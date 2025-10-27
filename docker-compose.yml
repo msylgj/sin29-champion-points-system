@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库服务
+  database:
+    image: postgres:15-alpine
+    container_name: archery_db
+    environment:
+      POSTGRES_USER: archery_user
+      POSTGRES_PASSWORD: archery_pass
+      POSTGRES_DB: archery_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - archery_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archery_user -d archery_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Python FastAPI 后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: archery_backend
+    environment:
+      - DATABASE_URL=postgresql://archery_user:archery_pass@database:5432/archery_db
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    networks:
+      - archery_network
+    depends_on:
+      database:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Vue.js 前端服务（开发模式）
+  frontend:
+    image: node:20-alpine
+    container_name: archery_frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "8080:8080"
+    networks:
+      - archery_network
+    depends_on:
+      - backend
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  archery_network:
+    driver: bridge

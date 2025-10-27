@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库服务
+  database:
+    image: postgres:15-alpine
+    container_name: archery_db_prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-archery_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-archery_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-archery_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - archery_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-archery_user} -d ${POSTGRES_DB:-archery_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Python FastAPI 后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: archery_backend_prod
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-archery_user}:${POSTGRES_PASSWORD:-archery_pass}@database:5432/${POSTGRES_DB:-archery_db}
+    ports:
+      - "8000:8000"
+    networks:
+      - archery_network
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+
+  # Vue.js 前端服务（生产模式 - Nginx）
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: archery_frontend_prod
+    ports:
+      - "8080:8080"
+    networks:
+      - archery_network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  archery_network:
+    driver: bridge
