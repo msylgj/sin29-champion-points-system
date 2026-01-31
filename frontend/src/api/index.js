@@ -44,4 +44,45 @@ api.interceptors.response.use(
   }
 )
 
+// ==================== 运动员 API ====================
+export const athleteAPI = {
+  getList: (params = {}) => api.get('/athletes', { params }),
+  getDetail: (id) => api.get(`/athletes/${id}`),
+  create: (data) => api.post('/athletes', data),
+  update: (id, data) => api.put(`/athletes/${id}`, data),
+  delete: (id) => api.delete(`/athletes/${id}`),
+  batchImport: (data) => api.post('/athletes/batch/import', data)
+}
+
+// ==================== 成绩 API ====================
+export const scoreAPI = {
+  getList: (params = {}) => api.get('/scores', { params }),
+  getDetail: (id) => api.get(`/scores/${id}`),
+  create: (data) => api.post('/scores', data),
+  update: (id, data) => api.put(`/scores/${id}`, data),
+  delete: (id) => api.delete(`/scores/${id}`),
+  batchImport: (data) => api.post('/scores/batch/import', data),
+  recalculate: () => api.post('/scores/recalculate'),
+  getAthleteScores: (athleteId, params = {}) => 
+    api.get(`/scores/athlete/${athleteId}/scores`, { params })
+}
+
+// ==================== 赛事 API ====================
+export const eventAPI = {
+  getList: (params = {}) => api.get('/events', { params }),
+  getDetail: (id) => api.get(`/events/${id}`),
+  create: (data) => api.post('/events', data),
+  update: (id, data) => api.put(`/events/${id}`, data),
+  delete: (id) => api.delete(`/events/${id}`)
+}
+
+// ==================== 统计排名 API ====================
+export const statsAPI = {
+  getRankings: (params = {}) => api.get('/stats/rankings', { params }),
+  getAggregate: (athleteId, params = {}) => 
+    api.get(`/stats/athlete/${athleteId}/aggregate`, { params }),
+  getTopPerformers: (params = {}) => 
+    api.get('/stats/top-performers', { params })
+}
+
 export default api
