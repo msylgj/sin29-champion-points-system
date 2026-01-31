@@ -1,46 +1,30 @@
 <template>
-  <div id="app">
-    <el-container>
-      <el-header>
-        <h1>射箭赛事积分统计系统</h1>
-      </el-header>
-      <el-main>
-        <router-view />
-      </el-main>
-    </el-container>
+  <div id="app" class="app-container">
+    <router-view />
+    <BottomNav />
   </div>
 </template>
 
 <script setup>
 import { onMounted } from 'vue'
+import BottomNav from '@/components/common/BottomNav.vue'
 
 onMounted(() => {
-  console.log('射箭赛事积分统计系统已启动')
+  console.log('🚀 射箭赛事积分统计系统已启动')
 })
 </script>
 
-<style>
+<style lang="scss">
 #app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  color: #2c3e50;
+  width: 100%;
+  height: 100%;
 }
 
-.el-header {
-  background-color: #409EFF;
-  color: white;
+.app-container {
   display: flex;
-  align-items: center;
-  padding: 0 20px;
-}
-
-.el-header h1 {
-  margin: 0;
-  font-size: 24px;
-}
-
-.el-main {
-  padding: 20px;
+  flex-direction: column;
+  width: 100%;
+  min-height: 100vh;
 }
 </style>
+

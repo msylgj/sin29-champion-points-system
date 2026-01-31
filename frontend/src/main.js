@@ -1,20 +1,20 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import ElementPlus from 'element-plus'
-import 'element-plus/dist/index.css'
-import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+import piniaPluginPersist from 'pinia-plugin-persist'
 
 import App from './App.vue'
 import router from './router'
 
+// 导入全局样式
+import '@/styles/variables.scss'
+
 const app = createApp(App)
 
-app.use(createPinia())
-app.use(router)
-app.use(ElementPlus)
+// Pinia 配置
+const pinia = createPinia()
+pinia.use(piniaPluginPersist)
 
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component)
-}
+app.use(pinia)
+app.use(router)
 
 app.mount('#app')
