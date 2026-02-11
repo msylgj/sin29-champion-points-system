@@ -37,6 +37,3 @@ class Score(Base):
         Index('idx_score_event_name', 'event_id', 'name'),
         Index('idx_score_event_bow_format', 'event_id', 'bow_type', 'distance', 'format'),
     )
-        return f"<Score(id={self.id}, athlete_id={self.athlete_id}, event_id={self.event_id}, " \
-               f"year={self.year}, season={self.season}, distance={self.distance}, " \
-               f"rank={self.rank}, raw_score={self.raw_score}, points={self.points})>"

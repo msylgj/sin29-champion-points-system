@@ -208,16 +208,15 @@ class ScoreService:
                 )
             ).first()
             
-            if not config:
-                # 如果没有配置，跳过（不应该发生）
-                continue
+            # 如果没有配置，使用默认参赛人数（10人）而不是跳过
+            participant_count = config.participant_count if config else 10
             
             # 计算积分
             points = ScoringCalculator.calculate_points(
                 rank=score.rank,
                 competition_format=score.format,
                 distance=score.distance,
-                participant_count=config.participant_count
+                participant_count=participant_count
             )
             
             key = (score.name, score.club)
@@ -313,45 +312,24 @@ class ScoreService:
     @staticmethod
     def batch_create_scores(db: Session, scores_data: List[ScoreCreate]) -> List[Score]:
         """批量创建成绩"""
-        calculator = ScoringCalculator()
         db_scores = []
 
         for score_data in scores_data:
-            # 验证运动员
-            athlete = db.query(Athlete).filter(Athlete.id == score_data.athlete_id).first()
-            if not athlete:
-                raise ValueError(f"运动员 ID {score_data.athlete_id} 不存在")
+            # 验证赛事是否存在
+            event = db.query(Event).filter(Event.id == score_data.event_id).first()
+            if not event:
+                raise ValueError(f"赛事 ID {score_data.event_id} 不存在")
 
             db_score = Score(
-                athlete_id=score_data.athlete_id,
-                year=score_data.year,
-                season=score_data.season,
-                distance=score_data.distance,
-                competition_format=score_data.competition_format,
-                gender_group=score_data.gender_group,
+                event_id=score_data.event_id,
+                name=score_data.name,
+                club=score_data.club,
                 bow_type=score_data.bow_type,
-                raw_score=score_data.raw_score,
-                rank=score_data.rank,
-                group_rank=score_data.group_rank,
-                round=score_data.round,
-                participant_count=score_data.participant_count,
-                remark=score_data.remark,
-                is_valid=1
+                distance=score_data.distance,
+                format=score_data.format,
+                rank=score_data.rank
             )
 
-            # 计算积分
-            base_points = calculator.calculate_base_points(
-                rank=score_data.rank,
-                competition_format=score_data.competition_format,
-                participant_count=score_data.participant_count
-            )
-            final_points = calculator.calculate_final_points(
-                base_points=base_points,
-                distance=score_data.distance
-            )
-
-            db_score.base_points = base_points
-            db_score.points = final_points
             db_scores.append(db_score)
 
         db.add_all(db_scores)
@@ -393,21 +371,14 @@ class ScoreService:
     @staticmethod
     def get_athlete_scores(
         db: Session,
-        athlete_id: int,
-        year: Optional[int] = None,
-        season: Optional[str] = None
+        name: str,
+        club: str = ""
     ) -> List[Score]:
-        """获取运动员的所有成绩"""
+        """获取运动员的所有成绩 (基于名称和俱乐部)"""
         query = db.query(Score).filter(
             and_(
-                Score.athlete_id == athlete_id,
-                Score.is_valid == 1
+                Score.name == name,
+                Score.club == club
             )
         )
-
-        if year is not None:
-            query = query.filter(Score.year == year)
-        if season:
-            query = query.filter(Score.season == season)
-
-        return query.order_by(desc(Score.created_at)).all()
+        return query.order_by(desc(Score.id)).all()

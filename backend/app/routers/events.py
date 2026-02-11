@@ -51,15 +51,19 @@ def create_event_with_configs(event_data: CreateEventWithConfigs, db: Session = 
         db.add(db_event)
         db.flush()  # 获取event的ID但不提交
         
-        # 添加配置
+        # 添加配置 - 为每个配置添加 event_id
         configs_with_event_id = []
         for config in event_data.configurations:
             config_dict = config.dict()
             config_dict['event_id'] = db_event.id
-            from app.schemas.event_configuration import EventConfigurationCreate
-            configs_with_event_id.append(EventConfigurationCreate(**config_dict))
+            from app.schemas.event_configuration import EventConfigurationBase
+            # 创建完整的配置模型用于数据库操作
+            full_config = EventConfigurationBase(**config_dict)
+            configs_with_event_id.append(full_config)
         
-        EventConfigurationService.batch_create_configurations(db, configs_with_event_id)
+        # 使用 service 批量创建
+        for config in configs_with_event_id:
+            EventConfigurationService.create_configuration(db, config)
         
         db.commit()
         db.refresh(db_event)

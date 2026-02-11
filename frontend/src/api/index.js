@@ -1,7 +1,18 @@
 import axios from 'axios'
 
+// 确定API基础URL
+// 在生产/容器中使用环境变量，本地开发中使用相对路径（通过Vite proxy）
+const getBaseURL = () => {
+  // 如果是生产构建或容器环境，使用VITE_API_BASE_URL
+  if (import.meta.env.VITE_API_BASE_URL && import.meta.env.MODE === 'production') {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+  // 开发环境默认使用相对路径（通过Vite proxy: /api -> http://backend:8000/api）
+  return '/api'
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: getBaseURL(),
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
@@ -44,16 +55,6 @@ api.interceptors.response.use(
   }
 )
 
-// ==================== 运动员 API ====================
-export const athleteAPI = {
-  getList: (params = {}) => api.get('/athletes', { params }),
-  getDetail: (id) => api.get(`/athletes/${id}`),
-  create: (data) => api.post('/athletes', data),
-  update: (id, data) => api.put(`/athletes/${id}`, data),
-  delete: (id) => api.delete(`/athletes/${id}`),
-  batchImport: (data) => api.post('/athletes/batch/import', data)
-}
-
 // ==================== 成绩 API ====================
 export const scoreAPI = {
   getList: (params = {}) => api.get('/scores', { params }),
@@ -81,13 +82,12 @@ export const eventAPI = {
   createWithConfigs: (data) => api.post('/events/with-configs', data)
 }
 
-// ==================== 统计排名 API ====================
-export const statsAPI = {
-  getRankings: (params = {}) => api.get('/stats/rankings', { params }),
-  getAggregate: (athleteId, params = {}) => 
-    api.get(`/stats/athlete/${athleteId}/aggregate`, { params }),
-  getTopPerformers: (params = {}) => 
-    api.get('/stats/top-performers', { params })
+// ==================== 字典 API ====================
+export const dictionaryAPI = {
+  getBowTypes: () => api.get('/dictionaries/bow-types'),
+  getDistances: () => api.get('/dictionaries/distances'),
+  getCompetitionFormats: () => api.get('/dictionaries/competition-formats'),
+  getAll: () => api.get('/dictionaries')
 }
 
 export default api

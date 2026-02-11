@@ -1,8 +1,15 @@
 <template>
   <div class="points-display-page safe-area">
     <div class="page-header">
-      <h1>积分排名</h1>
-      <p class="subtitle">查看年度弓种积分排名</p>
+      <div class="header-top">
+        <div>
+          <h1>积分排名</h1>
+          <p class="subtitle">查看年度弓种积分排名</p>
+        </div>
+        <button class="btn-manage" @click="navigateToManage" title="管理赛事和成绩">
+          ⚙️ 管理
+        </button>
+      </div>
     </div>
 
     <div class="display-container">
@@ -22,10 +29,9 @@
           <label for="bow-type-select">弓种</label>
           <select v-model="selectedBowType" id="bow-type-select" class="filter-input" @change="loadRanking">
             <option value="">请选择弓种</option>
-            <option value="recurve">反曲弓</option>
-            <option value="compound">复合弓</option>
-            <option value="barebow">光弓</option>
-            <option value="traditional">传统弓</option>
+            <option v-for="bow in bowTypes" :key="bow.code" :value="bow.code">
+              {{ bow.name }}
+            </option>
           </select>
         </div>
       </div>
@@ -130,7 +136,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { scoreAPI } from '@/api'
+import { scoreAPI, dictionaryAPI, eventAPI } from '@/api'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -139,6 +145,7 @@ const ranking = ref([])
 const selectedYear = ref('')
 const selectedBowType = ref('')
 const availableYears = ref([])
+const bowTypes = ref([])
 
 // 获取赛制标签
 const getFormatLabel = (format) => {
@@ -151,15 +158,49 @@ const getFormatLabel = (format) => {
   return labels[format] || format
 }
 
-// 初始化可选的年度
-const initYears = () => {
-  const currentYear = new Date().getFullYear()
-  const years = []
-  for (let i = currentYear + 2; i >= currentYear - 5; i--) {
-    years.push(i)
+// 初始化可选的年度 - 从数据库获取实际的事件年份
+const initYears = async () => {
+  try {
+    const response = await eventAPI.getList({ page_size: 100 })
+    const years = new Set()
+    
+    if (response.items && Array.isArray(response.items)) {
+      response.items.forEach(event => {
+        if (event.year) {
+          years.add(event.year)
+        }
+      })
+    }
+    
+    availableYears.value = Array.from(years).sort((a, b) => b - a)
+    
+    // 选择第一个可用的年份
+    if (availableYears.value.length > 0) {
+      selectedYear.value = availableYears.value[0]
+    }
+  } catch (error) {
+    console.error('加载年度数据失败:', error)
+    // 降级方案：使用静态年份
+    const currentYear = new Date().getFullYear()
+    const years = []
+    for (let i = currentYear; i >= currentYear - 5; i--) {
+      years.push(i)
+    }
+    availableYears.value = years
+    selectedYear.value = currentYear
   }
-  availableYears.value = years
-  selectedYear.value = currentYear
+}
+
+// 加载字典数据
+const loadDictionaries = async () => {
+  try {
+    const response = await dictionaryAPI.getAll()
+    if (response.success && response.data) {
+      bowTypes.value = response.data.bowTypes || []
+    }
+  } catch (error) {
+    console.error('加载字典数据失败:', error)
+  }
 }
 
 // 加载排名数据
@@ -212,8 +253,32 @@ const exportToCSV = () => {
   document.body.removeChild(link)
 }
 
-onMounted(() => {
-  initYears()
+// 导航到管理页面（成绩导入）
+const navigateToManage = () => {
+  router.push('/score-import')
+}
+
+onMounted(async () => {
+  // 首先加载年份和字典
+  await initYears()
+  await loadDictionaries()
+  
+  // 总是设置弓种（从URL或默认值）
+  if (bowTypes.value.length > 0) {
+    const urlParams = new URLSearchParams(window.location.search)
+    const bowTypeParam = urlParams.get('bowType')
+    
+    if (bowTypeParam && bowTypes.value.some(b => b.code === bowTypeParam)) {
+      selectedBowType.value = bowTypeParam
+    } else {
+      selectedBowType.value = bowTypes.value[0].code
+    }
+  }
+  
+  // 年份和弓种都有时加载排名
+  if (selectedYear.value && selectedBowType.value) {
+    await loadRanking()
+  }
 })
 </script>
 
@@ -229,6 +294,13 @@ onMounted(() => {
   padding: 30px 20px 20px;
   margin-bottom: 20px;
 
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
   h1 {
     margin: 0 0 5px;
     font-size: 28px;
@@ -239,6 +311,27 @@ onMounted(() => {
     margin: 0;
     opacity: 0.9;
     font-size: 14px;
+  }
+
+  .btn-manage {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+    white-space: nowrap;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
   }
 }
 

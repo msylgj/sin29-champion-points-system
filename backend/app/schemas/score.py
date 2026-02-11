@@ -10,7 +10,7 @@ class ScoreBase(BaseModel):
     """成绩基础数据"""
     event_id: int = Field(..., description="赛事ID")
     name: str = Field(..., min_length=1, max_length=100, description="选手姓名")
-    club: str = Field(..., min_length=1, max_length=100, description="俱乐部")
+    club: str = Field(default="", max_length=100, description="俱乐部")
     bow_type: str = Field(..., description="弓种：recurve, compound, traditional, longbow, barebow")
     distance: str = Field(..., description="距离：18m, 30m, 50m, 70m")
     format: str = Field(..., description="比赛类型：ranking, elimination, team")

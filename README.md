@@ -4,13 +4,28 @@
 
 > 当前版本：**v2.0** (完全重构) | 最后更新：2026年2月
 
-## ⚡ 快速开始
+## ⚡ 快速开始 (Docker推荐)
 
-0.5分钟了解系统：
+**使用 Docker 一键启动**（推荐）：
+
+```bash
+# 1. 复制配置文件
+cp .env.example .env
+
+# 2. 启动所有服务
+docker-compose up --build
+
+# 3. 打开浏览器
+# 前端: http://localhost:8080
+# API文档: http://localhost:8000/docs
+```
+
+**本地开发启动**：
 
 ```bash
 # 1. 启动后端 (终端1)
-cd backend && python3 -m uvicorn app.main:app --reload
+cd backend && pip install -r requirements.txt
+python3 -m uvicorn app.main:app --reload
 
 # 2. 启动前端 (终端2)
 cd frontend && npm install && npm run dev
@@ -19,7 +34,7 @@ cd frontend && npm install && npm run dev
 # http://localhost:5173
 ```
 
-👉 **详细指南**：查看 [QUICK_START.md](QUICK_START.md)
+👉 **详细指南**：查看 [QUICK_START.md](QUICK_START.md) | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
 
 ## ✨ 系统特点
 
@@ -33,9 +48,9 @@ cd frontend && npm install && npm run dev
 
 | 页面 | 功能 | 说明 |
 |-----|------|------|
-| 📅 **赛事管理** | 创建赛事及配置参赛人数 | 一次性提交赛事和所有弓种/距离/赛制的参赛人数 |
+| 🏆 **积分排名** ⭐ 首页 | 查看年度排名 | 按年度和弓种聚合排名，前8名高亮显示 |
 | 📊 **成绩导入** | 导入参赛者成绩 | 支持逐条录入或CSV/Excel批量导入 |
-| 🏆 **积分查看** | 查看年度排名 | 按年度和弓种聚合排名，前8名高亮显示 |
+| 📅 **赛事添加** | 创建赛事及配置 | 一次性提交赛事和所有弓种/距离/赛制的参赛人数 |
 
 ## 📋 技术栈
 
@@ -183,6 +198,36 @@ A：可以！编辑 `backend/app/services/scoring_calculator.py` 的积分表
 **Q：系统能处理多少数据？**  
 A：测试过 50,000+ 成绩，性能稳定
 
+## 📚 文档导航
+
+| 文档 | 说明 |
+|-----|------|
+| 🚀 [QUICK_START.md](QUICK_START.md) | 快速开始指南 (推荐首先阅读) |
+
+## 🎯 页面导航流程
+
+```
+打开应用 (http://localhost:8080)
+        ↓
+📊 积分排名页面 (PointsDisplay) ⭐ 首页
+├─ 选择年度和弓种查看排名
+├─ 显示排名表格和详细信息
+└─ ⚙️ 管理按钮
+        ↓
+   成绩导入页面 (ScoreImport)
+   ├─ 选择赛事
+   ├─ 查看赛事配置
+   ├─ 导入成绩
+   ├─ ← 返回积分排名
+   └─ ➕ 新增赛事
+        ↓
+   赛事添加页面 (EventAdd)
+   ├─ 填写赛事基本信息
+   ├─ 配置弓种、距离、赛制
+   │  (✨ 从字典 API 动态加载)
+   └─ 完成后自动返回成绩导入
+```
+
 **Q：如何备份数据？**  
 A：查看 [TECHNICAL_DETAILS.md](TECHNICAL_DETAILS.md) 的备份部分
 
@@ -203,11 +248,9 @@ MIT License
 ## 📞 获取帮助
 
 - 📖 首次使用：[QUICK_START.md](QUICK_START.md)
-- 🔧 技术问题：[TECHNICAL_DETAILS.md](TECHNICAL_DETAILS.md)
-- 💬 设计决策：[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)
 
 **祝你使用愉快！🎯🏹**
 
 ---
 
-**v2.0** | 2026年2月 | ✅ 生产就绪
+**v2.0** | 2026年2月 | ✅ 生产就绪 | 🎉 新增字典 API 和页面导航改进

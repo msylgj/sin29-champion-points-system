@@ -3,28 +3,28 @@
 """
 from app.models.enums import (
     BowType,
-    Gender,
     Distance,
     CompetitionFormat,
     Season,
 )
-from app.models.athlete import Athlete
 from app.models.score import Score
-from app.models.scoring_rule import ScoringRule
 from app.models.aggregate_points import AthleteAggregatePoints
-from app.models.operation_log import OperationLog
+from app.models.dictionary import BowTypeDict, DistanceDict, CompetitionFormatDict
+from app.models.event import Event
+from app.models.event_configuration import EventConfiguration
 
 __all__ = [
     # Enums
     "BowType",
-    "Gender",
     "Distance",
     "CompetitionFormat",
     "Season",
     # Models
-    "Athlete",
     "Score",
-    "ScoringRule",
     "AthleteAggregatePoints",
-    "OperationLog",
+    "BowTypeDict",
+    "DistanceDict",
+    "CompetitionFormatDict",
+    "Event",
+    "EventConfiguration",
 ]

@@ -1,8 +1,18 @@
 <template>
   <div class="score-import-page safe-area">
     <div class="page-header">
-      <h1>导入成绩</h1>
-      <p class="subtitle">为赛事导入参赛者成绩</p>
+      <div class="header-top">
+        <button class="btn-back" @click="$router.back()" title="返回积分排名">
+          ← 返回
+        </button>
+        <div>
+          <h1>导入成绩</h1>
+          <p class="subtitle">为赛事导入参赛者成绩</p>
+        </div>
+        <button class="btn-add-event" @click="navigateToAddEvent" title="新增赛事">
+          ➕ 新增赛事
+        </button>
+      </div>
     </div>
 
     <div class="import-container">
@@ -10,7 +20,14 @@
       <div class="section">
         <h2 class="section-title">选择赛事</h2>
         
-        <div class="form-group">
+        <div v-if="events.length === 0" class="no-events-tip">
+          <p>📋 当前无赛事记录，请先添加赛事</p>
+          <button class="btn-add-event-inline" @click="navigateToAddEvent">
+            ➕ 新增赛事
+          </button>
+        </div>
+
+        <div v-else class="form-group">
           <label for="event-select">赛事 *</label>
           <select 
             id="event-select"
@@ -97,8 +114,8 @@
               <label for="bow-type">弓种 *</label>
               <select v-model="singleScore.bow_type" id="bow-type" required class="form-input">
                 <option value="">请选择</option>
-                <option v-for="config in selectedEvent.configurations" :key="config.bow_type" :value="config.bow_type">
-                  {{ getBowTypeLabel(config.bow_type) }}
+                <option v-for="bow in bowTypes" :key="bow.code" :value="bow.code">
+                  {{ bow.name }}
                 </option>
               </select>
             </div>
@@ -107,8 +124,8 @@
               <label for="distance">距离 *</label>
               <select v-model="singleScore.distance" id="distance" required class="form-input">
                 <option value="">请选择</option>
-                <option v-for="config in selectedEvent.configurations" :key="config.distance" :value="config.distance">
-                  {{ config.distance }}
+                <option v-for="distance in distances" :key="distance.code" :value="distance.code">
+                  {{ distance.name }}
                 </option>
               </select>
             </div>
@@ -117,8 +134,8 @@
               <label for="format">赛制 *</label>
               <select v-model="singleScore.format" id="format" required class="form-input">
                 <option value="">请选择</option>
-                <option v-for="config in selectedEvent.configurations" :key="config.format" :value="config.format">
-                  {{ getFormatLabel(config.format) }}
+                <option v-for="format in competitionFormats" :key="format.code" :value="format.code">
+                  {{ format.name }}
                 </option>
               </select>
             </div>
@@ -233,7 +250,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { eventAPI, scoreAPI } from '@/api'
+import { eventAPI, scoreAPI, dictionaryAPI } from '@/api'
 
 const router = useRouter()
 const events = ref([])
@@ -246,6 +263,11 @@ const successMessage = ref('')
 const errorMessage = ref('')
 const uploadedFileName = ref('')
 const fileInput = ref(null)
+
+// 字典数据
+const bowTypes = ref([])
+const distances = ref([])
+const competitionFormats = ref([])
 
 const importTabs = [
   { id: 'single', label: '逐条录入' },
@@ -283,14 +305,27 @@ const getFormatLabel = (format) => {
   return labels[format] || format
 }
 
+// 加载字典数据
+const loadDictionaries = async () => {
+  try {
+    const response = await dictionaryAPI.getAll()
+    if (response.success && response.data) {
+      bowTypes.value = response.data.bowTypes || []
+      distances.value = response.data.distances || []
+      competitionFormats.value = response.data.competitionFormats || []
+    }
+  } catch (error) {
+    console.error('加载字典数据失败:', error)
+  }
+}
+
 // 加载赛事列表
 const loadEvents = async () => {
   try {
     const response = await eventAPI.getList({ page: 1, page_size: 100 })
     events.value = response.items || []
+    // 如果列表为空，显示友好提示
   } catch (error) {
-    errorMessage.value = '加载赛事列表失败'
-    console.error('Error loading events:', error)
   }
 }
 
@@ -395,10 +430,18 @@ const submitImport = async () => {
   try {
     const response = await scoreAPI.batchImport({ scores: batchScores.value })
     successMessage.value = `成功导入 ${batchScores.value.length} 条成绩`
+    
+    // 获取导入成绩中的首个弓种，用于跳转时传递参数
+    const firstBowType = batchScores.value.length > 0 ? batchScores.value[0].bow_type : ''
     batchScores.value = []
     
     setTimeout(() => {
-      router.push('/points-display')
+      // 跳转到PointsDisplay，并传递弓种参数
+      if (firstBowType) {
+        router.push(`/points-display?bowType=${firstBowType}`)
+      } else {
+        router.push('/points-display')
+      }
     }, 1500)
   } catch (error) {
     errorMessage.value = error.message || '导入失败，请重试'
@@ -408,7 +451,15 @@ const submitImport = async () => {
   }
 }
 
+// 导航到添加赛事页面
+const navigateToAddEvent = () => {
+  router.push('/event-add')
+}
+
 onMounted(() => {
+  errorMessage.value = ''
+  successMessage.value = ''
+  loadDictionaries()
   loadEvents()
 })
 </script>
@@ -425,6 +476,13 @@ onMounted(() => {
   padding: 30px 20px 20px;
   margin-bottom: 20px;
 
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
   h1 {
     margin: 0 0 5px;
     font-size: 28px;
@@ -435,6 +493,28 @@ onMounted(() => {
     margin: 0;
     opacity: 0.9;
     font-size: 14px;
+  }
+
+  .btn-back,
+  .btn-add-event {
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s;
+    white-space: nowrap;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
   }
 }
 
@@ -519,6 +599,42 @@ onMounted(() => {
       border-bottom: 1px solid #f0f0f0;
       color: #333;
     }
+  }
+}
+
+.no-events-tip {
+  text-align: center;
+  padding: 30px 20px;
+  background: #f0f4ff;
+  border: 2px dashed #667eea;
+  border-radius: 8px;
+  color: #666;
+
+  p {
+    margin: 0 0 15px;
+    font-size: 14px;
+    color: #333;
+  }
+}
+
+.btn-add-event-inline {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 }
 

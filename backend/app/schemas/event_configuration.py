@@ -15,9 +15,12 @@ class EventConfigurationBase(BaseModel):
     participant_count: int = Field(..., ge=1, description="参赛人数或队伍数")
 
 
-class EventConfigurationCreate(EventConfigurationBase):
-    """创建赛事配置请求"""
-    pass
+class EventConfigurationCreate(BaseModel):
+    """创建赛事配置请求 - 不包含 event_id，由后端分配"""
+    bow_type: str = Field(..., description="弓种：recurve/compound/traditional/longbow/barebow")
+    distance: str = Field(..., description="距离：18m/30m/50m/70m")
+    format: str = Field(..., description="比赛类型：ranking/elimination/mixed_doubles/team")
+    participant_count: int = Field(..., ge=1, description="参赛人数或队伍数")
 
 
 class EventConfigurationUpdate(BaseModel):

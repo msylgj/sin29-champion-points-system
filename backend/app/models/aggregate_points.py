@@ -26,7 +26,6 @@ class AthleteAggregatePoints(Base):
     rank = Column(Integer, nullable=True)  # 排名
     
     # 分组统计（可选）
-    gender_group = Column(String(50), nullable=True)  # 按性别分组的排名
     bow_type = Column(String(50), nullable=True)  # 按弓种分组的排名
     
     # 时间戳

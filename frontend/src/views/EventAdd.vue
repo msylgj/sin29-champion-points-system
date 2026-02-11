@@ -41,95 +41,40 @@
       <!-- 赛事配置 -->
       <div class="section">
         <h2 class="section-title">赛事配置</h2>
-        <p class="section-help">为每种弓的每个距离添加配置</p>
+        <p class="section-help">为每种弓的每个赛制和距离组合填写参赛人数</p>
 
-        <div 
-          v-for="(config, index) in formData.configurations" 
-          :key="index"
-          class="config-card"
-        >
-          <div class="config-header">
-            <span class="config-number">配置 {{ index + 1 }}</span>
-            <button 
-              v-if="formData.configurations.length > 1"
-              type="button"
-              @click="removeConfig(index)"
-              class="btn-remove"
-            >
-              删除
-            </button>
-          </div>
-
-          <div class="config-fields">
-            <div class="form-group">
-              <label :for="`bow-type-${index}`">弓种 *</label>
-              <select 
-                :id="`bow-type-${index}`"
-                v-model="config.bow_type" 
-                required
-                class="form-input"
-              >
-                <option value="">请选择弓种</option>
-                <option value="recurve">反曲弓</option>
-                <option value="compound">复合弓</option>
-                <option value="barebow">光弓</option>
-                <option value="traditional">传统弓</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label :for="`distance-${index}`">距离 *</label>
-              <select 
-                :id="`distance-${index}`"
-                v-model="config.distance" 
-                required
-                class="form-input"
-              >
-                <option value="">请选择距离</option>
-                <option value="18m">18米</option>
-                <option value="25m">25米</option>
-                <option value="30m">30米</option>
-                <option value="50m">50米</option>
-                <option value="70m">70米</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label :for="`format-${index}`">赛制 *</label>
-              <select 
-                :id="`format-${index}`"
-                v-model="config.format" 
-                required
-                class="form-input"
-              >
-                <option value="">请选择赛制</option>
-                <option value="ranking">排名赛</option>
-                <option value="elimination">淘汰赛</option>
-                <option value="mixed_doubles">混双赛</option>
-                <option value="team">团体赛</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label :for="`participant-count-${index}`">参赛人数 *</label>
-              <input 
-                :id="`participant-count-${index}`"
-                v-model.number="config.participant_count" 
-                type="number" 
-                min="1"
-                max="999"
-                required
-                class="form-input"
-                placeholder="如：24"
-              />
-              <small class="help-text">用于计算积分系数</small>
-            </div>
+        <!-- 为每种弓创建一个表格 -->
+        <div v-for="bowType in bowTypes" :key="bowType.code" class="bow-config-group">
+          <h3 class="bow-type-title">{{ bowType.name }}</h3>
+          
+          <div class="table-wrapper">
+            <table class="config-table">
+              <thead>
+                <tr>
+                  <th>赛制</th>
+                  <th v-for="distance in distances" :key="distance.code">
+                    {{ distance.name }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="format in competitionFormats" :key="format.code">
+                  <td class="format-label">{{ format.name }}</td>
+                  <td v-for="distance in distances" :key="distance.code" class="input-cell">
+                    <input 
+                      v-model.number="configTable[bowType.code][format.code][distance.code]"
+                      type="number"
+                      min="0"
+                      max="999"
+                      class="table-input"
+                      :placeholder="`0`"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
-
-        <button type="button" @click="addConfig" class="btn-add-config">
-          + 添加配置
-        </button>
       </div>
 
       <!-- 提交按钮 -->
@@ -156,9 +101,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { eventAPI } from '@/api'
+import { eventAPI, dictionaryAPI } from '@/api'
 
 const router = useRouter()
 const currentYear = new Date().getFullYear()
@@ -166,26 +111,76 @@ const loading = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
 
+// 字典数据
+const bowTypes = ref([])
+const distances = ref([])
+const competitionFormats = ref([])
+
 const formData = ref({
   year: currentYear,
-  season: '',
-  configurations: [
-    { bow_type: '', distance: '', format: '', participant_count: null }
-  ]
+  season: ''
 })
 
-const addConfig = () => {
-  formData.value.configurations.push({
-    bow_type: '',
-    distance: '',
-    format: '',
-    participant_count: null
-  })
+// 配置表数据结构：bow_type => format => distance => count
+const configTable = ref({})
+
+// 初始化配置表
+const initConfigTable = () => {
+  configTable.value = {}
+  if (bowTypes.value.length && distances.value.length && competitionFormats.value.length) {
+    bowTypes.value.forEach(bow => {
+      configTable.value[bow.code] = {}
+      competitionFormats.value.forEach(format => {
+        configTable.value[bow.code][format.code] = {}
+        distances.value.forEach(distance => {
+          configTable.value[bow.code][format.code][distance.code] = 0
+        })
+      })
+    })
+  }
 }
 
-const removeConfig = (index) => {
-  formData.value.configurations.splice(index, 1)
+// 加载字典数据
+const loadDictionaries = async () => {
+  try {
+    const response = await dictionaryAPI.getAll()
+    if (response.success && response.data) {
+      bowTypes.value = response.data.bowTypes || []
+      distances.value = response.data.distances || []
+      competitionFormats.value = response.data.competitionFormats || []
+      initConfigTable()
+    }
+  } catch (error) {
+    console.error('加载字典数据失败:', error)
+    errorMessage.value = '加载表单数据失败，请刷新重试'
+  }
 }
+
+// 页面挂载时加载字典
+onMounted(() => {
+  loadDictionaries()
+})
+
+// 将表格数据转换为配置数组
+const buildConfigurations = () => {
+  const configs = []
+  Object.entries(configTable.value).forEach(([bowType, formats]) => {
+    Object.entries(formats).forEach(([format, distances_map]) => {
+      Object.entries(distances_map).forEach(([distance, count]) => {
+        if (count && count > 0) {
+          configs.push({
+            bow_type: bowType,
+            distance,
+            format,
+            participant_count: count
+          })
+        }
+      })
+    })
+  })
+  return configs
+}
+
 
 const submitForm = async () => {
   if (!formData.value.season) {
@@ -193,8 +188,10 @@ const submitForm = async () => {
     return
   }
 
-  if (formData.value.configurations.some(c => !c.bow_type || !c.distance || !c.format || !c.participant_count)) {
-    errorMessage.value = '请完整填写所有配置信息'
+  const configurations = buildConfigurations()
+  
+  if (configurations.length === 0) {
+    errorMessage.value = '请填写至少一个赛事配置（参赛人数 > 0）'
     return
   }
 
@@ -203,7 +200,12 @@ const submitForm = async () => {
   successMessage.value = ''
 
   try {
-    const response = await eventAPI.createWithConfigs(formData.value)
+    const payload = {
+      year: formData.value.year,
+      season: formData.value.season,
+      configurations
+    }
+    const response = await eventAPI.createWithConfigs(payload)
     successMessage.value = '赛事添加成功'
     setTimeout(() => {
       router.push('/score-import')
@@ -305,68 +307,84 @@ const submitForm = async () => {
     margin-top: 4px;
   }
 }
+.bow-config-group {
+  margin-bottom: 30px;
 
-.config-card {
-  background: #f9f9f9;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  padding: 15px;
-  margin-bottom: 15px;
+  .bow-type-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #667eea;
+    margin: 15px 0 10px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #667eea;
+  }
+}
 
-  .config-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
-    .config-number {
-      font-size: 13px;
-      font-weight: 600;
+.config-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 400px;
+
+  th, td {
+    border: 1px solid #e0e0e0;
+    padding: 10px;
+    text-align: center;
+  }
+
+  th {
+    background: #f5f5f5;
+    font-weight: 600;
+    color: #333;
+    padding: 12px 10px;
+  }
+
+  td {
+    background: white;
+
+    &.format-label {
+      font-weight: 500;
       color: #666;
+      text-align: left;
+      background: #f9f9f9;
     }
 
-    .btn-remove {
-      padding: 4px 12px;
-      background: #ff4757;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      font-size: 12px;
-      cursor: pointer;
-
-      &:hover {
-        background: #ff3838;
-      }
+    &:first-child {
+      border-left: 1px solid #e0e0e0;
     }
   }
 
-  .config-fields {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+  tbody tr:nth-child(even) {
+    background: #fafafa;
 
-    .form-group:nth-child(2n + 1),
-    .form-group:nth-child(2n) {
-      margin-bottom: 0;
+    .format-label {
+      background: #f3f3f3;
     }
   }
 }
 
-.btn-add-config {
-  width: 100%;
-  padding: 12px;
-  background: #f0f0f0;
-  border: 2px dashed #ccc;
-  border-radius: 6px;
-  font-size: 14px;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.3s;
+.input-cell {
+  padding: 6px;
+}
 
-  &:hover {
-    background: #e8e8e8;
-    border-color: #999;
-    color: #333;
+.table-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: center;
+  font-family: inherit;
+
+  &:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
   }
 }
 
@@ -447,12 +465,6 @@ const submitForm = async () => {
   to {
     transform: translateY(0);
     opacity: 1;
-  }
-}
-
-@media (max-width: 480px) {
-  .config-card .config-fields {
-    grid-template-columns: 1fr;
   }
 }
 </style>

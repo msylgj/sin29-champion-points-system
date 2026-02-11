@@ -68,6 +68,115 @@ CORS_ORIGINS=["http://localhost:5173", "http://localhost:3000"]
 VITE_API_BASE_URL=http://localhost:8000/api
 ```
 
+## 🐳 使用 Docker 快速启动（推荐）
+
+### 前置要求
+- **Docker** 和 **Docker Compose** 已安装
+
+### 开发环境启动
+
+1. **进入项目目录**
+```bash
+cd /home/msylgj/sin29-champion-points-system
+```
+
+2. **复制环境配置文件**
+```bash
+cp .env.example .env
+```
+
+3. **启动所有服务（数据库 + 后端 + 前端）**
+```bash
+docker-compose up --build
+```
+
+或在后台运行：
+```bash
+docker-compose up -d --build
+```
+
+4. **查看服务状态**
+```bash
+docker-compose ps
+```
+
+**预期输出：**
+```
+CONTAINER ID   IMAGE                          COMMAND                  STATUS
+xxx            sin29-champion-points-system-backend   "uvicorn app.main:..."   Up X minute
+xxx            sin29-champion-points-system-frontend  "nginx -g daemon off"    Up X minute
+xxx            postgres:15-alpine             "postgres"              Up X minute (healthy)
+```
+
+5. **访问应用**
+   - 前端应用：http://localhost:8080
+   - 后端 API：http://localhost:8000
+   - API 文档：http://localhost:8000/docs
+
+### 生产环境启动
+
+```bash
+docker-compose -f docker-compose.prod.yml up -d --build
+```
+
+### 常用 Docker 命令
+
+```bash
+# 查看日志
+docker-compose logs -f backend
+docker-compose logs -f frontend
+docker-compose logs -f database
+
+# 停止所有服务
+docker-compose down
+
+# 删除所有数据（包括数据库）
+docker-compose down -v
+
+# 重启特定服务
+docker-compose restart backend
+
+# 完全重新构建
+docker-compose up --build --force-recreate
+
+# 进入容器调试
+docker-compose exec backend bash
+docker-compose exec database psql -U archery_user -d archery_db
+
+# 后台启动
+docker-compose up -d --build
+
+# 查看实时日志
+docker-compose logs -f
+```
+
+### 常见问题
+
+#### Docker 权限错误
+如果遇到 "permission denied" 错误，使用 sudo：
+```bash
+sudo docker-compose up --build
+```
+
+#### 数据库连接失败
+等待数据库容器完全启动：
+```bash
+docker-compose logs -f database
+# 等待看到 "database system is ready"
+```
+
+#### 端口已占用
+修改 `.env` 文件中的端口配置：
+```env
+BACKEND_PORT=8001  # 改为其他端口
+FRONTEND_PORT=8081
+DB_PORT=5433
+```
+
+### 详细的故障排除指南
+
+请查看 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+
 ## 详细启动步骤
 
 ### 第1步：数据库准备

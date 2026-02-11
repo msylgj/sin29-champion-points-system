@@ -17,7 +17,7 @@ class Event(Base):
     year = Column(Integer, nullable=False)  # 年度
     season = Column(String(10), nullable=False)  # 季度 (Q1, Q2, Q3, Q4)
     
-    # 元数据
+    # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
@@ -25,17 +25,6 @@ class Event(Base):
     __table_args__ = (
         Index('idx_event_year_season', 'year', 'season', unique=True),
     )
-    # 时间戳
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    
-    # 索引
-    __table_args__ = (
-        Index('idx_event_year_season', 'year', 'season'),
-        Index('idx_event_date', 'start_date', 'end_date'),
-        Index('idx_event_status', 'status'),
-        Index('idx_event_format', 'distance', 'competition_format'),
-    )
 
     def __repr__(self):
-        return f"<Event(id={self.id}, name={self.name}, year={self.year}, season={self.season})>"
+        return f"<Event(id={self.id}, year={self.year}, season={self.season})>"
