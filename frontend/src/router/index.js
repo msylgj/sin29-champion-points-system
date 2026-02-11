@@ -1,6 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-// 页面组件
+// 新的三个主要页面
+import EventAdd from '@/views/EventAdd.vue'
+import ScoreImport from '@/views/ScoreImport.vue'
+import PointsDisplay from '@/views/PointsDisplay.vue'
+
+// 保留的其他页面（可选）
 import Dashboard from '@/views/Dashboard.vue'
 import Scores from '@/views/Scores.vue'
 import ScoreForm from '@/views/ScoreForm.vue'
@@ -10,15 +15,40 @@ import Profile from '@/views/Profile.vue'
 const routes = [
   {
     path: '/',
+    name: 'Home',
+    component: EventAdd,
+    meta: { title: '赛事管理', icon: '📅', showBottomNav: true }
+  },
+  {
+    path: '/event-add',
+    name: 'EventAdd',
+    component: EventAdd,
+    meta: { title: '新增赛事', icon: '📅', showBottomNav: true }
+  },
+  {
+    path: '/score-import',
+    name: 'ScoreImport',
+    component: ScoreImport,
+    meta: { title: '导入成绩', icon: '📊', showBottomNav: true }
+  },
+  {
+    path: '/points-display',
+    name: 'PointsDisplay',
+    component: PointsDisplay,
+    meta: { title: '积分排名', icon: '🏆', showBottomNav: true }
+  },
+  // 保留的其他路由
+  {
+    path: '/dashboard',
     name: 'Dashboard',
     component: Dashboard,
-    meta: { title: '仪表板', icon: '🏠', showBottomNav: true }
+    meta: { title: '仪表板', icon: '🏠', showBottomNav: false }
   },
   {
     path: '/scores',
     name: 'Scores',
     component: Scores,
-    meta: { title: '成绩', icon: '📊', showBottomNav: true }
+    meta: { title: '成绩', icon: '📊', showBottomNav: false }
   },
   {
     path: '/scores/create',
@@ -36,13 +66,13 @@ const routes = [
     path: '/rankings',
     name: 'Rankings',
     component: Rankings,
-    meta: { title: '排名', icon: '🏆', showBottomNav: true }
+    meta: { title: '排名', icon: '🏆', showBottomNav: false }
   },
   {
     path: '/profile',
     name: 'Profile',
     component: Profile,
-    meta: { title: '我的', icon: '👤', showBottomNav: true }
+    meta: { title: '我的', icon: '👤', showBottomNav: false }
   }
 ]
 

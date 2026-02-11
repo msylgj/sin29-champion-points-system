@@ -1,13 +1,14 @@
 """
-成绩服务
+成绩服务 - 简化版本
 """
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, desc
+from sqlalchemy import and_, desc
 from app.models.score import Score
-from app.models.athlete import Athlete
+from app.models.event import Event
+from app.models.event_configuration import EventConfiguration
 from app.schemas.score import ScoreCreate, ScoreUpdate
 from app.services.scoring_calculator import ScoringCalculator
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 
 
 class ScoreService:
@@ -16,48 +17,21 @@ class ScoreService:
     @staticmethod
     def create_score(db: Session, score: ScoreCreate) -> Score:
         """创建成绩"""
-        # 验证运动员是否存在
-        athlete = db.query(Athlete).filter(Athlete.id == score.athlete_id).first()
-        if not athlete:
-            raise ValueError(f"运动员 ID {score.athlete_id} 不存在")
+        # 验证赛事是否存在
+        event = db.query(Event).filter(Event.id == score.event_id).first()
+        if not event:
+            raise ValueError(f"赛事 ID {score.event_id} 不存在")
 
         # 创建成绩记录
         db_score = Score(
-            athlete_id=score.athlete_id,
-            year=score.year,
-            season=score.season,
-            distance=score.distance,
-            competition_format=score.competition_format,
-            gender_group=score.gender_group,
+            event_id=score.event_id,
+            name=score.name,
+            club=score.club,
             bow_type=score.bow_type,
-            raw_score=score.raw_score,
-            rank=score.rank,
-            group_rank=score.group_rank,
-            round=score.round,
-            participant_count=score.participant_count,
-            remark=score.remark,
-            is_valid=1
+            distance=score.distance,
+            format=score.format,
+            rank=score.rank
         )
-
-        # 计算积分
-        calculator = ScoringCalculator()
-        if score.rank:
-            final_points = calculator.calculate_points(
-                rank=score.rank,
-                competition_format=score.competition_format,
-                distance=score.distance,
-                participant_count=score.participant_count
-            )
-            base_points = calculator.calculate_base_points(
-                rank=score.rank,
-                competition_format=score.competition_format
-            )
-        else:
-            base_points = 0.0
-            final_points = 0.0
-
-        db_score.base_points = base_points
-        db_score.points = final_points
 
         db.add(db_score)
         db.commit()
@@ -74,30 +48,208 @@ class ScoreService:
         db: Session,
         skip: int = 0,
         limit: int = 10,
-        athlete_id: Optional[int] = None,
-        year: Optional[int] = None,
-        season: Optional[str] = None,
-        distance: Optional[str] = None,
-        competition_format: Optional[str] = None,
-        is_valid: Optional[int] = 1
+        event_id: Optional[int] = None,
+        bow_type: Optional[str] = None,
+        format: Optional[str] = None,
+        name: Optional[str] = None
     ) -> Tuple[List[Score], int]:
         """获取成绩列表"""
         query = db.query(Score)
 
-        if athlete_id is not None:
-            query = query.filter(Score.athlete_id == athlete_id)
-        if year is not None:
-            query = query.filter(Score.year == year)
-        if season:
-            query = query.filter(Score.season == season)
-        if distance:
-            query = query.filter(Score.distance == distance)
-        if competition_format:
-            query = query.filter(Score.competition_format == competition_format)
-        if is_valid is not None:
-            query = query.filter(Score.is_valid == is_valid)
+        if event_id is not None:
+            query = query.filter(Score.event_id == event_id)
+        if bow_type:
+            query = query.filter(Score.bow_type == bow_type)
+        if format:
+            query = query.filter(Score.format == format)
+        if name:
+            query = query.filter(Score.name.ilike(f"%{name}%"))
 
         total = query.count()
+        scores = query.order_by(desc(Score.created_at)).offset(skip).limit(limit).all()
+        return scores, total
+
+    @staticmethod
+    def update_score(db: Session, score_id: int, score_update: ScoreUpdate) -> Optional[Score]:
+        """更新成绩"""
+        db_score = db.query(Score).filter(Score.id == score_id).first()
+        if not db_score:
+            return None
+
+        # 更新允许的字段
+        if score_update.name is not None:
+            db_score.name = score_update.name
+        if score_update.club is not None:
+            db_score.club = score_update.club
+        if score_update.rank is not None:
+            db_score.rank = score_update.rank
+
+        db.commit()
+        db.refresh(db_score)
+        return db_score
+
+    @staticmethod
+    def delete_score(db: Session, score_id: int) -> bool:
+        """删除成绩"""
+        db_score = db.query(Score).filter(Score.id == score_id).first()
+        if not db_score:
+            return False
+        db.delete(db_score)
+        db.commit()
+        return True
+
+    @staticmethod
+    def batch_create_scores(db: Session, scores: List[ScoreCreate]) -> List[Score]:
+        """批量创建成绩"""
+        result = []
+        for score in scores:
+            created = ScoreService.create_score(db, score)
+            result.append(created)
+        return result
+
+    @staticmethod
+    def get_scores_by_event_and_bow(
+        db: Session,
+        event_id: int,
+        bow_type: str,
+        distance: str,
+        format: str = "ranking"
+    ) -> List[Dict]:
+        """获取某赛事某弓种的所有成绩，并计算积分
+        
+        返回排序后的列表，每项包含成绩信息和动态计算的积分
+        """
+        # 获取赛事配置，得到参赛人数
+        config = db.query(EventConfiguration).filter(
+            and_(
+                EventConfiguration.event_id == event_id,
+                EventConfiguration.bow_type == bow_type,
+                EventConfiguration.distance == distance,
+                EventConfiguration.format == format
+            )
+        ).first()
+        
+        if not config:
+            raise ValueError(f"未找到该赛事配置：事件{event_id}, 弓种{bow_type}, 距离{distance}, 格式{format}")
+        
+        participant_count = config.participant_count
+        
+        # 获取该比赛的所有成绩，并按排名排序
+        scores = db.query(Score).filter(
+            and_(
+                Score.event_id == event_id,
+                Score.bow_type == bow_type,
+                Score.distance == distance,
+                Score.format == format
+            )
+        ).order_by(Score.rank).all()
+        
+        # 计算积分并组装返回数据
+        result = []
+        for idx, score in enumerate(scores, 1):
+            points = ScoringCalculator.calculate_points(
+                rank=score.rank,
+                competition_format=score.format,
+                distance=score.distance,
+                participant_count=participant_count
+            )
+            result.append({
+                'id': score.id,
+                'display_rank': idx,  # 显示排名（按显示顺序）
+                'official_rank': score.rank,  # 官方排名
+                'name': score.name,
+                'club': score.club,
+                'bow_type': score.bow_type,
+                'distance': score.distance,
+                'format': score.format,
+                'points': points,
+                'highlight': idx <= 8  # 前8名突出显示
+            })
+        
+        return result
+
+    @staticmethod
+    def get_yearly_bow_type_ranking(
+        db: Session,
+        year: int,
+        bow_type: str
+    ) -> List[Dict]:
+        """获取某年度某弓种的积分排名（跨赛事、距离、格式聚合）
+        
+        返回该弓种在该年度的所有选手及其总积分排名
+        """
+        from sqlalchemy import and_
+        
+        # 获取该年度该弓种的所有成绩
+        scores = db.query(Score).filter(
+            Score.bow_type == bow_type
+        ).all()
+        
+        # 按赛事过滤年度
+        filtered_scores = []
+        for score in scores:
+            event = db.query(Event).filter(Event.id == score.event_id).first()
+            if event and event.year == year:
+                filtered_scores.append(score)
+        
+        # 按选手+俱乐部聚合积分
+        athlete_points = {}  # key: (name, club), value: dict
+        
+        for score in filtered_scores:
+            event = db.query(Event).filter(Event.id == score.event_id).first()
+            
+            # 获取赛事配置以获取参赛人数
+            config = db.query(EventConfiguration).filter(
+                and_(
+                    EventConfiguration.event_id == score.event_id,
+                    EventConfiguration.bow_type == score.bow_type,
+                    EventConfiguration.distance == score.distance,
+                    EventConfiguration.format == score.format
+                )
+            ).first()
+            
+            if not config:
+                # 如果没有配置，跳过（不应该发生）
+                continue
+            
+            # 计算积分
+            points = ScoringCalculator.calculate_points(
+                rank=score.rank,
+                competition_format=score.format,
+                distance=score.distance,
+                participant_count=config.participant_count
+            )
+            
+            key = (score.name, score.club)
+            if key not in athlete_points:
+                athlete_points[key] = {
+                    'name': score.name,
+                    'club': score.club,
+                    'total_points': 0.0,
+                    'scores': []
+                }
+            
+            athlete_points[key]['total_points'] += points
+            athlete_points[key]['scores'].append({
+                'event_id': score.event_id,
+                'event_season': f"{event.year} {event.season}",
+                'distance': score.distance,
+                'format': score.format,
+                'rank': score.rank,
+                'points': points
+            })
+        
+        # 排序
+        result = list(athlete_points.values())
+        result.sort(key=lambda x: x['total_points'], reverse=True)
+        
+        # 添加排名
+        for idx, item in enumerate(result, 1):
+            item['ranking'] = idx
+            item['highlight'] = idx <= 8
+        
+        return result
+
         scores = query.order_by(desc(Score.created_at)).offset(skip).limit(limit).all()
         return scores, total
 

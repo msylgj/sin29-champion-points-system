@@ -80,7 +80,7 @@ class ScoringCalculator:
         
         Args:
             rank: 排名（1开始）
-            competition_format: 赛制 ('ranking', 'elimination', 'team')
+            competition_format: 赛制 ('ranking', 'elimination', 'mixed_doubles', 'team')
             
         Returns:
             基础积分
@@ -91,7 +91,7 @@ class ScoringCalculator:
         elif competition_format == "elimination":
             return float(ScoringCalculator.ELIMINATION_POINTS.get(rank, 1))
         
-        elif competition_format == "team":
+        elif competition_format in ("mixed_doubles", "team"):
             return float(ScoringCalculator.TEAM_POINTS.get(rank, 1))
         
         return 1.0  # 其他情况返回1分
@@ -115,8 +115,8 @@ class ScoringCalculator:
             # 如果人数不足，使用基础系数1.0，不限制排名
             return 1.0, float('inf')
         
-        # 单项赛和团体赛使用不同的系数表
-        if competition_format == "team":
+        # 团体赛和混双赛使用团队系数表，其他赛制使用参赛人数系数表
+        if competition_format in ("team", "mixed_doubles"):
             coefficients = ScoringCalculator.TEAM_COEFFICIENTS
         else:
             coefficients = ScoringCalculator.PARTICIPANT_COEFFICIENTS
@@ -148,7 +148,7 @@ class ScoringCalculator:
         
         Args:
             rank: 排名（1开始）
-            competition_format: 赛制 ('ranking', 'elimination', 'team')
+            competition_format: 赛制 ('ranking', 'elimination', 'mixed_doubles', 'team')
             distance: 距离 (默认'30m'，'18m'时积分减半)
             participant_count: 参赛人数（用于计算系数）
             
@@ -193,7 +193,7 @@ class ScoringCalculator:
         return {
             "type": "rank_based",
             "version": "1.0",
-            "description": "射箭比赛积分规则 - 支持排名赛、淘汰赛、团体赛",
+            "description": "射箭比赛积分规则 - 支持排名赛、淘汰赛、混双赛、团体赛",
             "rules": {
                 "ranking": {
                     "base_points": ScoringCalculator.RANKING_POINTS,
@@ -203,6 +203,10 @@ class ScoringCalculator:
                     "base_points": ScoringCalculator.ELIMINATION_POINTS,
                     "default_points_9_16": 15,
                     "coefficients": ScoringCalculator.PARTICIPANT_COEFFICIENTS
+                },
+                "mixed_doubles": {
+                    "base_points": ScoringCalculator.TEAM_POINTS,
+                    "coefficients": ScoringCalculator.TEAM_COEFFICIENTS
                 },
                 "team": {
                     "base_points": ScoringCalculator.TEAM_POINTS,

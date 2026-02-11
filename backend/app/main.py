@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.routers import health, athletes, scores, events, stats
+from app.routers import event_configuration
 
 settings = get_settings()
 
@@ -25,6 +26,7 @@ app.include_router(health.router, prefix="/api", tags=["健康检查"])
 app.include_router(athletes.router, tags=["运动员管理"])
 app.include_router(scores.router, tags=["成绩管理"])
 app.include_router(events.router, tags=["赛事管理"])
+app.include_router(event_configuration.router, tags=["赛事配置管理"])
 app.include_router(stats.router, tags=["统计和排名"])
 
 

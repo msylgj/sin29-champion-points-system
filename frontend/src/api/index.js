@@ -64,7 +64,11 @@ export const scoreAPI = {
   batchImport: (data) => api.post('/scores/batch/import', data),
   recalculate: () => api.post('/scores/recalculate'),
   getAthleteScores: (athleteId, params = {}) => 
-    api.get(`/scores/athlete/${athleteId}/scores`, { params })
+    api.get(`/scores/athlete/${athleteId}/scores`, { params }),
+  getEventRanking: (eventId, params = {}) =>
+    api.get(`/scores/event/${eventId}/ranking`, { params }),
+  getAnnualRanking: (year, bowType) =>
+    api.get(`/scores/annual-ranking/${year}/${bowType}`)
 }
 
 // ==================== 赛事 API ====================
@@ -73,7 +77,8 @@ export const eventAPI = {
   getDetail: (id) => api.get(`/events/${id}`),
   create: (data) => api.post('/events', data),
   update: (id, data) => api.put(`/events/${id}`, data),
-  delete: (id) => api.delete(`/events/${id}`)
+  delete: (id) => api.delete(`/events/${id}`),
+  createWithConfigs: (data) => api.post('/events/with-configs', data)
 }
 
 // ==================== 统计排名 API ====================

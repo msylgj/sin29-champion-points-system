@@ -9,15 +9,8 @@ class BowType(str, enum.Enum):
     RECURVE = "recurve"  # 反曲弓
     COMPOUND = "compound"  # 复合弓
     TRADITIONAL = "traditional"  # 传统弓
-    LONGBOW = "longbow"  # 长弓（美猎弓）
+    LONGBOW = "longbow"  # 美猎弓
     BAREBOW = "barebow"  # 光弓
-
-
-class Gender(str, enum.Enum):
-    """性别枚举"""
-    MALE = "male"  # 男
-    FEMALE = "female"  # 女
-    MIXED = "mixed"  # 混合
 
 
 class Distance(str, enum.Enum):
@@ -32,21 +25,8 @@ class CompetitionFormat(str, enum.Enum):
     """比赛形式/赛制枚举"""
     RANKING = "ranking"  # 排位赛
     ELIMINATION = "elimination"  # 淘汰赛
+    MIXED_DOUBLES = "mixed_doubles"  # 混双赛
     TEAM = "team"  # 团体赛
-
-
-class EventStatus(str, enum.Enum):
-    """赛事状态枚举 - 已移除，系统不再保存赛事表"""
-    NOT_STARTED = "not_started"  # 未开始
-    IN_PROGRESS = "in_progress"  # 进行中
-    COMPLETED = "completed"  # 已结束
-
-
-class UserRole(str, enum.Enum):
-    """用户角色枚举 - 已移除，系统采用匿名密码认证"""
-    ADMIN = "admin"  # 管理员
-    COACH = "coach"  # 教练
-    VIEWER = "viewer"  # 查看者
 
 
 class Season(str, enum.Enum):
@@ -55,3 +35,4 @@ class Season(str, enum.Enum):
     Q2 = "Q2"  # 第二季度
     Q3 = "Q3"  # 第三季度
     Q4 = "Q4"  # 第四季度
+

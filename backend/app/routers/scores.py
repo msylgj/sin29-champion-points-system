@@ -1,18 +1,20 @@
 """
-成绩 API 路由
+成绩 API 路由 - 简化版本
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.score import (
     ScoreCreate, ScoreUpdate, ScoreRead, ScoreList, ScoreBatchImport
 )
 from app.services.score_service import ScoreService
+from app.models.event import Event
+from io import BytesIO
 
 router = APIRouter(prefix="/api/scores", tags=["成绩管理"])
 
 
-@router.post("", response_model=ScoreRead, summary="录入成绩")
+@router.post("", response_model=ScoreRead, summary="录入单条成绩")
 def create_score(score: ScoreCreate, db: Session = Depends(get_db)):
     """录入单条成绩"""
     try:
@@ -36,12 +38,10 @@ def get_score(score_id: int, db: Session = Depends(get_db)):
 def list_scores(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
-    athlete_id: int = Query(None),
-    year: int = Query(None),
-    season: str = Query(None),
-    distance: str = Query(None),
-    competition_format: str = Query(None),
-    is_valid: int = Query(1),
+    event_id: int = Query(None),
+    bow_type: str = Query(None),
+    format: str = Query(None),
+    name: str = Query(None),
     db: Session = Depends(get_db)
 ):
     """获取成绩列表，支持多条件筛选"""
@@ -50,12 +50,10 @@ def list_scores(
         db,
         skip=skip,
         limit=page_size,
-        athlete_id=athlete_id,
-        year=year,
-        season=season,
-        distance=distance,
-        competition_format=competition_format,
-        is_valid=is_valid
+        event_id=event_id,
+        bow_type=bow_type,
+        format=format,
+        name=name
     )
     return ScoreList(
         items=scores,
@@ -101,23 +99,48 @@ def batch_import_scores(
         raise HTTPException(status_code=500, detail=f"导入失败：{str(e)}")
 
 
-@router.post("/recalculate", summary="重新计算所有成绩的积分")
-def recalculate_scores(db: Session = Depends(get_db)):
-    """重新计算所有成绩的积分"""
-    try:
-        count = ScoreService.recalculate_all_scores(db)
-        return {"message": f"已重新计算 {count} 条成绩的积分"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"重新计算失败：{str(e)}")
-
-
-@router.get("/athlete/{athlete_id}/scores", response_model=list[ScoreRead], summary="获取运动员成绩")
-def get_athlete_scores(
-    athlete_id: int,
-    year: int = Query(None),
-    season: str = Query(None),
+@router.get("/event/{event_id}/ranking", summary="获取赛事积分排名")
+def get_event_ranking(
+    event_id: int,
+    bow_type: str = Query(...),
+    distance: str = Query(...),
+    format: str = Query("ranking"),
     db: Session = Depends(get_db)
 ):
-    """获取运动员的所有成绩"""
-    scores = ScoreService.get_athlete_scores(db, athlete_id, year, season)
-    return scores
+    """获取某赛事某弓种某距离的成绩排名和动态计算的积分"""
+    try:
+        scores = ScoreService.get_scores_by_event_and_bow(db, event_id, bow_type, distance, format)
+        return {
+            "event_id": event_id,
+            "bow_type": bow_type,
+            "distance": distance,
+            "format": format,
+            "scores": scores,
+            "total": len(scores)
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取排名失败：{str(e)}")
+
+
+@router.get("/annual-ranking/{year}/{bow_type}", summary="获取年度弓种积分排名")
+def get_annual_ranking(
+    year: int,
+    bow_type: str,
+    db: Session = Depends(get_db)
+):
+    """获取某年度某弓种的年度积分排名（跨赛事、距离、格式聚合）
+    
+    返回该弓种在该年度的所有选手及其总积分排名，前8名标记为突出显示
+    """
+    try:
+        ranking = ScoreService.get_yearly_bow_type_ranking(db, year, bow_type)
+        return {
+            "year": year,
+            "bow_type": bow_type,
+            "athletes": ranking,
+            "total": len(ranking)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取排名失败：{str(e)}")
