@@ -126,8 +126,8 @@
 
       <!-- 导出按钮 -->
       <div v-if="ranking.length > 0" class="action-bar">
-        <button @click="exportToCSV" class="btn-export">
-          📥 导出为CSV
+        <button @click="exportToExcel" class="btn-export">
+          📥 导出为 Excel
         </button>
       </div>
     </div>
@@ -138,6 +138,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { scoreAPI, dictionaryAPI, eventAPI } from '@/api'
 import { useRouter } from 'vue-router'
+import * as XLSX from 'xlsx'
 
 const router = useRouter()
 const loading = ref(false)
@@ -150,7 +151,7 @@ const bowTypes = ref([])
 // 获取赛制标签
 const getFormatLabel = (format) => {
   const labels = {
-    'ranking': '排名赛',
+    'ranking': '排位赛',
     'elimination': '淘汰赛',
     'mixed_doubles': '混双赛',
     'team': '团体赛'
@@ -222,8 +223,8 @@ const loadRanking = async () => {
   }
 }
 
-// 导出CSV
-const exportToCSV = () => {
+// 导出 Excel
+const exportToExcel = () => {
   if (ranking.value.length === 0) return
 
   const headers = ['排名', '姓名', '俱乐部', '积分', '参赛次数']
@@ -235,22 +236,29 @@ const exportToCSV = () => {
     athlete.scores.length
   ])
 
-  const csv = [
-    headers.join(','),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-  ].join('\n')
+  // 创建工作表
+  const worksheetData = [headers, ...rows]
+  const worksheet = XLSX.utils.aoa_to_sheet(worksheetData)
 
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-  const link = document.createElement('a')
-  const url = URL.createObjectURL(blob)
-  
-  link.setAttribute('href', url)
-  link.setAttribute('download', `${selectedYear.value}年${selectedBowType.value}弓排名.csv`)
-  link.style.visibility = 'hidden'
-  
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  // 设置列宽
+  worksheet['!cols'] = [
+    { wch: 8 },  // 排名
+    { wch: 15 }, // 姓名
+    { wch: 20 }, // 俱乐部
+    { wch: 12 }, // 积分
+    { wch: 12 }  // 参赛次数
+  ]
+
+  // 创建工作簿
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, '排名列表')
+
+  // 生成文件名
+  const bowTypeLabel = bowTypes.value.find(b => b.code === selectedBowType.value)?.name || selectedBowType.value
+  const filename = `${selectedYear.value}年${bowTypeLabel}积分排名.xlsx`
+
+  // 导出文件
+  XLSX.writeFile(workbook, filename)
 }
 
 // 导航到管理页面（成绩导入）

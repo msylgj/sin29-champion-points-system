@@ -73,11 +73,4 @@ class ScoreList(BaseModel):
 
 class ScoreBatchImport(BaseModel):
     """批量导入成绩"""
-    event_id: int
-    scores: list[ScoreCreate]
-
-
-
-class ScoreBatchImport(BaseModel):
-    """批量导入成绩"""
     scores: list[ScoreCreate]

@@ -9,7 +9,7 @@ class TestScoringCalculator:
     """测试积分计算器"""
     
     def test_ranking_points_rank1_30m(self):
-        """测试排名赛排名第1名、30米的积分"""
+        """测试排位赛排名第1名、30米的积分"""
         points = ScoringCalculator.calculate_points(
             rank=1,
             competition_format="ranking",
@@ -20,7 +20,7 @@ class TestScoringCalculator:
         assert points == 20.0
     
     def test_ranking_points_rank1_18m(self):
-        """测试排名赛排名第1名、18米的积分（减半）"""
+        """测试排位赛排名第1名、18米的积分（减半）"""
         points = ScoringCalculator.calculate_points(
             rank=1,
             competition_format="ranking",
@@ -31,7 +31,7 @@ class TestScoringCalculator:
         assert points == 10.0
     
     def test_ranking_points_rank5_30m(self):
-        """测试排名赛排名第5名、30米的积分"""
+        """测试排位赛排名第5名、30米的积分"""
         points = ScoringCalculator.calculate_points(
             rank=5,
             competition_format="ranking",
@@ -42,7 +42,7 @@ class TestScoringCalculator:
         assert points == 8.0
     
     def test_ranking_points_large_group(self):
-        """测试排名赛大分组（128人以上）的系数"""
+        """测试排位赛大分组（128人以上）的系数"""
         points = ScoringCalculator.calculate_points(
             rank=1,
             competition_format="ranking",
@@ -53,7 +53,7 @@ class TestScoringCalculator:
         assert points == 35.0
     
     def test_ranking_points_beyond_limit(self):
-        """测试排名赛超出获得原额基础积分范围的排名（获得1分）"""
+        """测试排位赛超出获得原额基础积分范囲的排名（获得1分）"""
         points = ScoringCalculator.calculate_points(
             rank=10,
             competition_format="ranking",
@@ -150,7 +150,7 @@ class TestScoringCalculator:
         assert cutoff == 16
     
     def test_base_points_ranking(self):
-        """测试排名赛的基础积分（超出范围返回1分）"""
+        """测试排位赛的基础积分（超出范囲返回1分）"""
         assert ScoringCalculator.calculate_base_points(1, "ranking") == 25.0
         assert ScoringCalculator.calculate_base_points(2, "ranking") == 22.0
         assert ScoringCalculator.calculate_base_points(3, "ranking") == 19.0

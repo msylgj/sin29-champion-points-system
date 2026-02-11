@@ -1,8 +1,8 @@
 """
 积分计算服务 - 根据比赛规则和排名自动计算积分
 
-计分规则说明（来自point.jpg）:
-1. 排名赛(单项):
+计分规则说明:
+1. 排位赛(单项):
    - 排名1-8: 25, 22, 19, 15, 10, 8, 6, 4分
    
 2. 淘汰赛:
@@ -36,7 +36,7 @@ import json
 class ScoringCalculator:
     """积分计算器"""
     
-    # 排名赛基础积分表
+    # 排位赛基础积分表
     RANKING_POINTS = {
         1: 25, 2: 22, 3: 19, 4: 15, 5: 10, 6: 8, 7: 6, 8: 4
     }
@@ -193,7 +193,7 @@ class ScoringCalculator:
         return {
             "type": "rank_based",
             "version": "1.0",
-            "description": "射箭比赛积分规则 - 支持排名赛、淘汰赛、混双赛、团体赛",
+            "description": "射箭比赛积分规则 - 支持排位赛、淘汰赛、混双赛、团体赛",
             "rules": {
                 "ranking": {
                     "base_points": ScoringCalculator.RANKING_POINTS,

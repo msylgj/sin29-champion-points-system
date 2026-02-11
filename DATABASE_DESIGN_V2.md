@@ -129,17 +129,17 @@ CREATE INDEX idx_event_config_lookup ON event_configurations(event_id, bow_type,
 
 **示例数据**：
 ```sql
--- 2024 Q1 赛事，反曲弓30米排名赛，24人参赛
+-- 2024 Q1 赛事，反曲弓30米排位赛，24人参赛
 INSERT INTO event_configurations 
 (event_id, bow_type, distance, format, participant_count) 
 VALUES (1, 'recurve', '30m', 'ranking', 24);
 
--- 2024 Q1 赛事，反曲弓18米排名赛，20人参赛
+-- 2024 Q1 赛事，反曲弓18米排位赛，20人参赛
 INSERT INTO event_configurations 
 (event_id, bow_type, distance, format, participant_count) 
 VALUES (1, 'recurve', '18m', 'ranking', 20);
 
--- 2024 Q1 赛事，复合弓30米排名赛，15人参赛
+-- 2024 Q1 赛事，复合弓30米排位赛，15人参赛
 INSERT INTO event_configurations 
 (event_id, bow_type, distance, format, participant_count) 
 VALUES (1, 'compound', '30m', 'ranking', 15);
@@ -198,7 +198,7 @@ CREATE INDEX idx_scores_year_bow ON scores(SELECT EXTRACT(YEAR FROM e.created_at
 
 **示例数据**：
 ```sql
--- 张三在2024 Q1赛事中，反曲弓30米排名赛排名第1
+-- 张三在2024 Q1赛事中，反曲弓30米排位赛排名第1
 INSERT INTO scores (event_id, name, club, bow_type, distance, format, rank)
 VALUES (1, '张三', '俱乐部A', 'recurve', '30m', 'ranking', 1);
 
@@ -206,7 +206,7 @@ VALUES (1, '张三', '俱乐部A', 'recurve', '30m', 'ranking', 1);
 INSERT INTO scores (event_id, name, club, bow_type, distance, format, rank)
 VALUES (1, '李四', '俱乐部B', 'recurve', '30m', 'ranking', 2);
 
--- 张三同赛事18m排名赛排名第2
+-- 张三同赛事18m排位赛排名第2
 INSERT INTO scores (event_id, name, club, bow_type, distance, format, rank)
 VALUES (1, '张三', '俱乐部A', 'recurve', '18m', 'ranking', 2);
 ```
@@ -278,7 +278,7 @@ CREATE TABLE competition_formats (
 **初始数据**：
 ```sql
 INSERT INTO competition_formats (name, display_name, description) VALUES
-('ranking', '排名赛', '参与者根据成绩排名，排名应分即为积分'),
+('ranking', '排位赛', '参与者根据成绩排名，排名应分即为积分'),
 ('elimination', '淘汰赛', '逐轮淘汰赛制，最后赢家排名第1'),
 ('mixed_doubles', '混双赛', '两人一队，混性别组队，计分同淘汰赛'),
 ('team', '团体赛', '多人一队团体竞赛，计分同淘汰赛');

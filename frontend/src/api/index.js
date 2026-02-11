@@ -46,12 +46,16 @@ api.interceptors.response.use(
         case 403:
           console.error('无权限访问')
           break
+        case 422:
+          // 处理验证错误
+          console.error('验证失败:', error.response.data)
+          break
         case 500:
           console.error('服务器错误')
           break
       }
     }
-    return Promise.reject(error)
+    return Promise.reject(error.response?.data || error)
   }
 )
 

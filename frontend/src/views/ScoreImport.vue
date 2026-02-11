@@ -203,11 +203,14 @@
               hidden
             />
             <button type="button" @click="$refs.fileInput.click()" class="btn-upload">
-              选择CSV或Excel文件
+              选择 Excel 或 CSV 文件
             </button>
             <p class="upload-help">
-              CSV格式：姓名, 俱乐部, 弓种, 距离, 赛制, 排名<br/>
-              单位：逗号分隔
+              支持格式：Excel (.xlsx, .xls) 或 CSV<br/>
+              <strong>列标题需包括（推荐英文或中文）：</strong><br/>
+              <span style="color: #667eea;">姓名</span>、<span style="color: #667eea;">俱乐部</span>、<span style="color: #667eea;">弓种</span>、<span style="color: #667eea;">距离</span>、<span style="color: #667eea;">赛制</span>、<span style="color: #667eea;">排名</span><br/>
+              <em style="font-size: 12px; color: #999;">弓种、距离、赛制的值支持使用字典名称（如"反曲弓"、"30m"、"排位赛"）或代码（如"recurve"、"ranking"）</em><br/>
+              系统会自动识别列标题并匹配字段
             </p>
           </div>
           <div v-if="uploadedFileName" class="file-info">
@@ -251,6 +254,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { eventAPI, scoreAPI, dictionaryAPI } from '@/api'
+import * as XLSX from 'xlsx'
 
 const router = useRouter()
 const events = ref([])
@@ -297,7 +301,7 @@ const getBowTypeLabel = (type) => {
 // 获取赛制标签
 const getFormatLabel = (format) => {
   const labels = {
-    'ranking': '排名赛',
+    'ranking': '排位赛',
     'elimination': '淘汰赛',
     'mixed_doubles': '混双赛',
     'team': '团体赛'
@@ -381,39 +385,204 @@ const onFileSelected = async (event) => {
   if (!file) return
 
   uploadedFileName.value = file.name
+  errorMessage.value = ''
+  successMessage.value = ''
 
-  // 这里可以使用 CSV 解析库来解析文件
-  // 简单示例：读取CSV文件
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    try {
-      const csv = e.target.result
-      const lines = csv.split('\n')
-      
-      for (let i = 1; i < lines.length; i++) {
-        if (!lines[i].trim()) continue
-        
-        const parts = lines[i].split(',').map(p => p.trim())
-        if (parts.length < 6) continue
-
-        batchScores.value.push({
-          event_id: parseInt(selectedEventId.value),
-          name: parts[0],
-          club: parts[1] || '',
-          bow_type: parts[2],
-          distance: parts[3],
-          format: parts[4],
-          rank: parseInt(parts[5])
-        })
+  try {
+    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+    
+    if (isExcel) {
+      // Excel 文件处理
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result)
+          const workbook = XLSX.read(data, { type: 'array' })
+          const sheetName = workbook.SheetNames[0]
+          const worksheet = workbook.Sheets[sheetName]
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+          
+          parseExcelData(jsonData)
+        } catch (error) {
+          errorMessage.value = 'Excel 文件解析失败：' + error.message
+        }
       }
-      
-      successMessage.value = `成功解析 ${batchScores.value.length} 条成绩`
-      activeTab.value = 'single'
-    } catch (error) {
-      errorMessage.value = '文件解析失败：' + error.message
+      reader.readAsArrayBuffer(file)
+    } else if (file.name.endsWith('.csv')) {
+      // CSV 文件处理
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const csv = e.target.result
+          const lines = csv.split('\n')
+          const jsonData = lines.map(line => 
+            line.split(',').map(p => p.trim())
+          )
+          parseExcelData(jsonData)
+        } catch (error) {
+          errorMessage.value = 'CSV 文件解析失败：' + error.message
+        }
+      }
+      reader.readAsText(file)
+    } else {
+      errorMessage.value = '请上传 .xlsx, .xls 或 .csv 格式的文件'
+    }
+  } catch (error) {
+    errorMessage.value = '文件处理失败：' + error.message
+  }
+}
+
+// 解析 Excel/CSV 数据
+const parseExcelData = (jsonData) => {
+  if (!jsonData || jsonData.length === 0) {
+    errorMessage.value = '文件为空'
+    return
+  }
+
+  // 字段映射 - 支持多种列名变体
+  const fieldMappings = {
+    name: ['姓名', 'name', '名字', '选手', '参赛者'],
+    club: ['俱乐部', 'club', '组织', '队伍', '俱乐部名称'],
+    bow_type: ['弓种', 'bow_type', 'bow', '弓类', '弓的类型'],
+    distance: ['距离', 'distance', '比赛距离', '距离(m)', '距离m'],
+    format: ['赛制', 'format', '比赛格式', '赛制格式', '竞赛形式'],
+    rank: ['排名', 'rank', '名次', '成绩排名', 'rank号']
+  }
+
+  // 获取第一行作为列标题
+  const headerRow = jsonData[0]
+  if (!headerRow) {
+    errorMessage.value = '无法读取列标题'
+    return
+  }
+
+  // 创建字段映射
+  const columnMapping = {}
+  const requiredFields = ['name', 'distance', 'format', 'rank']
+  const allRequiredFieldsPresent = []
+
+  // 尝试匹配每个字段
+  for (const [fieldName, aliases] of Object.entries(fieldMappings)) {
+    for (let colIndex = 0; colIndex < headerRow.length; colIndex++) {
+      const headerValue = (headerRow[colIndex] || '').toString().trim().toLowerCase()
+      if (aliases.some(alias => headerValue === alias.toLowerCase())) {
+        columnMapping[fieldName] = colIndex
+        if (requiredFields.includes(fieldName)) {
+          allRequiredFieldsPresent.push(fieldName)
+        }
+        break
+      }
     }
   }
-  reader.readAsText(file)
+
+  // 验证必需字段
+  const missingFields = requiredFields.filter(f => !allRequiredFieldsPresent.includes(f))
+  if (missingFields.length > 0) {
+    const fieldLabels = {
+      'name': '姓名',
+      'distance': '距离',
+      'format': '赛制',
+      'rank': '排名'
+    }
+    const missingLabels = missingFields.map(f => fieldLabels[f]).join('、')
+    errorMessage.value = `Excel 文件缺少必需字段：${missingLabels}。列标题应包括：姓名、距离、赛制、排名`
+    return
+  }
+
+  // 验证弓种字段
+  if (!columnMapping['bow_type']) {
+    errorMessage.value = `Excel 文件缺少"弓种"字段。请确保列标题包括：姓名、俱乐部、弓种、距离、赛制、排名`
+    return
+  }
+
+  // 验证俱乐部字段
+  if (!columnMapping['club']) {
+    errorMessage.value = `Excel 文件缺少"俱乐部"字段。请确保列标题为（按顺序）：姓名、俱乐部、弓种、距离、赛制、排名`
+    return
+  }
+
+  // 创建字典值到代码的映射
+  const createValueToCodeMap = (dictArray) => {
+    const map = {}
+    if (Array.isArray(dictArray)) {
+      dictArray.forEach(item => {
+        if (item.name && item.code) {
+          map[item.name.toLowerCase().trim()] = item.code
+        }
+      })
+    }
+    return map
+  }
+
+  const bowTypeMap = createValueToCodeMap(bowTypes.value)
+  const distanceMap = createValueToCodeMap(distances.value)
+  const formatMap = createValueToCodeMap(competitionFormats.value)
+
+  // 转换字典值为代码
+  const convertToCode = (value, valueMap, fieldName) => {
+    const trimmedValue = (value || '').toString().trim()
+    if (!trimmedValue) return trimmedValue
+
+    // 首先尝试直接匹配（用户输入的可能就是代码）
+    if (valueMap[trimmedValue.toLowerCase()]) {
+      return valueMap[trimmedValue.toLowerCase()]
+    }
+
+    // 然后尝试模糊匹配（如果输入是代码形式）
+    for (const [name, code] of Object.entries(valueMap)) {
+      if (code.toLowerCase() === trimmedValue.toLowerCase()) {
+        return code
+      }
+    }
+
+    // 如果都没匹配上，返回原值
+    return trimmedValue
+  }
+
+  // 解析数据行
+  const newScores = []
+  for (let i = 1; i < jsonData.length; i++) {
+    const row = jsonData[i]
+    if (!row || !row[columnMapping.name] || (typeof row[columnMapping.name] === 'string' && !row[columnMapping.name].trim())) {
+      continue // 跳过空行或没有姓名的行
+    }
+
+    const name = (row[columnMapping.name] || '').toString().trim()
+    const club = (row[columnMapping.club] || '').toString().trim()
+    let bow_type = (row[columnMapping.bow_type] || '').toString().trim()
+    let distance = (row[columnMapping.distance] || '').toString().trim()
+    let format = (row[columnMapping.format] || '').toString().trim()
+    const rank = parseInt(row[columnMapping.rank])
+
+    // 转换字典值为代码
+    bow_type = convertToCode(bow_type, bowTypeMap, 'bow_type')
+    distance = convertToCode(distance, distanceMap, 'distance')
+    format = convertToCode(format, formatMap, 'format')
+
+    // 基本验证
+    if (!name || !bow_type || !distance || !format || isNaN(rank) || rank < 1) {
+      continue
+    }
+
+    newScores.push({
+      event_id: parseInt(selectedEventId.value),
+      name,
+      club: club || '',
+      bow_type,
+      distance,
+      format,
+      rank
+    })
+  }
+
+  if (newScores.length === 0) {
+    errorMessage.value = '文件中没有有效的成绩数据'
+    return
+  }
+
+  batchScores.value = newScores
+  successMessage.value = `成功解析 ${newScores.length} 条成绩。`
+  activeTab.value = 'single'
 }
 
 // 提交导入
@@ -428,7 +597,61 @@ const submitImport = async () => {
   successMessage.value = ''
 
   try {
-    const response = await scoreAPI.batchImport({ scores: batchScores.value })
+    // 再次验证数据
+    const validScores = []
+    const validationErrors = []
+    
+    // 构建字典映射
+    const bowTypeMap = {}
+    const formatMap = {}
+    const distanceMap = {}
+    
+    bowTypes.value.forEach(b => {
+      bowTypeMap[b.code] = b.name
+    })
+    competitionFormats.value.forEach(f => {
+      formatMap[f.code] = f.name
+    })
+    distances.value.forEach(d => {
+      distanceMap[d.code] = d.name
+    })
+    
+    for (let i = 0; i < batchScores.value.length; i++) {
+      const score = batchScores.value[i]
+      const lineNo = i + 1
+      const errors = []
+      
+      if (!score.event_id || !Number.isInteger(score.event_id) || score.event_id < 1) {
+        errors.push(`无效的赛事ID`)
+      }
+      if (!score.name || score.name.length === 0) {
+        errors.push(`选手姓名不能为空`)
+      }
+      if (!score.bow_type || score.bow_type.length === 0) {
+        errors.push(`弓种不能为空`)
+      }
+      if (!score.distance || score.distance.length === 0) {
+        errors.push(`距离不能为空`)
+      }
+      if (!score.format || score.format.length === 0) {
+        errors.push(`赛制不能为空`)
+      }
+      if (!Number.isInteger(score.rank) || score.rank < 1) {
+        errors.push(`排名必须是正整数`)
+      }
+      
+      if (errors.length > 0) {
+        validationErrors.push(`第 ${lineNo} 条成绩（${score.name}）：${errors.join('；')}`)
+      } else {
+        validScores.push(score)
+      }
+    }
+    
+    if (validationErrors.length > 0) {
+      throw new Error(validationErrors.join('\n'))
+    }
+
+    const response = await scoreAPI.batchImport({ scores: validScores })
     successMessage.value = `成功导入 ${batchScores.value.length} 条成绩`
     
     // 获取导入成绩中的首个弓种，用于跳转时传递参数
@@ -444,7 +667,74 @@ const submitImport = async () => {
       }
     }, 1500)
   } catch (error) {
-    errorMessage.value = error.message || '导入失败，请重试'
+    let errorMsg = '导入失败，请重试'
+    
+    console.error('Import error:', error)
+    
+    try {
+      if (error.detail) {
+        // Pydantic 验证错误
+        if (Array.isArray(error.detail)) {
+          // 构建错误映射 - 找出具体哪一行数据出错
+          const errorMap = {}
+          
+          error.detail.forEach(e => {
+            const msg = e.msg || '验证失败'
+            const loc = e.loc || []
+            
+            // 从错误消息中提取类型信息
+            let translatedMsg = msg
+            
+            // 弓种错误转换
+            if (msg.includes('弓种必须是')) {
+              const validBows = bowTypes.value.map(b => b.name).join('、')
+              translatedMsg = `弓种必须是：${validBows}`
+            }
+            
+            // 赛制/比赛类型错误转换
+            if (msg.includes('比赛类型必须是') || msg.includes('赛制必须是')) {
+              const validFormats = competitionFormats.value.map(f => f.name).join('、')
+              translatedMsg = `赛制必须是：${validFormats}`
+            }
+            
+            // 距离错误转换
+            if (msg.includes('距离必须是')) {
+              const validDistances = distances.value.map(d => d.name).join('、')
+              translatedMsg = `距离必须是：${validDistances}`
+            }
+            
+            // 获取是第几条成绩
+            if (loc && loc.length >= 2 && loc[0] === 'body' && loc[1] === 'scores') {
+              const scoreIndex = parseInt(loc[2])
+              const lineNo = scoreIndex + 1 // 数组从0开始，显示时+1
+              const scoreName = batchScores.value[scoreIndex]?.name || '未知'
+              
+              if (!errorMap[lineNo]) {
+                errorMap[lineNo] = []
+              }
+              errorMap[lineNo].push(`${translatedMsg}（姓名：${scoreName}）`)
+            }
+          })
+          
+          // 构建错误提示
+          const errorLines = Object.keys(errorMap).sort((a, b) => parseInt(a) - parseInt(b))
+          if (errorLines.length > 0) {
+            errorMsg = errorLines.map(lineNo => {
+              return `第 ${lineNo} 条成绩：${errorMap[lineNo].join('；')}`
+            }).join('\n')
+          }
+        } else {
+          errorMsg = error.detail
+        }
+      } else if (error.message) {
+        errorMsg = error.message
+      }
+    } catch (parseError) {
+      console.error('Error parsing error response:', parseError)
+      errorMsg = '导入失败，详情请查看控制台'
+    }
+    
+    errorMessage.value = errorMsg
     console.error('Error importing scores:', error)
   } finally {
     importLoading.value = false
@@ -831,6 +1121,11 @@ onMounted(() => {
   border-radius: 6px;
   font-size: 14px;
   animation: slideUp 0.3s ease;
+  max-height: 150px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
 }
 
 .error-message {
@@ -844,6 +1139,11 @@ onMounted(() => {
   border-radius: 6px;
   font-size: 14px;
   animation: slideUp 0.3s ease;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
 }
 
 @keyframes fadeIn {
