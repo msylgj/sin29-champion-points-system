@@ -1,203 +1,327 @@
-# 数据库设计文档 (v2.0 - 重构版)
+# 数据库设计文档 (v2.0)
 
-## 概述
+一个针对射箭赛事积分统计系统的轻量级数据库架构。系统设计规范、高效，支持多维度积分计算和年度排名聚合。
 
-经过完整重构，系统数据库架构从原来的 15+ 个表简化为 8 个核心表。主要改进包括：
-- ✅ 移除冗余表（athletes, event_participants, aggregate_points）
-- ✅ 移除 scores 表的 points 字段（改为动态计算）
-- ✅ 新增 event_configurations 表（存储参赛人数）
-- ✅ 统一赛制设计（支持4种赛制）
+> **版本**: v2.0 | **最后更新**: 2026年2月 | **核心表**: 6个 | **特点**: 动态计算积分，不存储冗余数据
 
 ---
 
-## 数据库架构图
+## 📊 核心概念
+
+### 三层数据模型
 
 ```
-┌─────────────────────────────────────┐
-│          数据库核心表               │
-├─────────────────────────────────────┤
-│                                     │
-│  events (赛事)                      │
-│  ├─ id, year, season              │
-│  └─ created_at, updated_at         │
-│       ↓                             │
-│  event_configurations (配置)        │
-│  ├─ event_id (PK+FK)              │
-│  ├─ bow_type, distance, format    │
-│  └─ participant_count              │
-│       ↓                             │
-│  scores (成绩)                      │
-│  ├─ id, event_id (FK)             │
-│  ├─ name, club                     │
-│  ├─ bow_type, distance, format    │
-│  ├─ rank (★ 不存储积分)             │
-│  └─ created_at                     │
-│                                     │
-│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-│  字典表（参考数据）                  │
-│  ├─ bow_types (弓种)               │
-│  ├─ distances (距离)               │
-│  └─ competition_formats (赛制)     │
-│                                     │
-└─────────────────────────────────────┘
+业务数据层          事实数据层          字典数据层
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│  events      │  │  scores      │  │ bow_types    │
+│ (赛事)       │──│ (成绩)       │──│ (弓种字典)   │
+└──────────────┘  └──────────────┘  └──────────────┘
+│                  │
+├─event_configs   ├─no points field! (动态计算)
+│ (参赛人数)      │
+└──────────────┘  │                  ┌──────────────┐
+                  │                  │ distances   │
+                  │                  │ (距离字典)  │
+                  │                  └──────────────┘
+                  │
+                  │                  ┌──────────────┐
+                  └──────────────────│ competition  │
+                                     │ _formats     │
+                                     │ (赛制字典)   │
+                                     └──────────────┘
 ```
+
+### 关键设计理念
+
+| 原则 | 实现 | 优势 |
+|-----|-----|------|
+| **规范化** | 只存储事实数据 | 避免冗余和不一致 |
+| **动态计算** | 积分在响应时计算 | 支持后期调整参数 |
+| **灵活扩展** | 字典驱动的设计 | 可动态添加弓种/距离/赛制 |
+| **高效查询** | 关键字段建立索引 | 支持百万级数据 |
 
 ---
 
-## 详细表结构
+## 🗄️ 数据库表详解
 
 ### 1. events（赛事表）
 
-**用途**：存储赛事基本信息
+**用途**：存储射箭比赛赛事的基本信息
 
 ```sql
-CREATE TABLE events (
+CREATE TABLE IF NOT EXISTS events (
     id SERIAL PRIMARY KEY,
     year INTEGER NOT NULL,
     season VARCHAR(2) NOT NULL,  -- Q1, Q2, Q3, Q4
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(year, season)
 );
 ```
 
 **字段说明**：
 
-| 字段 | 类型 | 说明 |
-|-----|-----|------|
-| id | SERIAL | 主键，赛事ID |
-| year | INTEGER | 赛事年度（2024、2025等） |
-| season | VARCHAR(2) | 赛季（Q1-Q4代表四个季度） |
-| created_at | TIMESTAMP | 创建时间 |
-| updated_at | TIMESTAMP | 更新时间 |
+| 字段 | 类型 | 约束 | 说明 |
+|-----|-----|------|------|
+| id | SERIAL | PRIMARY KEY | 赛事唯一标识 |
+| year | INTEGER | NOT NULL | 赛事年份（2024、2025等） |
+| season | VARCHAR(2) | NOT NULL | 赛季（Q1-Q4，代表四个季度） |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 更新时间 |
+
+**约束**：
+- `UNIQUE(year, season)`：同一年度的同一季度只能创建一个赛事
 
 **索引**：
 ```sql
-CREATE INDEX idx_events_year ON events(year);
-CREATE INDEX idx_events_year_season ON events(year, season);
+CREATE INDEX idx_event_year ON events(year);
+CREATE INDEX idx_event_year_season ON events(year, season);
 ```
 
 **示例数据**：
 ```sql
-INSERT INTO events (year, season) VALUES (2024, 'Q1');  -- 2024年第一季度
-INSERT INTO events (year, season) VALUES (2024, 'Q2');
-INSERT INTO events (year, season) VALUES (2025, 'Q1');
+INSERT INTO events (year, season) VALUES (2024, 'Q1');  -- 2024年第1季度
+INSERT INTO events (year, season) VALUES (2024, 'Q2');  -- 2024年第2季度
+INSERT INTO events (year, season) VALUES (2025, 'Q1');  -- 2025年第1季度
 ```
 
 ---
 
-### 2. event_configurations（赛事配置表）⭐ NEW
+### 2. event_configurations（赛事配置表）⭐ 新增表
 
-**用途**：存储每个赛事的配置信息，特别是参赛人数（用于计算积分系数）
+**用途**：存储每个赛事的多组比赛配置（弓种/距离/赛制组合），以及该配置的参赛人数
+
+**关键作用**：参赛人数直接影响积分系数计算，需要单独存储
 
 ```sql
-CREATE TABLE event_configurations (
+CREATE TABLE IF NOT EXISTS event_configurations (
     id SERIAL PRIMARY KEY,
     event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    bow_type VARCHAR(20) NOT NULL,
+    bow_type VARCHAR(50) NOT NULL,
     distance VARCHAR(10) NOT NULL,
-    format VARCHAR(20) NOT NULL,
+    format VARCHAR(50) NOT NULL,
     participant_count INTEGER NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(event_id, bow_type, distance, format)
 );
 ```
 
 **字段说明**：
 
-| 字段 | 类型 | 说明 |
-|-----|-----|------|
-| id | SERIAL | 主键 |
-| event_id | INTEGER | 外键，关联events表 |
-| bow_type | VARCHAR(20) | 弓种（recurve、compound、barebow、traditional） |
-| distance | VARCHAR(10) | 距离（18m、25m、30m、50m、70m） |
-| format | VARCHAR(20) | 赛制（ranking、elimination、mixed_doubles、team） |
-| participant_count | INTEGER | 参赛人数（1-999） |
-| created_at | TIMESTAMP | 创建时间 |
-| updated_at | TIMESTAMP | 更新时间 |
+| 字段 | 类型 | 约束 | 说明 |
+|-----|-----|------|------|
+| id | SERIAL | PRIMARY KEY | 配置ID |
+| event_id | INTEGER | NOT NULL, FK | 关联的赛事ID |
+| bow_type | VARCHAR(50) | NOT NULL | 弓种代码（recurve、compound等） |
+| distance | VARCHAR(10) | NOT NULL | 距离代码（18m、30m、50m、70m） |
+| format | VARCHAR(50) | NOT NULL | 赛制代码（ranking、elimination、mixed_doubles、team） |
+| participant_count | INTEGER | NOT NULL | 参赛人数（1-999） |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
+| updated_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 更新时间 |
 
 **约束**：
-- UNIQUE(event_id, bow_type, distance, format)：每个赛事的每个配置组合唯一
-- participant_count >= 1：参赛人数至少1人
+- `UNIQUE(event_id, bow_type, distance, format)`：每个赛事的每个配置组合唯一
+- `participant_count >= 1`：参赛人数至少1人
 
 **索引**：
 ```sql
 CREATE INDEX idx_event_config_event ON event_configurations(event_id);
-CREATE INDEX idx_event_config_lookup ON event_configurations(event_id, bow_type, distance, format);
+CREATE INDEX idx_event_config_key ON event_configurations(event_id, bow_type, distance, format);
 ```
 
-**示例数据**：
+**实际使用示例**：
 ```sql
--- 2024 Q1 赛事，反曲弓30米排位赛，24人参赛
-INSERT INTO event_configurations 
-(event_id, bow_type, distance, format, participant_count) 
+-- 2024 Q1 赛事中的多个配置
+-- 配置1：反曲弓30米，24人参赛
+INSERT INTO event_configurations (event_id, bow_type, distance, format, participant_count)
 VALUES (1, 'recurve', '30m', 'ranking', 24);
 
--- 2024 Q1 赛事，反曲弓18米排位赛，20人参赛
-INSERT INTO event_configurations 
-(event_id, bow_type, distance, format, participant_count) 
+-- 配置2：反曲弓18米，20人参赛
+INSERT INTO event_configurations (event_id, bow_type, distance, format, participant_count)
 VALUES (1, 'recurve', '18m', 'ranking', 20);
 
--- 2024 Q1 赛事，复合弓30米排位赛，15人参赛
-INSERT INTO event_configurations 
-(event_id, bow_type, distance, format, participant_count) 
+-- 配置3：复合弓30米，15人参赛
+INSERT INTO event_configurations (event_id, bow_type, distance, format, participant_count)
 VALUES (1, 'compound', '30m', 'ranking', 15);
 ```
 
-**关键特点**：
-- 允许同一赛事的不同配置有不同的参赛人数
-- 参赛人数用于计算积分系数（18人以上为1.0倍，15-17人为0.9倍，10-14人为0.8倍）
-- 配置信息允许后期修改（例如调整参赛人数），动态重新计算积分
+**为什么需要这张表**：
+- 参赛人数决定了积分系数（人数越多系数越高）
+- 同一赛事的不同配置的参赛人数可能不同
+- 需要在计算积分时查询对应配置的参赛人数
+- 支持后期修改参赛人数，动态重新计算所有相关成绩的积分
 
 ---
 
-### 3. scores（成绩表）
+### 3. scores（成绩表）⭐ 关键改进
 
-**用途**：存储参赛者的比赛成绩
+**用途**：存储参赛者在每个比赛配置中的具体成绩
+
+**关键特性**：⚡ **不存储积分字段**，积分在查询时动态计算
 
 ```sql
-CREATE TABLE scores (
+CREATE TABLE IF NOT EXISTS scores (
     id SERIAL PRIMARY KEY,
     event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
     club VARCHAR(100),
-    bow_type VARCHAR(20) NOT NULL,
+    bow_type VARCHAR(50) NOT NULL,
     distance VARCHAR(10) NOT NULL,
-    format VARCHAR(20) NOT NULL,
+    format VARCHAR(50) NOT NULL,
     rank INTEGER NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
 **字段说明**：
 
-| 字段 | 类型 | 说明 |
-|-----|-----|------|
-| id | SERIAL | 主键 |
-| event_id | INTEGER | 外键，关联events表 |
-| name | VARCHAR(100) | 参赛者姓名 |
-| club | VARCHAR(100) | 俱乐部名称（可空） |
-| bow_type | VARCHAR(20) | 弓种 |
-| distance | VARCHAR(10) | 距离 |
-| format | VARCHAR(20) | 赛制 |
-| rank | INTEGER | 排名（1、2、3...） |
-| created_at | TIMESTAMP | 创建时间 |
+| 字段 | 类型 | 约束 | 说明 |
+|-----|-----|------|------|
+| id | SERIAL | PRIMARY KEY | 成绩ID |
+| event_id | INTEGER | NOT NULL, FK | 关联的赛事ID |
+| name | VARCHAR(100) | NOT NULL | 参赛者姓名 |
+| club | VARCHAR(100) | NULLABLE | 俱乐部名称（可空） |
+| bow_type | VARCHAR(50) | NOT NULL | 弓种代码 |
+| distance | VARCHAR(10) | NOT NULL | 距离代码 |
+| format | VARCHAR(50) | NOT NULL | 赛制代码 |
+| rank | INTEGER | NOT NULL | 排名（1、2、3...） |
+| created_at | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
 
-**关键变更**：
-- ❌ **移除了 points 字段**：积分现在在查询时动态计算
-- 只存储客观事实（排名），不存储计算结果（积分）
 
 **索引**：
 ```sql
 CREATE INDEX idx_scores_event ON scores(event_id);
 CREATE INDEX idx_scores_event_bow ON scores(event_id, bow_type);
 CREATE INDEX idx_scores_name ON scores(name);
-CREATE INDEX idx_scores_year_bow ON scores(SELECT EXTRACT(YEAR FROM e.created_at) FROM events e WHERE e.id = scores.event_id, bow_type);
 ```
 
 **示例数据**：
 ```sql
+-- 张三在2024 Q1赛事中，反曲弓30米排位赛排名第1
+INSERT INTO scores (event_id, name, club, bow_type, distance, format, rank)
+VALUES (1, '张三', '北京俱乐部', 'recurve', '30m', 'ranking', 1);
+
+-- 李四同赛事排名第2
+INSERT INTO scores (event_id, name, club, bow_type, distance, format, rank)
+VALUES (1, '李四', '上海俱乐部', 'recurve', '30m', 'ranking', 2);
+
+-- 张三同赛事18m排位赛排名第2
+INSERT INTO scores (event_id, name, club, bow_type, distance, format, rank)
+VALUES (1, '张三', '北京俱乐部', 'recurve', '18m', 'ranking', 2);
+```
+
+**积分计算方式**：
+```python
+# 伪代码
+def get_score_points(score: Score) -> float:
+    config = get_configuration(
+        event_id=score.event_id,
+        bow_type=score.bow_type,
+        distance=score.distance,
+        format=score.format
+    )
+    base_points = POINTS_TABLE[score.format][score.rank]
+    coefficient = get_coefficient(config.participant_count)
+    distance_factor = 0.5 if score.distance == '18m' else 1.0
+    return base_points * coefficient * distance_factor
+```
+
+---
+
+### 4. bow_types（弓种字典表）
+
+**用途**：维护系统支持的弓种列表
+
+```sql
+CREATE TABLE IF NOT EXISTS bow_types (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+```
+
+**字段说明**：
+
+| 字段 | 说明 |
+|-----|------|
+| code | 代码（用于API和数据库） |
+| name | 中文显示名称 |
+| description | 弓种描述 |
+
+**初始数据**：
+```sql
+INSERT INTO bow_types (code, name, description) VALUES
+    ('recurve', '反曲弓', '最常见的竞技弓'),
+    ('compound', '复合弓', '使用定滑轮的现代弓'),
+    ('traditional', '传统弓', '传统弓术'),
+    ('longbow', '美猎弓', '美国狩猎弓'),
+    ('barebow', '光弓', '无瞄准器的弓');
+```
+
+---
+
+### 5. distances（距离字典表）
+
+**用途**：维护系统支持的射箭距离列表
+
+```sql
+CREATE TABLE IF NOT EXISTS distances (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(10) NOT NULL UNIQUE,
+    name VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+```
+
+**初始数据**：
+```sql
+INSERT INTO distances (code, name) VALUES
+    ('18m', '18米'),
+    ('30m', '30米'),
+    ('50m', '50米'),
+    ('70m', '70米');
+```
+
+**特殊处理**：18米距离的成绩积分自动减半（×0.5）
+
+---
+
+### 6. competition_formats（赛制字典表）
+
+**用途**：维护系统支持的比赛赛制列表
+
+```sql
+CREATE TABLE IF NOT EXISTS competition_formats (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+```
+
+**初始数据**：
+```sql
+INSERT INTO competition_formats (code, name, description) VALUES
+    ('ranking', '排位赛', '个人排位比赛'),
+    ('elimination', '淘汰赛', '单淘汰比赛'),
+    ('mixed_doubles', '混双赛', '混合双打比赛'),
+    ('team', '团体赛', '团队比赛');
+```
+
+**赛制说明**：
+
+| 赛制 | 积分表 | 说明 |
+|-----|--------|------|
+| ranking | RANKING_POINTS | 排位赛第1-8名分别25、22、19、15、10、8、6、4分 |
+| elimination | ELIMINATION_POINTS | 淘汰赛第1-16名有分数，其余为1分 |
+| mixed_doubles | TOURNAMENT_POINTS | 与淘汰赛相同的积分表 |
+| team | TOURNAMENT_POINTS | 与淘汰赛相同的积分表 |
+
+---
 -- 张三在2024 Q1赛事中，反曲弓30米排位赛排名第1
 INSERT INTO scores (event_id, name, club, bow_type, distance, format, rank)
 VALUES (1, '张三', '俱乐部A', 'recurve', '30m', 'ranking', 1);
@@ -346,22 +470,6 @@ INSERT INTO competition_formats (name, display_name, description) VALUES
   - compound + 30m + ranking: 15人 → 系数0.9
 ```
 
-### 为什么支持4种赛制但 mixed_doubles 和 team 共用计分？
-
-**原因：**
-- 淘汰赛的几个变体（淘汰赛、混双、团体）本质上是相同的逻辑
-- 都是固定队伍在轮次中竞争
-- 为了简化系统而保留用户可区分的赛制类型
-
-**实现：**
-```python
-def get_competition_points(format, rank):
-    if format in ['elimination', 'mixed_doubles', 'team']:
-        return ELIMINATION_POINTS[rank]
-    else:  # ranking
-        return RANKING_POINTS[rank]
-```
-
 ---
 
 ## 性能优化
@@ -417,91 +525,14 @@ ORDER BY total_points DESC;
 
 ---
 
-## 数据迁移（从v1到v2）
-
-如果从旧版本升级，需要：
-
-```sql
--- 1. 创建新表
--- (见上面的CREATE TABLE语句)
-
--- 2. 迁移数据
-INSERT INTO events (year, season)
-SELECT DISTINCT year, season FROM old_events;
-
--- 3. 迁移成绩（移除points字段）
-INSERT INTO scores (event_id, name, club, bow_type, distance, format, rank)
-SELECT event_id, name, club, bow_type, distance, format, rank 
-FROM old_scores;
-
--- 4. 从old_scores中恢复points字段
--- 查询出每条old_score的points，反推participant_count
--- 在event_configurations中插入参赛人数
--- （需要手动核对或恢复原始数据）
-```
-
----
-
-## 扩展建议
-
-### 可能的未来扩展
-
-1. **用户和权限表**：
-   ```sql
-   CREATE TABLE users (
-       id SERIAL PRIMARY KEY,
-       username VARCHAR(50) UNIQUE,
-       password_hash VARCHAR(255),
-       role VARCHAR(20)  -- admin, scorer, viewer
-   );
-   ```
-
-2. **积分调整记录表**：
-   ```sql
-   CREATE TABLE score_adjustments (
-       id SERIAL PRIMARY KEY,
-       score_id INTEGER REFERENCES scores(id),
-       old_points FLOAT,
-       new_points FLOAT,
-       reason TEXT,
-       adjusted_by INTEGER REFERENCES users(id),
-       adjusted_at TIMESTAMP
-   );
-   ```
-
-3. **赛事参赛人统计**：
-   ```sql
-   CREATE TABLE event_participant_stats (
-       id SERIAL PRIMARY KEY,
-       event_id INTEGER REFERENCES events(id),
-       bow_type VARCHAR(20),
-       total_participants INTEGER,
-       statistics JSON
-   );
-   ```
-
----
-
 ## 相关文档
 
-- [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) - 系统架构总体设计
-- [TECHNICAL_DETAILS.md](TECHNICAL_DETAILS.md) - 技术深度讨论
-- [QUICK_START.md](QUICK_START.md) - 快速开始指南
-
----
-
-## 总结
-
-v2.0 数据库设计的核心改进：
-
-✅ **简化**：从 15+ 表减至 8 个核心表  
-✅ **规范化**：移除冗余和推导数据  
-✅ **灵活**：支持动态计算和后期调整  
-✅ **高效**：关键查询的良好索引支持  
-✅ **可维护**：清晰的表关系和设计逻辑
+- [README.md](README.md) - 项目概览
+- [QUICK_START.md](QUICK_START.md) - 快速启动指南
+- [backend/app/services/scoring_calculator.py](backend/app/services/scoring_calculator.py) - 积分计算逻辑
 
 ---
 
 **数据库版本**：v2.0  
-**最后更新**：2026年2月  
-**维护者**：系统开发团队
+**创建日期**：2026年2月  
+**维护状态**：✅ 生产就绪

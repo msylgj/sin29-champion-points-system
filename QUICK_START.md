@@ -1,222 +1,131 @@
 # 快速开始指南
 
-## 系统架构概览
+本指南涵盖详细的启动步骤、功能测试流程、API参考和常见问题解决方案。
 
-射箭赛事积分统计系统已经重构为**三个简洁的功能页面**：
+## 📋 目录
 
-```
-┌─────────────────────────────────────────────────┐
-│  📱 移动 Web 应用 (Vue 3 + Vite)                 │
-├─────────────────────────────────────────────────┤
-│                                                   │
-│  📅 页面1: 赛事管理                               │
-│     ↓ 创建赛事 + 配置参赛信息                     │
-│  POST /api/events/with-configs                  │
-│                                                   │
-│  📊 页面2: 成绩导入                               │
-│     ↓ 选择赛事，导入选手成绩                      │
-│  POST /api/scores/batch/import                  │
-│                                                   │
-│  🏆 页面3: 积分排名                               │
-│     ↓ 查看年度弓种排名                            │
-│  GET /api/scores/annual-ranking/{year}/{bow}   │
-│                                                   │
-└─────────────────────────────────────────────────┘
-         ↓ HTTP/REST API
-┌─────────────────────────────────────────────────┐
-│  🔧 后端 API 服务 (FastAPI + SQLAlchemy)        │
-├─────────────────────────────────────────────────┤
-│                                                   │
-│  核心业务逻辑:                                    │
-│  ├── 赛事和配置管理                               │
-│  ├── 成绩导入和查询                               │
-│  ├── 动态积分计算                                 │
-│  └── 年度排名聚合                                 │
-│                                                   │
-└─────────────────────────────────────────────────┘
-         ↓ SQL
-┌─────────────────────────────────────────────────┐
-│  💾 数据库 (PostgreSQL)                          │
-├─────────────────────────────────────────────────┤
-│                                                   │
-│  核心表:                                          │
-│  ├── events (赛事)                               │
-│  ├── event_configurations (赛事配置)              │
-│  ├── scores (成绩)                               │
-│  └── 字典表 (弓种、距离、赛制)                     │
-│                                                   │
-└─────────────────────────────────────────────────┘
-```
+- [前置条件](#前置条件)
+- [快速启动（Docker）](#快速启动docker)
+- [本地开发启动](#本地开发启动)
+- [功能测试流程](#功能测试流程)
+- [API 文档](#api-文档)
+- [常见问题](#常见问题)
+- [故障排除](#故障排除)
+- [生产部署](#生产部署)
 
-## 环境要求
+---
 
-- **Python 3.8+**
-- **Node.js 16+**
-- **PostgreSQL 12+**
+## 前置条件
 
-## 环境变量配置
+### 要求
+- **Docker & Docker Compose**（推荐方式）OR
+- **Python 3.8+** + **Node.js 16+** + **PostgreSQL 12+**（本地开发）
 
-### 后端 (.env)
-```env
-DATABASE_URL=postgresql://user:password@localhost:5432/archery_db
-DEBUG=True
-CORS_ORIGINS=["http://localhost:5173", "http://localhost:3000"]
-```
-
-### 前端 (.env.development)
-```env
-VITE_API_BASE_URL=http://localhost:8000/api
-```
-
-## 🐳 使用 Docker 快速启动（推荐）
-
-### 前置要求
-- **Docker** 和 **Docker Compose** 已安装
-
-### 开发环境启动
-
-1. **进入项目目录**
+### 环境检查
 ```bash
-cd /home/msylgj/sin29-champion-points-system
+# 检查版本
+python3 --version    # 应该 >= 3.8
+node --version       # 应该 >= 16
+docker --version     # 应该已安装（可选）
 ```
 
-2. **复制环境配置文件**
+---
+
+## 快速启动（Docker）
+
+### 🚀 一键启动（推荐）
+
 ```bash
+# 1. 进入项目目录
+cd ./sin29-champion-points-system
+
+# 2. 复制环境配置
 cp .env.example .env
-```
 
-3. **启动所有服务（数据库 + 后端 + 前端）**
-```bash
+# 3. 启动所有服务
 docker-compose up --build
+
+# 4. 等待启动完成，见"预期输出"
 ```
 
-或在后台运行：
+### 预期输出
+
+```
+[+] Building 12.3s (XX/XX)
+...
+[+] Running XX/XX
+ ✓ Container sin29_db       Running                    0.5s
+ ✓ Container sin29_backend  Running                    2.3s
+ ✓ Container sin29_frontend Running                    1.8s
+```
+
+### 访问应用
+
+| 地址 | 说明 |
+|-----|------|
+| http://localhost:8080 | 前端应用（主应用） |
+| http://localhost:8000/docs | 后端API文档（Swagger） |
+| http://localhost:8000 | 后端API根地址 |
+
+### 停止服务
+
 ```bash
+# 原终端按 Ctrl+C，或在新终端运行：
+docker-compose down
+
+# 清理所有数据（包括数据库）
+docker-compose down -v
+```
+
+### 后台运行（生产推荐）
+
+```bash
+# 后台启动
 docker-compose up -d --build
-```
 
-4. **查看服务状态**
-```bash
-docker-compose ps
-```
-
-**预期输出：**
-```
-CONTAINER ID   IMAGE                          COMMAND                  STATUS
-xxx            sin29-champion-points-system-backend   "uvicorn app.main:..."   Up X minute
-xxx            sin29-champion-points-system-frontend  "nginx -g daemon off"    Up X minute
-xxx            postgres:15-alpine             "postgres"              Up X minute (healthy)
-```
-
-5. **访问应用**
-   - 前端应用：http://localhost:8080
-   - 后端 API：http://localhost:8000
-   - API 文档：http://localhost:8000/docs
-
-### 生产环境启动
-
-```bash
-docker-compose -f docker-compose.prod.yml up -d --build
-```
-
-### 常用 Docker 命令
-
-```bash
 # 查看日志
+docker-compose logs -f
+
+# 只查看特定服务日志
 docker-compose logs -f backend
 docker-compose logs -f frontend
 docker-compose logs -f database
 
-# 停止所有服务
+# 查看服务状态
+docker-compose ps
+
+# 停止
 docker-compose down
-
-# 删除所有数据（包括数据库）
-docker-compose down -v
-
-# 重启特定服务
-docker-compose restart backend
-
-# 完全重新构建
-docker-compose up --build --force-recreate
-
-# 进入容器调试
-docker-compose exec backend bash
-docker-compose exec database psql -U archery_user -d archery_db
-
-# 后台启动
-docker-compose up -d --build
-
-# 查看实时日志
-docker-compose logs -f
 ```
 
-### 常见问题
+---
 
-#### Docker 权限错误
-如果遇到 "permission denied" 错误，使用 sudo：
+## 本地开发启动
+
+如果不使用 Docker，按以下步骤启动。
+
+### 前提条件
+
+1. **创建 PostgreSQL 数据库**
 ```bash
-sudo docker-compose up --build
-```
-
-#### 数据库连接失败
-等待数据库容器完全启动：
-```bash
-docker-compose logs -f database
-# 等待看到 "database system is ready"
-```
-
-#### 端口已占用
-修改 `.env` 文件中的端口配置：
-```env
-BACKEND_PORT=8001  # 改为其他端口
-FRONTEND_PORT=8081
-DB_PORT=5433
-```
-
-### 详细的故障排除指南
-
-请查看 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-
-## 详细启动步骤
-
-### 第1步：数据库准备
-
-#### 方式A：使用现有脚本（推荐）
-```bash
-cd /home/msylgj/sin29-champion-points-system
-
-# 创建数据库（如果还不存在）
 createdb archery_db
-
-# 运行初始化脚本
-psql archery_db < database/init.sql
 ```
 
-#### 方式B：手动初始化
+2. **初始化数据库**
 ```bash
-# 连接到 PostgreSQL
-psql
-
-# 创建数据库
-CREATE DATABASE archery_db;
-
-# 连接到新数据库
-\c archery_db
-
-# 运行初始化脚本
-\i /home/msylgj/sin29-champion-points-system/database/init.sql
+psql archery_db < /home/msylgj/sin29-champion-points-system/database/init.sql
 ```
 
-### 第2步：启动后端服务
+### 终端1：启动后端服务
 
 ```bash
 cd /home/msylgj/sin29-champion-points-system/backend
 
-# 安装依赖（首次）
-pip3 install -r requirements.txt
+# 首次安装依赖
+pip install -r requirements.txt
 
-# 启动 FastAPI 服务
-python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# 启动服务
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
 **预期输出：**
@@ -225,12 +134,14 @@ INFO:     Uvicorn running on http://0.0.0.0:8000
 INFO:     Application startup complete
 ```
 
-### 第3步：启动前端应用
+✅ 后端就绪，访问 http://localhost:8000/docs
+
+### 终端2：启动前端应用
 
 ```bash
 cd /home/msylgj/sin29-champion-points-system/frontend
 
-# 安装依赖（首次）
+# 首次安装依赖
 npm install
 
 # 启动开发服务器
@@ -241,110 +152,182 @@ npm run dev
 ```
   VITE v7.1.12  ready in 234 ms
 
-  ➜  Local:   http://localhost:5173/
+  ➜  Local:   http://localhost:8080/
   ➜  press h to show help
 ```
 
-## 访问应用
+✅ 前端就绪，访问 http://localhost:8080
 
-打开浏览器，访问：
-```
-http://localhost:5173
-```
+---
 
 ## 功能测试流程
 
-### 📅 步骤1：创建赛事（赛事管理页面）
+按照以下步骤完整测试系统功能。
 
-1. 打开应用，进入 **赛事管理** 页面
-2. 输入基本信息：
-   - 年度：2024
-   - 赛季：Q1
-3. 添加配置（点击"+ 添加配置"可添加多个）：
-   - **配置1**：
-     - 弓种：反曲弓 (recurve)
-     - 距离：30m
-     - 赛制：排位赛 (ranking)
-     - 参赛人数：24
-   - **配置2**：
-     - 弓种：反曲弓 (recurve)
-     - 距离：18m
-     - 赛制：排位赛 (ranking)
-     - 参赛人数：20
-4. 点击 **保存赛事**
+### 📅 第一步：创建赛事
 
-**预期结果：** 赛事创建成功提示，自动跳转到成绩导入页面
+进入应用后，自动显示**积分排名页面**。点击左上角的 **➕ 新增赛事** 按钮，转到赛事管理页面。
 
-### 📊 步骤2：导入成绩（成绩导入页面）
+1. **填写赛事信息**
+   - 年度：`2024`
+   - 赛季：`Q1`
 
-1. 进入 **成绩导入** 页面
-2. 选择刚才创建的赛事 "2024 Q1"
-3. 显示赛事配置信息（应显示刚才创建的两个配置）
-4. 选择 **逐条录入** 标签页
-5. 逐条添加成绩：
+2. **添加配置1**（点击 **+ 添加配置**）
+   - 弓种：`反曲弓` (recurve)
+   - 距离：`30m`
+   - 赛制：`排位赛` (ranking)
+   - 参赛人数：`24`
+   - 点击 **➕ 添加此配置**
 
-   **第1条成绩：**
-   - 姓名：张三
-   - 俱乐部：北京俱乐部
-   - 弓种：反曲弓
-   - 距离：30m
-   - 赛制：排位赛
-   - 排名：1
-   - 点击 "+ 添加成绩"
+3. **添加配置2**（点击 **+ 添加配置**）
+   - 弓种：`反曲弓` (recurve)
+   - 距离：`18m`
+   - 赛制：`排位赛` (ranking)
+   - 参赛人数：`20`
+   - 点击 **➕ 添加此配置**
 
-   **第2条成绩：**
-   - 姓名：李四
-   - 俱乐部：上海俱乐部
-   - 弓种：反曲弓
-   - 距离：30m
-   - 赛制：排位赛
-   - 排名：2
-   - 点击 "+ 添加成绩"
+4. **提交**
+   - 点击 **💾 保存赛事** 按钮
 
-   **第3条成绩：**
-   - 姓名：张三
-   - 俱乐部：北京俱乐部
-   - 弓种：反曲弓
-   - 距离：18m
-   - 赛制：排位赛
-   - 排名：2
+**预期结果：**
+- ✅ 弹出"赛事创建成功"提示
+- ✅ 自动跳转到**成绩导入页面**
+- ✅ 赛事选择框中显示"2024 Q1"
+- ✅ 显示两个配置信息
 
-6. 查看 **待导入成绩** 列表（应显示3条）
-7. 点击 **确认导入 (3条)** 提交
+### 📊 第二步：导入成绩
 
-**预期结果：** 成绩导入成功提示，自动跳转到积分查看页面
+在**成绩导入页面**：
 
-### 🏆 步骤3：查看积分排名（积分查看页面）
+1. **确认赛事已选择**
+   - 应显示"2024 Q1"
+   - 显示配置表（2个配置）
 
-1. 进入 **积分排名** 页面
-2. 选择条件：
-   - 年度：2024
-   - 弓种：反曲弓 (recurve)
-3. 自动加载排名数据
+2. **选择"逐条录入"标签页**
 
-**预期结果：** 显示排名表，包含：
+3. **添加成绩1**
+   ```
+   姓名：张三
+   俱乐部：北京俱乐部
+   弓种：反曲弓
+   距离：30m
+   赛制：排位赛
+   排名：1
+   ```
+   - 点击 **+ 添加成绩**
+
+4. **添加成绩2**
+   ```
+   姓名：李四
+   俱乐部：上海俱乐部
+   弓种：反曲弓
+   距离：30m
+   赛制：排位赛
+   排名：2
+   ```
+   - 点击 **+ 添加成绩**
+
+5. **添加成绩3**
+   ```
+   姓名：张三
+   俱乐部：北京俱乐部
+   弓种：反曲弓
+   距离：18m
+   赛制：排位赛
+   排名：2
+   ```
+   - 点击 **+ 添加成绩**
+
+6. **查看待导入成绩列表**
+   - 应显示"待导入成绩 (3条)"的表格
+
+7. **确认导入**
+   - 点击 **确认导入 (3条)** 按钮
+
+**预期结果：**
+- ✅ 弹出"成功导入 3 条成绩"提示
+- ✅ 1.5秒后自动跳转到**积分排名页面**
+
+### 🏆 第三步：查看积分排名
+
+在**积分排名页面**（首页）：
+
+1. **查看数据**
+   - 年度自动选择为"2024"
+   - 弓种自动选择为"反曲弓"
+   - 自动显示排名表
+
+2. **预期排名表**
 
 | 排名 | 姓名 | 俱乐部 | 积分 | 参赛次数 |
 |-----|-----|--------|------|---------|
-| 1 | 张三 | 北京俱乐部 | 182.0 | 2次 |
-| 2 | 李四 | 上海俱乐部 | 101.0 | 1次 |
+| 1️⃣ | 张三 | 北京俱乐部 | 136 | 2次 |
+| 2️⃣ | 李四 | 上海俱乐部 | 88 | 1次 |
 
-**说明：**
-- 张三的积分 = 30m排位赛第1名积分 (91) + 18m排位赛第2名积分 (91)
-- 李四的积分 = 30m排位赛第2名积分 (101)
-- 实际积分值取决于参赛人数系数，上方是参考值
+**注意：** 具体积分值取决于参赛人数系数，上表为参考值。
 
-**详细信息：** 点击前8名卡片查看每场比赛的分数构成
+3. **点击第1名卡片查看详细分数**
+   ```
+   张三的获奖情况：
+   - 2024 Q1 30米排位赛：第1名，基础25分，经系数调整后68分
+   - 2024 Q1 18米排位赛：第2名，基础22分，×0.5×系数后为44分
+   - 年度总积分：136分
+   ```
 
-## API 文档快速参考
+4. **Excel导出**
+   - 点击 **📥 导出为Excel** 按钮
+   - 下载包含排名数据的 Excel 文件
 
-### 赛事相关 API
+**预期结果：**
+- ✅ 排名表显示正确数据
+- ✅ 前8名高亮显示
+- ✅ Excel导出成功
+
+---
+
+## 测试：批量导入功能
+
+### 准备 Excel 文件
+
+创建一个 Excel 文件 `test_scores.xlsx`，包含以下列（列顺序任意）：
+
+| 姓名 | 俱乐部 | 弓种 | 距离 | 赛制 | 排名 |
+|-----|--------|------|------|------|------|
+| 王五 | 广州俱乐部 | 反曲弓 | 30m | 排位赛 | 3 |
+| 赵六 | 深圳俱乐部 | 反曲弓 | 30m | 排位赛 | 4 |
+| 孙七 | 杭州俱乐部 | 反曲弓 | 18m | 排位赛 | 3 |
+| 周八 | 西安俱乐部 | 反曲弓 | 18m | 排位赛 | 4 |
+
+### 导入步骤
+
+1. 进入**成绩导入页面**，选择赛事"2024 Q1"
+2. 选择**"批量导入"标签页**
+3. 点击 **选择 Excel 或 CSV 文件** 按钮
+4. 选择上面创建的 `test_scores.xlsx` 文件
+5. 文件被正确解析，显示"成功解析 4 条成绩"
+6. 点击 **确认导入 (4条)**
+
+**预期结果：**
+- ✅ 自动识别列标题
+- ✅ 显示"成功解析 4 条成绩"
+- ✅ 成功导入后自动跳转到积分排名页面
+- ✅ 新增的4名选手出现在排名中
+
+---
+
+## API 文档
+
+完整的API文档访问：**http://localhost:8000/docs** (Swagger UI)
+
+### 赛事管理 API
 
 #### 创建赛事（带配置）
 ```bash
 POST /api/events/with-configs
-Content-Type: application/json
+```
 
+**请求示例：**
+```json
 {
   "year": 2024,
   "season": "Q1",
@@ -354,6 +337,37 @@ Content-Type: application/json
       "distance": "30m",
       "format": "ranking",
       "participant_count": 24
+    },
+    {
+      "bow_type": "recurve",
+      "distance": "18m",
+      "format": "ranking",
+      "participant_count": 20
+    }
+  ]
+}
+```
+
+**响应示例（成功）：**
+```json
+{
+  "id": 1,
+  "year": 2024,
+  "season": "Q1",
+  "configurations": [
+    {
+      "id": 1,
+      "bow_type": "recurve",
+      "distance": "30m",
+      "format": "ranking",
+      "participant_count": 24
+    },
+    {
+      "id": 2,
+      "bow_type": "recurve",
+      "distance": "18m",
+      "format": "ranking",
+      "participant_count": 20
     }
   ]
 }
@@ -366,16 +380,18 @@ GET /api/events?page=1&page_size=10
 
 #### 获取赛事详情
 ```bash
-GET /api/events/1
+GET /api/events/{event_id}
 ```
 
-### 成绩相关 API
+### 成绩管理 API
 
 #### 批量导入成绩
 ```bash
 POST /api/scores/batch/import
-Content-Type: application/json
+```
 
+**请求示例：**
+```json
 {
   "scores": [
     {
@@ -386,17 +402,26 @@ Content-Type: application/json
       "distance": "30m",
       "format": "ranking",
       "rank": 1
+    },
+    {
+      "event_id": 1,
+      "name": "李四",
+      "club": "上海俱乐部",
+      "bow_type": "recurve",
+      "distance": "30m",
+      "format": "ranking",
+      "rank": 2
     }
   ]
 }
 ```
 
-#### 获取单个赛事排名（单弓种单距离）
+#### 获取年度排名（核心API）
 ```bash
-GET /api/scores/event/1/ranking?bow_type=recurve&distance=30m&format=ranking
+GET /api/scores/annual-ranking/{year}/{bow_type}
 ```
 
-#### 获取年度弓种排名（跨赛事聚合）
+**示例：**
 ```bash
 GET /api/scores/annual-ranking/2024/recurve
 ```
@@ -411,7 +436,7 @@ GET /api/scores/annual-ranking/2024/recurve
       "ranking": 1,
       "name": "张三",
       "club": "北京俱乐部",
-      "total_points": 182.0,
+      "total_points": 136.0,
       "highlight": true,
       "scores": [
         {
@@ -420,7 +445,7 @@ GET /api/scores/annual-ranking/2024/recurve
           "distance": "30m",
           "format": "ranking",
           "rank": 1,
-          "points": 91.0
+          "points": 68.0
         },
         {
           "event_id": 1,
@@ -428,7 +453,24 @@ GET /api/scores/annual-ranking/2024/recurve
           "distance": "18m",
           "format": "ranking",
           "rank": 2,
-          "points": 91.0
+          "points": 44.0
+        }
+      ]
+    },
+    {
+      "ranking": 2,
+      "name": "李四",
+      "club": "上海俱乐部",
+      "total_points": 88.0,
+      "highlight": false,
+      "scores": [
+        {
+          "event_id": 1,
+          "event_season": "2024 Q1",
+          "distance": "30m",
+          "format": "ranking",
+          "rank": 2,
+          "points": 88.0
         }
       ]
     }
@@ -436,111 +478,261 @@ GET /api/scores/annual-ranking/2024/recurve
 }
 ```
 
-## 常见问题和解决方案
+### 字典数据 API
 
-### Q1: 后端启动失败，显示 "ModuleNotFoundError"
-**解决方案：** 确保安装了所有依赖
+#### 获取所有字典数据
 ```bash
-cd backend
-pip3 install -r requirements.txt
+GET /api/dictionaries
 ```
 
-### Q2: 数据库连接失败
-**解决方案：**
-1. 确认 PostgreSQL 正在运行
-2. 检查 `.env` 中的 `DATABASE_URL` 是否正确
-3. 确认数据库已创建：`psql archery_db`
-
-### Q3: 前端空白页面
-**解决方案：**
-1. 打开浏览器开发者工具（F12）
-2. 检查 Console 标签中的错误信息
-3. 确认 API_BASE_URL 配置正确
-
-### Q4: 成绩导入后看不到数据
-**解决方案：**
-1. 确认已选择正确的年度和弓种
-2. 检查浏览器开发者工具中是否有 API 错误
-3. 查看后端日志是否有错误信息
-
-## 性能测试数据
-
-系统支持的规模：
-- **赛事数量**：无限制
-- **单个赛事配置数**：建议 100 以内
-- **成绩记录**：单赛事建议 10,000 以内
-- **参赛人数**：单配置 1-999 人
-
-## 数据导出
-
-### 导出年度排名 CSV
-
-在积分查看页面，查看完排名后，点击 **📥 导出为CSV**，将下载包含以下列的 CSV 文件：
-
-```csv
-排名,姓名,俱乐部,积分,参赛次数
-1,张三,北京俱乐部,182.0,2
-2,李四,上海俱乐部,101.0,1
+**响应示例：**
+```json
+{
+  "bowTypes": [
+    {"code": "recurve", "name": "反曲弓"},
+    {"code": "compound", "name": "复合弓"},
+    {"code": "barebow", "name": "光弓"},
+    {"code": "traditional", "name": "传统弓"},
+    {"code": "longbow", "name": "美猎弓"}
+  ],
+  "distances": [
+    {"code": "18m", "name": "18米"},
+    {"code": "30m", "name": "30米"},
+    {"code": "50m", "name": "50米"},
+    {"code": "70m", "name": "70米"}
+  ],
+  "competitionFormats": [
+    {"code": "ranking", "name": "排位赛"},
+    {"code": "elimination", "name": "淘汰赛"},
+    {"code": "mixed_doubles", "name": "混双赛"},
+    {"code": "team", "name": "团体赛"}
+  ]
+}
 ```
-
-## 生产环境部署
-
-### 使用 Docker Compose（推荐）
-
-```bash
-cd /home/msylgj/sin29-champion-points-system
-
-# 启动所有服务
-docker-compose -f docker-compose.prod.yml up -d
-
-# 查看日志
-docker-compose logs -f
-
-# 停止服务
-docker-compose down
-```
-
-### 手动部署
-
-1. **后端**：使用 Gunicorn + Nginx
-   ```bash
-   pip install gunicorn
-   gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
-   ```
-
-2. **前端**：构建静态资源
-   ```bash
-   npm run build
-   # 使用 Nginx 或其他 Web 服务器提供 dist/ 目录
-   ```
-
-3. **数据库**：使用生产级 PostgreSQL 实例
-
-## 常用命令速查表
-
-```bash
-# 后端相关
-cd backend && python3 -m uvicorn app.main:app --reload
-
-# 前端相关
-cd frontend && npm run dev
-
-# 数据库相关
-psql archery_db < database/init.sql        # 初始化数据库
-psql archery_db -c "SELECT COUNT(*) FROM scores;"  # 查询成绩数量
-
-# 开发相关
-cd backend && python3 -m pytest tests/       # 运行测试（如配置）
-cd frontend && npm run lint                 # 代码检查
-```
-
-## 获取帮助
-
-- 📖 查看完整实现文档：`IMPLEMENTATION_SUMMARY.md`
-- 🗄️ 数据库设计文档：`DATA_BASE_DESIGN_V2.md`
-- 📋 架构设计文档：`ARCHITECTURE.md`
-- 🛠️ 检查后端日志：`backend/logs/`
 
 ---
 
-祝您使用愉快！如有任何问题，欢迎反馈。
+## 常见问题
+
+### Q1: Docker 启动后浏览器连接超时
+**A:** 这通常是因为服务还在启动中。
+```bash
+# 查看日志，等待看到 "Application startup complete"
+docker-compose logs -f backend
+
+# 查看容器状态
+docker-compose ps
+```
+
+### Q2: 数据库连接失败（本地开发）
+**A:** 检查以下几点：
+```bash
+# 1. 确认 PostgreSQL 运行中
+psql --version
+
+# 2. 确认数据库存在
+psql archery_db -c "SELECT 1"
+
+# 3. 检查 env 中的 DATABASE_URL
+cat .env | grep DATABASE_URL
+
+# 4. 重新初始化数据库
+psql archery_db < database/init.sql
+```
+
+### Q3: 导入 Excel 时出现"无法解析文件"
+**A:** 检查以下几点（按顺序）：
+1. 确认文件格式为 `.xlsx` 或 `.xls`（不支持 `.xlsm` 等其他格式）
+2. 确认Excel有表头行（第一行为列标题）
+3. 确认列标题包含：姓名、俱乐部、弓种、距离、赛制、排名
+4. 查看浏览器开发者工具 Console 标签的错误信息
+
+### Q4: 导入成功但看不到数据
+**A:** 检查以下几点：
+1. 确认选择了正确的年度和弓种
+2. 刷新页面（F5）
+3. 打开浏览器开发者工具 Network 标签，查看 API 响应是否正确
+4. 查看后端日志：`docker-compose logs backend`
+
+### Q5: 前端显示"API连接失败"
+**A:** 根据启动方式处理：
+
+**Docker 方式：**
+```bash
+# 检查后端容器是否运行
+docker-compose ps
+
+# 查看后端日志
+docker-compose logs backend
+```
+
+**本地开发：**
+```bash
+# 确认后端运行在 http://localhost:8000
+# 检查前端 .env 文件中的 VITE_API_BASE_URL
+cat frontend/.env.development
+```
+
+### Q6: Excel 导出按钮不工作
+**A:** 
+1. 确认已成功加载排名数据
+2. 确认前端依赖完整（包含 xlsx 库）：
+   ```bash
+   cd frontend && npm list xlsx
+   ```
+3. 查看浏览器控制台错误信息
+
+---
+
+## 故障排除
+
+### 清理和重新启动
+
+#### Docker 完全清理
+```bash
+# 停止所有容器
+docker-compose down
+
+# 删除所有数据和镜像
+docker-compose down -v
+docker-compose down --rmi all
+
+# 重新启动
+docker-compose up --build
+```
+
+#### 本地开发重置
+```bash
+# 重建数据库
+dropdb archery_db
+createdb archery_db
+psql archery_db < database/init.sql
+
+# 清理前端缓存
+cd frontend && rm -rf node_modules dist && npm install
+
+# 清理后端缓存
+cd backend && find . -type d -name __pycache__ -exec rm -r {} + 2>/dev/null; true
+
+# 重新启动
+```
+
+### 检查日志
+
+```bash
+# Docker 方式
+docker-compose logs backend        # 后端日志
+docker-compose logs frontend       # 前端日志
+docker-compose logs database       # 数据库日志
+docker-compose logs -f --tail=100  # 最近100行，持续输出
+
+# 本地开发
+# 后端日志会直接在终端显示
+# 前端日志也会直接在终端显示，或查看浏览器控制台
+```
+
+### 端口占用处理
+
+```bash
+# 查看占用 8080 端口的进程
+lsof -i :8080
+
+# 修改 .env 文件的端口配置
+FRONTEND_PORT=8081
+BACKEND_PORT=8001
+DB_PORT=5433
+```
+
+---
+
+## 生产部署
+
+### Docker Compose 生产部署
+
+```bash
+# 使用生产配置文件
+docker-compose -f docker-compose.prod.yml up -d --build
+
+# 查看状态
+docker-compose -f docker-compose.prod.yml ps
+
+# 查看日志
+docker-compose -f docker-compose.prod.yml logs -f
+```
+
+### Systemd 服务（可选）
+
+创建 `/etc/systemd/system/archery-scores.service`：
+```ini
+[Unit]
+Description=Archery Scoring System
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/msylgj/sin29-champion-points-system
+ExecStart=/usr/bin/docker-compose up
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启用和启动：
+```bash
+sudo systemctl enable archery-scores
+sudo systemctl start archery-scores
+sudo systemctl status archery-scores
+```
+
+### 数据备份
+
+```bash
+# 备份数据库
+docker-compose exec database pg_dump -U archery_user archery_db > backup.sql
+
+# 恢复数据库
+docker-compose exec -T database psql -U archery_user archery_db < backup.sql
+```
+
+---
+
+## 常用命令速查
+
+```bash
+# 启动
+docker-compose up --build
+docker-compose up -d --build  # 后台启动
+
+# 停止
+docker-compose down
+docker-compose down -v        # 删除数据
+
+# 查看状态
+docker-compose ps
+docker-compose logs -f
+
+# 重启服务
+docker-compose restart
+docker-compose restart backend
+
+# 进入容器
+docker exec -it sin29_backend bash
+docker exec -it sin29_frontend bash
+
+# 数据库命令
+docker-compose exec database psql -U archery_user archery_db
+```
+
+---
+
+## 获取帮助
+
+- 📖 **[README.md](README.md)** - 项目概览和特性说明
+- 🗄️ **[DATABASE_DESIGN_V2.md](DATABASE_DESIGN_V2.md)** - 数据库架构和表结构
+- 🔗 **http://localhost:8000/docs** - 完整 API 文档（Swagger UI）
+- 💻 **浏览器开发者工具** - F12 查看前端日志和网络请求
+
+---
+
+**祝您使用愉快！🎯🏹**
