@@ -37,3 +37,14 @@ class CompetitionFormatDict(Base):
     name = Column(String(100), nullable=False)  # 名称
     description = Column(Text, nullable=True)  # 描述
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CompetitionGroupDict(Base):
+    """比赛组别字典表"""
+    __tablename__ = "competition_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_code = Column(String(2), nullable=False, index=True)  # 组别：S/A/B/C
+    bow_type = Column(String(50), nullable=False, index=True)  # 弓种代码
+    distance = Column(String(10), nullable=False, index=True)  # 距离代码
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

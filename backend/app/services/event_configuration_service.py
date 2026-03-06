@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
 from app.models.event_configuration import EventConfiguration
 from app.models.event import Event
-from app.schemas.event_configuration import EventConfigurationCreate, EventConfigurationUpdate
+from app.schemas.event_configuration import EventConfigurationBase, EventConfigurationUpdate
 from typing import Optional, List, Tuple
 
 
@@ -13,7 +13,7 @@ class EventConfigurationService:
     """赛事配置业务服务"""
 
     @staticmethod
-    def create_configuration(db: Session, config: EventConfigurationCreate) -> EventConfiguration:
+    def create_configuration(db: Session, config: EventConfigurationBase) -> EventConfiguration:
         """创建赛事配置"""
         # 验证赛事是否存在
         event = db.query(Event).filter(Event.id == config.event_id).first()
@@ -25,8 +25,7 @@ class EventConfigurationService:
             and_(
                 EventConfiguration.event_id == config.event_id,
                 EventConfiguration.bow_type == config.bow_type,
-                EventConfiguration.distance == config.distance,
-                EventConfiguration.format == config.format
+                EventConfiguration.distance == config.distance
             )
         ).first()
         if existing:
@@ -36,8 +35,9 @@ class EventConfigurationService:
             event_id=config.event_id,
             bow_type=config.bow_type,
             distance=config.distance,
-            format=config.format,
-            participant_count=config.participant_count
+            individual_participant_count=config.individual_participant_count,
+            mixed_doubles_team_count=config.mixed_doubles_team_count,
+            team_count=config.team_count
         )
         db.add(db_config)
         db.commit()
@@ -54,16 +54,14 @@ class EventConfigurationService:
         db: Session,
         event_id: int,
         bow_type: str,
-        distance: str,
-        format: str
+        distance: str
     ) -> Optional[EventConfiguration]:
-        """根据赛事+弓种+距离+格式获取配置"""
+        """根据赛事+弓种+距离获取配置"""
         return db.query(EventConfiguration).filter(
             and_(
                 EventConfiguration.event_id == event_id,
                 EventConfiguration.bow_type == bow_type,
-                EventConfiguration.distance == distance,
-                EventConfiguration.format == format
+                EventConfiguration.distance == distance
             )
         ).first()
 
@@ -88,8 +86,12 @@ class EventConfigurationService:
         if not db_config:
             return None
         
-        if config_update.participant_count is not None:
-            db_config.participant_count = config_update.participant_count
+        if config_update.individual_participant_count is not None:
+            db_config.individual_participant_count = config_update.individual_participant_count
+        if config_update.mixed_doubles_team_count is not None:
+            db_config.mixed_doubles_team_count = config_update.mixed_doubles_team_count
+        if config_update.team_count is not None:
+            db_config.team_count = config_update.team_count
         
         db.commit()
         db.refresh(db_config)
@@ -108,7 +110,7 @@ class EventConfigurationService:
     @staticmethod
     def batch_create_configurations(
         db: Session,
-        configs: List[EventConfigurationCreate]
+        configs: List[EventConfigurationBase]
     ) -> List[EventConfiguration]:
         """批量创建赛事配置"""
         result = []

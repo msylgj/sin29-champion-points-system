@@ -11,10 +11,12 @@ class BowType(str, enum.Enum):
     TRADITIONAL = "traditional"  # 传统弓
     LONGBOW = "longbow"  # 美猎弓
     BAREBOW = "barebow"  # 光弓
+    SIGHTLESS = "sightless"  # 无瞄弓
 
 
 class Distance(str, enum.Enum):
     """比赛距离枚举"""
+    DISTANCE_10M = "10m"  # 10米
     DISTANCE_18M = "18m"  # 18米
     DISTANCE_30M = "30m"  # 30米
     DISTANCE_50M = "50m"  # 50米

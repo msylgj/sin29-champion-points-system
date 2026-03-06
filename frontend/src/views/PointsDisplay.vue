@@ -453,6 +453,7 @@ onMounted(async () => {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 20px;
+    table-layout: fixed;
 
     thead {
       background: #f9f9f9;
@@ -464,6 +465,29 @@ onMounted(async () => {
         font-weight: 600;
         font-size: 13px;
         color: #666;
+
+        &.col-rank {
+          width: 60px;
+          text-align: center;
+        }
+
+        &.col-name {
+          width: 20%;
+        }
+
+        &.col-club {
+          width: 30%;
+        }
+
+        &.col-points {
+          width: 90px;
+          text-align: right;
+        }
+
+        &.col-count {
+          width: 90px;
+          text-align: center;
+        }
       }
     }
 

@@ -16,13 +16,14 @@ class EventConfiguration(Base):
     # 赛事关联
     event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False)
     
-    # 比赛标识
-    bow_type = Column(String(50), nullable=False)  # 弓种：recurve, compound, traditional, longbow, barebow
-    distance = Column(String(10), nullable=False)  # 距离：18m, 30m, 50m, 70m
-    format = Column(String(50), nullable=False)  # 比赛类型：ranking, elimination, mixed_doubles, team
-    
+    # 比赛标识（同一弓种同距离共用配置）
+    bow_type = Column(String(50), nullable=False)  # 弓种：recurve, compound, traditional, longbow, barebow, sightless
+    distance = Column(String(10), nullable=False)  # 距离：10m, 18m, 30m, 50m, 70m
+
     # 参赛规模
-    participant_count = Column(Integer, nullable=False)  # 参赛人数或队伍数
+    individual_participant_count = Column(Integer, nullable=False, default=0)  # 个人赛人数（排位/淘汰共用）
+    mixed_doubles_team_count = Column(Integer, nullable=False, default=0)  # 混双队伍数
+    team_count = Column(Integer, nullable=False, default=0)  # 团体队伍数
     
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -31,5 +32,5 @@ class EventConfiguration(Base):
     # 索引
     __table_args__ = (
         Index('idx_event_config_event', 'event_id'),
-        Index('idx_event_config_key', 'event_id', 'bow_type', 'distance', 'format', unique=True),
+        Index('idx_event_config_key', 'event_id', 'bow_type', 'distance', unique=True),
     )

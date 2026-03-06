@@ -11,21 +11,21 @@ class ScoreBase(BaseModel):
     event_id: int = Field(..., description="赛事ID")
     name: str = Field(..., min_length=1, max_length=100, description="选手姓名")
     club: str = Field(default="", max_length=100, description="俱乐部")
-    bow_type: str = Field(..., description="弓种：recurve, compound, traditional, longbow, barebow")
-    distance: str = Field(..., description="距离：18m, 30m, 50m, 70m")
+    bow_type: str = Field(..., description="弓种：recurve, compound, traditional, longbow, barebow, sightless")
+    distance: str = Field(..., description="距离：10m, 18m, 30m, 50m, 70m")
     format: str = Field(..., description="比赛类型：ranking, elimination, team")
     rank: int = Field(..., ge=1, description="名次")
 
     @field_validator('bow_type')
     def validate_bow_type(cls, v):
-        valid = ['recurve', 'compound', 'traditional', 'longbow', 'barebow']
+        valid = ['recurve', 'compound', 'traditional', 'longbow', 'barebow', 'sightless']
         if v not in valid:
             raise ValueError(f'弓种必须是 {valid}')
         return v
 
     @field_validator('distance')
     def validate_distance(cls, v):
-        valid = ['18m', '30m', '50m', '70m']
+        valid = ['10m', '18m', '30m', '50m', '70m']
         if v not in valid:
             raise ValueError(f'距离必须是 {valid}')
         return v

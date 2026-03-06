@@ -17,8 +17,11 @@
    - 64-127人: 系数1.2, 1-16名获得基础积分
    - 128人以上: 系数1.4, 1-16名获得基础积分
 
-4. 18米特殊规则:
-   - 所有18米比赛的积分在基础上减半(×0.5)
+4. 组别积分系数规则:
+    - 根据弓种+距离匹配组别
+    - B组：积分×0.5
+    - C组：积分×0.3
+    - S/A组或未匹配：积分不变
 
 5. 团体赛规则:
    - 排名1-8: 20, 15, 10, 8, 5, 4, 3, 2分(每人)
@@ -71,6 +74,49 @@ class ScoringCalculator:
         (11, 14): (1.2, 8),     # 11-14队：系数1.2，1-8名获得基础积分
         (15, float('inf')): (1.4, 8)  # 15队以上：系数1.4，1-8名获得基础积分
     }
+
+    # 比赛组别字典（弓种+距离 -> 组别）
+    COMPETITION_GROUPS = {
+        ("barebow", "50m"): "S",
+        ("traditional", "30m"): "A",
+        ("longbow", "30m"): "A",
+        ("barebow", "30m"): "A",
+        ("recurve", "30m"): "A",
+        ("compound", "50m"): "A",
+        ("sightless", "18m"): "B",
+        ("recurve", "18m"): "B",
+        ("compound", "30m"): "B",
+        ("sightless", "10m"): "C",
+        ("recurve", "10m"): "C",
+        ("compound", "18m"): "C",
+    }
+
+    GROUP_MULTIPLIERS = {
+        "S": 1.0,
+        "A": 1.0,
+        "B": 0.5,
+        "C": 0.3,
+    }
+
+    @staticmethod
+    def get_group_multiplier(bow_type: Optional[str], distance: str) -> float:
+        """
+        获取组别积分系数
+
+        Args:
+            bow_type: 弓种
+            distance: 距离
+
+        Returns:
+            组别系数（B=0.5, C=0.3, 其他=1.0）
+        """
+        if not bow_type:
+            return 1.0
+
+        group_code = ScoringCalculator.COMPETITION_GROUPS.get((bow_type, distance))
+        if not group_code:
+            return 1.0
+        return ScoringCalculator.GROUP_MULTIPLIERS.get(group_code, 1.0)
     
     @staticmethod
     def calculate_base_points(rank: int, competition_format: str) -> float:
@@ -111,8 +157,7 @@ class ScoringCalculator:
         Returns:
             (系数, 获得基础积分的人数上限)
         """
-        if participant_count is None or participant_count < 8:
-            # 如果人数不足，使用基础系数1.0，不限制排名
+        if participant_count is None:
             return 1.0, float('inf')
         
         # 团体赛和混双赛使用团队系数表，其他赛制使用参赛人数系数表
@@ -133,6 +178,7 @@ class ScoringCalculator:
     def calculate_points(
         rank: int,
         competition_format: str,
+        bow_type: Optional[str] = None,
         distance: str = "30m",
         participant_count: Optional[int] = None
     ) -> float:
@@ -144,12 +190,13 @@ class ScoringCalculator:
         2. 获取系数和"原额积分"的排名限制
         3. 如果排名在限制内，使用步骤1的基础积分；否则替换为1分
         4. 计算：基础积分 × 系数
-        5. 如果是18米，再乘以0.5
+        5. 根据弓种+距离匹配组别系数（B组×0.5，C组×0.3）
         
         Args:
             rank: 排名（1开始）
             competition_format: 赛制 ('ranking', 'elimination', 'mixed_doubles', 'team')
-            distance: 距离 (默认'30m'，'18m'时积分减半)
+            bow_type: 弓种（用于匹配组别系数）
+            distance: 距离 (默认'30m')
             participant_count: 参赛人数（用于计算系数）
             
         Returns:
@@ -171,9 +218,9 @@ class ScoringCalculator:
         # 步骤4：计算最终积分：基础积分 × 系数
         final_points = base_points * coefficient
         
-        # 步骤5：18米比赛积分减半
-        if distance == "18m":
-            final_points *= 0.5
+        # 步骤5：组别系数调整
+        group_multiplier = ScoringCalculator.get_group_multiplier(bow_type, distance)
+        final_points *= group_multiplier
         
         return round(final_points, 2)
     
@@ -214,7 +261,11 @@ class ScoringCalculator:
                 }
             },
             "special_rules": {
-                "18m_discount": 0.5,
+                "group_multipliers": ScoringCalculator.GROUP_MULTIPLIERS,
+                "competition_groups": {
+                    f"{bow_type}:{distance}": group
+                    for (bow_type, distance), group in ScoringCalculator.COMPETITION_GROUPS.items()
+                },
                 "use_participant_count_coefficient": use_cutoff
             }
         }
@@ -334,28 +385,31 @@ if __name__ == "__main__":
     points = ScoringCalculator.calculate_points(
         rank=3,
         competition_format="ranking",
+        bow_type="recurve",
         distance="30m",
         participant_count=20
     )
     print(f"排名3位、30米、20人参赛：{points}分")
     
-    # 示例2：18米减半
+    # 示例2：B组系数（反曲弓18米，乘0.5）
     points_18m = ScoringCalculator.calculate_points(
         rank=3,
         competition_format="ranking",
+        bow_type="recurve",
         distance="18m",
         participant_count=20
     )
-    print(f"排名3位、18米、20人参赛：{points_18m}分（减半后）")
+    print(f"排名3位、反曲弓18米、20人参赛：{points_18m}分（B组系数后）")
     
-    # 示例3：淘汰赛
+    # 示例3：C组系数（复合弓18米，乘0.3）
     points_elim = ScoringCalculator.calculate_points(
         rank=10,
         competition_format="elimination",
-        distance="50m",
+        bow_type="compound",
+        distance="18m",
         participant_count=32
     )
-    print(f"淘汰赛排名10位、50米、32人参赛：{points_elim}分")
+    print(f"淘汰赛排名10位、复合弓18米、32人参赛：{points_elim}分")
     
     # 示例4：积分规则配置
     rule_config = ScoringCalculator.build_scoring_rule_config()

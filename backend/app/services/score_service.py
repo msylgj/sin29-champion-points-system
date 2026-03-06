@@ -15,6 +15,17 @@ class ScoreService:
     """成绩业务服务"""
 
     @staticmethod
+    def _get_participant_count_for_format(config: EventConfiguration, competition_format: str) -> int:
+        """根据赛制从简化配置中读取对应人数/队伍数"""
+        if competition_format in ("ranking", "elimination"):
+            return config.individual_participant_count
+        if competition_format == "mixed_doubles":
+            return config.mixed_doubles_team_count
+        if competition_format == "team":
+            return config.team_count
+        return config.individual_participant_count
+
+    @staticmethod
     def create_score(db: Session, score: ScoreCreate) -> Score:
         """创建成绩"""
         # 验证赛事是否存在
@@ -124,15 +135,14 @@ class ScoreService:
             and_(
                 EventConfiguration.event_id == event_id,
                 EventConfiguration.bow_type == bow_type,
-                EventConfiguration.distance == distance,
-                EventConfiguration.format == format
+                EventConfiguration.distance == distance
             )
         ).first()
         
         if not config:
             raise ValueError(f"未找到该赛事配置：事件{event_id}, 弓种{bow_type}, 距离{distance}, 格式{format}")
         
-        participant_count = config.participant_count
+        participant_count = ScoreService._get_participant_count_for_format(config, format)
         
         # 获取该比赛的所有成绩，并按排名排序
         scores = db.query(Score).filter(
@@ -150,6 +160,7 @@ class ScoreService:
             points = ScoringCalculator.calculate_points(
                 rank=score.rank,
                 competition_format=score.format,
+                bow_type=score.bow_type,
                 distance=score.distance,
                 participant_count=participant_count
             )
@@ -203,18 +214,18 @@ class ScoreService:
                 and_(
                     EventConfiguration.event_id == score.event_id,
                     EventConfiguration.bow_type == score.bow_type,
-                    EventConfiguration.distance == score.distance,
-                    EventConfiguration.format == score.format
+                    EventConfiguration.distance == score.distance
                 )
             ).first()
             
-            # 如果没有配置，使用默认参赛人数（10人）而不是跳过
-            participant_count = config.participant_count if config else 10
+            # 如果没有配置，使用默认人数（10）而不是跳过
+            participant_count = ScoreService._get_participant_count_for_format(config, score.format) if config else 10
             
             # 计算积分
             points = ScoringCalculator.calculate_points(
                 rank=score.rank,
                 competition_format=score.format,
+                bow_type=score.bow_type,
                 distance=score.distance,
                 participant_count=participant_count
             )
@@ -280,6 +291,7 @@ class ScoreService:
             final_points = calculator.calculate_points(
                 rank=db_score.rank,
                 competition_format=db_score.competition_format,
+                bow_type=db_score.bow_type,
                 distance=db_score.distance,
                 participant_count=db_score.participant_count
             )
@@ -351,6 +363,7 @@ class ScoreService:
                 final_points = calculator.calculate_points(
                     rank=score.rank,
                     competition_format=score.competition_format,
+                    bow_type=score.bow_type,
                     distance=score.distance,
                     participant_count=score.participant_count
                 )

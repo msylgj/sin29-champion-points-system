@@ -8,6 +8,7 @@ from app.database import get_db
 from app.schemas.event import EventCreate, EventUpdate, EventRead, EventList
 from app.schemas.event_configuration import CreateEventWithConfigs
 from app.models.event import Event
+from app.models.event_configuration import EventConfiguration
 from app.services.event_configuration_service import EventConfigurationService
 
 router = APIRouter(prefix="/api/events", tags=["赛事管理"])
@@ -83,16 +84,37 @@ def create_event_with_configs(event_data: CreateEventWithConfigs, db: Session = 
         raise HTTPException(status_code=500, detail=f"创建失败：{str(e)}")
 
 
-@router.get("/{event_id}", response_model=EventRead, summary="获取赛事详情")
+@router.get("/{event_id}", summary="获取赛事详情")
 def get_event(event_id: int, db: Session = Depends(get_db)):
     """获取单个赛事的详细信息"""
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="赛事不存在")
-    return event
+    configs = db.query(EventConfiguration).filter(EventConfiguration.event_id == event.id).all()
+    return {
+        "id": event.id,
+        "year": event.year,
+        "season": event.season,
+        "created_at": event.created_at,
+        "updated_at": event.updated_at,
+        "configurations": [
+            {
+                "id": cfg.id,
+                "event_id": cfg.event_id,
+                "bow_type": cfg.bow_type,
+                "distance": cfg.distance,
+                "individual_participant_count": cfg.individual_participant_count,
+                "mixed_doubles_team_count": cfg.mixed_doubles_team_count,
+                "team_count": cfg.team_count,
+                "created_at": cfg.created_at,
+                "updated_at": cfg.updated_at,
+            }
+            for cfg in configs
+        ]
+    }
 
 
-@router.get("", response_model=EventList, summary="获取赛事列表")
+@router.get("", summary="获取赛事列表")
 def list_events(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
@@ -112,12 +134,41 @@ def list_events(
     skip = (page - 1) * page_size
     events = query.order_by(desc(Event.created_at)).offset(skip).limit(page_size).all()
 
-    return EventList(
-        items=events,
-        total=total,
-        page=page,
-        page_size=page_size
-    )
+    event_ids = [item.id for item in events]
+    config_map = {}
+    if event_ids:
+        configs = db.query(EventConfiguration).filter(EventConfiguration.event_id.in_(event_ids)).all()
+        for cfg in configs:
+            if cfg.event_id not in config_map:
+                config_map[cfg.event_id] = []
+            config_map[cfg.event_id].append({
+                "id": cfg.id,
+                "event_id": cfg.event_id,
+                "bow_type": cfg.bow_type,
+                "distance": cfg.distance,
+                "individual_participant_count": cfg.individual_participant_count,
+                "mixed_doubles_team_count": cfg.mixed_doubles_team_count,
+                "team_count": cfg.team_count,
+                "created_at": cfg.created_at,
+                "updated_at": cfg.updated_at,
+            })
+
+    return {
+        "items": [
+            {
+                "id": event.id,
+                "year": event.year,
+                "season": event.season,
+                "created_at": event.created_at,
+                "updated_at": event.updated_at,
+                "configurations": config_map.get(event.id, []),
+            }
+            for event in events
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size
+    }
 
 
 @router.put("/{event_id}", response_model=EventRead, summary="更新赛事")

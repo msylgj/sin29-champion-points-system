@@ -4,7 +4,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.dictionary import BowTypeDict, DistanceDict, CompetitionFormatDict
+from app.models.dictionary import BowTypeDict, DistanceDict, CompetitionFormatDict, CompetitionGroupDict
 
 router = APIRouter(prefix="/api/dictionaries", tags=["字典管理"])
 
@@ -54,6 +54,25 @@ def get_competition_formats(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/competition-groups")
+def get_competition_groups(db: Session = Depends(get_db)):
+    """
+    获取所有比赛组别映射（组别/弓种/距离）
+    """
+    groups = db.query(CompetitionGroupDict).all()
+    return {
+        "success": True,
+        "data": [
+            {
+                "group_code": item.group_code,
+                "bow_type": item.bow_type,
+                "distance": item.distance
+            }
+            for item in groups
+        ]
+    }
+
+
 @router.get("")
 def get_all_dictionaries(db: Session = Depends(get_db)):
     """
@@ -62,6 +81,7 @@ def get_all_dictionaries(db: Session = Depends(get_db)):
     bow_types = db.query(BowTypeDict).all()
     distances = db.query(DistanceDict).all()
     formats = db.query(CompetitionFormatDict).all()
+    groups = db.query(CompetitionGroupDict).all()
     
     return {
         "success": True,
@@ -77,6 +97,14 @@ def get_all_dictionaries(db: Session = Depends(get_db)):
             "competitionFormats": [
                 {"code": item.code, "name": item.name}
                 for item in formats
+            ],
+            "competitionGroups": [
+                {
+                    "group_code": item.group_code,
+                    "bow_type": item.bow_type,
+                    "distance": item.distance
+                }
+                for item in groups
             ]
         }
     }

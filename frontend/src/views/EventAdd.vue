@@ -41,7 +41,7 @@
       <!-- 赛事配置 -->
       <div class="section">
         <h2 class="section-title">赛事配置</h2>
-        <p class="section-help">为每种弓的每个赛制和距离组合填写参赛人数</p>
+        <p class="section-help">按弓种+距离填写组别及人数：个人（排位/淘汰共用）、混双队伍、团体队伍</p>
 
         <!-- 为每种弓创建一个表格 -->
         <div v-for="bowType in bowTypes" :key="bowType.code" class="bow-config-group">
@@ -51,18 +51,20 @@
             <table class="config-table">
               <thead>
                 <tr>
-                  <th>赛制</th>
+                  <th>人数类型</th>
                   <th v-for="distance in distances" :key="distance.code">
                     {{ distance.name }}
+                    <br>
+                    <small class="group-tag">{{ getGroupCode(bowType.code, distance.code) }}</small>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="format in competitionFormats" :key="format.code">
-                  <td class="format-label">{{ format.name }}</td>
+                <tr v-for="row in countRows" :key="row.key">
+                  <td class="format-label">{{ row.label }}</td>
                   <td v-for="distance in distances" :key="distance.code" class="input-cell">
                     <input 
-                      v-model.number="configTable[bowType.code][format.code][distance.code]"
+                      v-model.number="configTable[bowType.code][distance.code][row.key]"
                       type="number"
                       min="0"
                       max="999"
@@ -115,6 +117,7 @@ const errorMessage = ref('')
 const bowTypes = ref([])
 const distances = ref([])
 const competitionFormats = ref([])
+const competitionGroups = ref([])
 
 const formData = ref({
   year: currentYear,
@@ -123,18 +126,31 @@ const formData = ref({
 
 // 配置表数据结构：bow_type => format => distance => count
 const configTable = ref({})
+const countRows = [
+  { key: 'individual_participant_count', label: '个人（排位/淘汰）' },
+  { key: 'mixed_doubles_team_count', label: '混双（队伍）' },
+  { key: 'team_count', label: '团体（队伍）' }
+]
+
+const getGroupCode = (bowType, distance) => {
+  const found = competitionGroups.value.find(
+    item => item.bow_type === bowType && item.distance === distance
+  )
+  return found ? `${found.group_code}组` : '-'
+}
 
 // 初始化配置表
 const initConfigTable = () => {
   configTable.value = {}
-  if (bowTypes.value.length && distances.value.length && competitionFormats.value.length) {
+  if (bowTypes.value.length && distances.value.length) {
     bowTypes.value.forEach(bow => {
       configTable.value[bow.code] = {}
-      competitionFormats.value.forEach(format => {
-        configTable.value[bow.code][format.code] = {}
-        distances.value.forEach(distance => {
-          configTable.value[bow.code][format.code][distance.code] = 0
-        })
+      distances.value.forEach(distance => {
+        configTable.value[bow.code][distance.code] = {
+          individual_participant_count: 0,
+          mixed_doubles_team_count: 0,
+          team_count: 0
+        }
       })
     })
   }
@@ -148,6 +164,7 @@ const loadDictionaries = async () => {
       bowTypes.value = response.data.bowTypes || []
       distances.value = response.data.distances || []
       competitionFormats.value = response.data.competitionFormats || []
+      competitionGroups.value = response.data.competitionGroups || []
       initConfigTable()
     }
   } catch (error) {
@@ -164,18 +181,20 @@ onMounted(() => {
 // 将表格数据转换为配置数组
 const buildConfigurations = () => {
   const configs = []
-  Object.entries(configTable.value).forEach(([bowType, formats]) => {
-    Object.entries(formats).forEach(([format, distances_map]) => {
-      Object.entries(distances_map).forEach(([distance, count]) => {
-        if (count && count > 0) {
-          configs.push({
-            bow_type: bowType,
-            distance,
-            format,
-            participant_count: count
-          })
-        }
-      })
+  Object.entries(configTable.value).forEach(([bowType, distanceMap]) => {
+    Object.entries(distanceMap).forEach(([distance, counts]) => {
+      const individual = Number(counts.individual_participant_count || 0)
+      const mixed = Number(counts.mixed_doubles_team_count || 0)
+      const team = Number(counts.team_count || 0)
+      if (individual > 0 || mixed > 0 || team > 0) {
+        configs.push({
+          bow_type: bowType,
+          distance,
+          individual_participant_count: individual,
+          mixed_doubles_team_count: mixed,
+          team_count: team
+        })
+      }
     })
   })
   return configs

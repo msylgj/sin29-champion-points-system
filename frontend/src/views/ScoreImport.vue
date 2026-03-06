@@ -52,16 +52,18 @@
                 <tr>
                   <th>弓种</th>
                   <th>距离</th>
-                  <th>赛制</th>
-                  <th>参赛人数</th>
+                  <th>个人（排位/淘汰）</th>
+                  <th>混双（队伍）</th>
+                  <th>团体（队伍）</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="config in selectedEvent.configurations" :key="`${config.bow_type}-${config.distance}-${config.format}`">
+                <tr v-for="config in selectedEvent.configurations" :key="`${config.bow_type}-${config.distance}`">
                   <td>{{ getBowTypeLabel(config.bow_type) }}</td>
                   <td>{{ config.distance }}</td>
-                  <td>{{ getFormatLabel(config.format) }}</td>
-                  <td>{{ config.participant_count }}</td>
+                  <td>{{ config.individual_participant_count }}</td>
+                  <td>{{ config.mixed_doubles_team_count }}</td>
+                  <td>{{ config.team_count }}</td>
                 </tr>
               </tbody>
             </table>
@@ -209,7 +211,7 @@
               支持格式：Excel (.xlsx, .xls) 或 CSV<br/>
               <strong>列标题需包括（推荐英文或中文）：</strong><br/>
               <span style="color: #667eea;">姓名</span>、<span style="color: #667eea;">俱乐部</span>、<span style="color: #667eea;">弓种</span>、<span style="color: #667eea;">距离</span>、<span style="color: #667eea;">赛制</span>、<span style="color: #667eea;">排名</span><br/>
-              <em style="font-size: 12px; color: #999;">弓种、距离、赛制的值支持使用字典名称（如"反曲弓"、"30m"、"排位赛"）或代码（如"recurve"、"ranking"）</em><br/>
+              <em style="font-size: 12px; color: #999;">弓种、距离、赛制的值支持使用字典名称（如"无瞄弓"、"10米"、"排位赛"）或代码（如"sightless"、"10m"、"ranking"）</em><br/>
               系统会自动识别列标题并匹配字段
             </p>
           </div>
@@ -293,7 +295,9 @@ const getBowTypeLabel = (type) => {
     'recurve': '反曲弓',
     'compound': '复合弓',
     'barebow': '光弓',
-    'traditional': '传统弓'
+    'traditional': '传统弓',
+    'longbow': '美猎弓',
+    'sightless': '无瞄弓'
   }
   return labels[type] || type
 }

@@ -9,23 +9,27 @@ from typing import Optional
 class EventConfigurationBase(BaseModel):
     """赛事配置基础数据"""
     event_id: int = Field(..., description="赛事ID")
-    bow_type: str = Field(..., description="弓种：recurve/compound/traditional/longbow/barebow")
-    distance: str = Field(..., description="距离：18m/30m/50m/70m")
-    format: str = Field(..., description="比赛类型：ranking/elimination/mixed_doubles/team")
-    participant_count: int = Field(..., ge=1, description="参赛人数或队伍数")
+    bow_type: str = Field(..., description="弓种：recurve/compound/traditional/longbow/barebow/sightless")
+    distance: str = Field(..., description="距离：10m/18m/30m/50m/70m")
+    individual_participant_count: int = Field(0, ge=0, description="个人赛人数（排位/淘汰共用）")
+    mixed_doubles_team_count: int = Field(0, ge=0, description="混双队伍数")
+    team_count: int = Field(0, ge=0, description="团体队伍数")
 
 
 class EventConfigurationCreate(BaseModel):
     """创建赛事配置请求 - 不包含 event_id，由后端分配"""
-    bow_type: str = Field(..., description="弓种：recurve/compound/traditional/longbow/barebow")
-    distance: str = Field(..., description="距离：18m/30m/50m/70m")
-    format: str = Field(..., description="比赛类型：ranking/elimination/mixed_doubles/team")
-    participant_count: int = Field(..., ge=1, description="参赛人数或队伍数")
+    bow_type: str = Field(..., description="弓种：recurve/compound/traditional/longbow/barebow/sightless")
+    distance: str = Field(..., description="距离：10m/18m/30m/50m/70m")
+    individual_participant_count: int = Field(0, ge=0, description="个人赛人数（排位/淘汰共用）")
+    mixed_doubles_team_count: int = Field(0, ge=0, description="混双队伍数")
+    team_count: int = Field(0, ge=0, description="团体队伍数")
 
 
 class EventConfigurationUpdate(BaseModel):
     """更新赛事配置请求"""
-    participant_count: int = Field(..., ge=1)
+    individual_participant_count: int = Field(0, ge=0)
+    mixed_doubles_team_count: int = Field(0, ge=0)
+    team_count: int = Field(0, ge=0)
 
 
 class EventConfigurationRead(EventConfigurationBase):

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.event_configuration import (
-    EventConfigurationCreate, EventConfigurationUpdate, EventConfigurationRead, EventConfigurationList
+    EventConfigurationBase, EventConfigurationUpdate, EventConfigurationRead, EventConfigurationList
 )
 from app.services.event_configuration_service import EventConfigurationService
 
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/event-configurations", tags=["赛事配置管理
 
 
 @router.post("", response_model=EventConfigurationRead, summary="创建赛事配置")
-def create_configuration(config: EventConfigurationCreate, db: Session = Depends(get_db)):
+def create_configuration(config: EventConfigurationBase, db: Session = Depends(get_db)):
     """创建赛事配置"""
     try:
         return EventConfigurationService.create_configuration(db, config)

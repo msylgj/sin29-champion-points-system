@@ -20,7 +20,8 @@ INSERT INTO bow_types (code, name, description) VALUES
     ('compound', '复合弓', '使用定滑轮的现代弓'),
     ('traditional', '传统弓', '传统弓术'),
     ('longbow', '美猎弓', '美国狩猎弓'),
-    ('barebow', '光弓', '无瞄准器的弓')
+    ('barebow', '光弓', '无瞄准器的弓'),
+    ('sightless', '无瞄弓', '无瞄具的弓种')
 ON CONFLICT (code) DO NOTHING;
 
 -- ============================================================================
@@ -34,6 +35,7 @@ CREATE TABLE IF NOT EXISTS distances (
 );
 
 INSERT INTO distances (code, name) VALUES
+    ('10m', '10米'),
     ('18m', '18米'),
     ('30m', '30米'),
     ('50m', '50米'),
@@ -59,6 +61,33 @@ INSERT INTO competition_formats (code, name, description) VALUES
 ON CONFLICT (code) DO NOTHING;
 
 -- ============================================================================
+-- 比赛组别字典表 (competition_groups)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS competition_groups (
+    id SERIAL PRIMARY KEY,
+    group_code VARCHAR(2) NOT NULL,
+    bow_type VARCHAR(50) NOT NULL,
+    distance VARCHAR(10) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE(group_code, bow_type, distance)
+);
+
+INSERT INTO competition_groups (group_code, bow_type, distance) VALUES
+    ('S', 'barebow', '50m'),
+    ('A', 'traditional', '30m'),
+    ('A', 'longbow', '30m'),
+    ('A', 'barebow', '30m'),
+    ('A', 'recurve', '30m'),
+    ('A', 'compound', '50m'),
+    ('B', 'sightless', '18m'),
+    ('B', 'recurve', '18m'),
+    ('B', 'compound', '30m'),
+    ('C', 'sightless', '10m'),
+    ('C', 'recurve', '10m'),
+    ('C', 'compound', '18m')
+ON CONFLICT (group_code, bow_type, distance) DO NOTHING;
+
+-- ============================================================================
 -- 赛事表 (events)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS events (
@@ -78,17 +107,18 @@ CREATE INDEX IF NOT EXISTS idx_event_year_season ON events(year, season);
 CREATE TABLE IF NOT EXISTS event_configurations (
     id SERIAL PRIMARY KEY,
     event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    bow_type VARCHAR(50) NOT NULL CHECK (bow_type IN ('recurve', 'compound', 'traditional', 'longbow', 'barebow')),
-    distance VARCHAR(10) NOT NULL CHECK (distance IN ('18m', '30m', '50m', '70m')),
-    format VARCHAR(50) NOT NULL CHECK (format IN ('ranking', 'elimination', 'mixed_doubles', 'team')),
-    participant_count INTEGER NOT NULL,
+    bow_type VARCHAR(50) NOT NULL CHECK (bow_type IN ('recurve', 'compound', 'traditional', 'longbow', 'barebow', 'sightless')),
+    distance VARCHAR(10) NOT NULL CHECK (distance IN ('10m', '18m', '30m', '50m', '70m')),
+    individual_participant_count INTEGER NOT NULL DEFAULT 0,
+    mixed_doubles_team_count INTEGER NOT NULL DEFAULT 0,
+    team_count INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    UNIQUE(event_id, bow_type, distance, format)
+    UNIQUE(event_id, bow_type, distance)
 );
 
 CREATE INDEX IF NOT EXISTS idx_event_config_event ON event_configurations(event_id);
-CREATE INDEX IF NOT EXISTS idx_event_config_key ON event_configurations(event_id, bow_type, distance, format);
+CREATE INDEX IF NOT EXISTS idx_event_config_key ON event_configurations(event_id, bow_type, distance);
 
 -- ============================================================================
 -- 成绩表 (scores) - 核心表
@@ -98,8 +128,8 @@ CREATE TABLE IF NOT EXISTS scores (
     event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
     club VARCHAR(100) NOT NULL,
-    bow_type VARCHAR(50) NOT NULL CHECK (bow_type IN ('recurve', 'compound', 'traditional', 'longbow', 'barebow')),
-    distance VARCHAR(10) NOT NULL CHECK (distance IN ('18m', '30m', '50m', '70m')),
+    bow_type VARCHAR(50) NOT NULL CHECK (bow_type IN ('recurve', 'compound', 'traditional', 'longbow', 'barebow', 'sightless')),
+    distance VARCHAR(10) NOT NULL CHECK (distance IN ('10m', '18m', '30m', '50m', '70m')),
     format VARCHAR(50) NOT NULL CHECK (format IN ('ranking', 'elimination', 'mixed_doubles', 'team')),
     rank INTEGER NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -120,13 +150,11 @@ INSERT INTO events (year, season) VALUES
 ON CONFLICT DO NOTHING;
 
 -- 示例数据：赛事配置
-INSERT INTO event_configurations (event_id, bow_type, distance, format, participant_count) VALUES
-    (1, 'recurve', '18m', 'ranking', 20),
-    (1, 'recurve', '30m', 'ranking', 20),
-    (1, 'compound', '18m', 'ranking', 15),
-    (1, 'compound', '30m', 'ranking', 15),
-    (1, 'recurve', '30m', 'elimination', 16),
-    (1, 'compound', '30m', 'elimination', 12)
+INSERT INTO event_configurations (event_id, bow_type, distance, individual_participant_count, mixed_doubles_team_count, team_count) VALUES
+    (1, 'recurve', '18m', 20, 8, 6),
+    (1, 'recurve', '30m', 20, 8, 6),
+    (1, 'compound', '18m', 15, 6, 4),
+    (1, 'compound', '30m', 15, 6, 4)
 ON CONFLICT DO NOTHING;
 
 -- 示例数据：成绩
