@@ -47,155 +47,40 @@
         <div v-if="selectedEvent" class="event-info">
           <div class="info-card">
             <div class="info-title">赛事配置</div>
-            <table class="config-table">
-              <thead>
-                <tr>
-                  <th>弓种</th>
-                  <th>距离</th>
-                  <th>个人（排位/淘汰）</th>
-                  <th>混双（队伍）</th>
-                  <th>团体（队伍）</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="config in selectedEvent.configurations" :key="`${config.bow_type}-${config.distance}`">
-                  <td>{{ getBowTypeLabel(config.bow_type) }}</td>
-                  <td>{{ config.distance }}</td>
-                  <td>{{ config.individual_participant_count }}</td>
-                  <td>{{ config.mixed_doubles_team_count }}</td>
-                  <td>{{ config.team_count }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div v-for="bowType in bowTypes" :key="bowType.code" class="bow-config-group">
+              <h3 class="bow-type-title">{{ bowType.name }}</h3>
+              <div class="table-wrapper">
+                <table class="config-table">
+                  <thead>
+                    <tr>
+                      <th>人数类型</th>
+                      <th v-for="distance in sortedDistances" :key="distance.code" v-show="shouldShowDistance(distance.code)">
+                        {{ distance.name }}
+                        <br>
+                        <small class="group-tag">{{ getGroupCode(bowType.code, distance.code) }}</small>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in countRows" :key="row.key">
+                      <td class="format-label">{{ row.label }}</td>
+                      <td v-for="distance in sortedDistances" :key="distance.code" v-show="shouldShowDistance(distance.code)">
+                        {{ getConfigCount(bowType.code, distance.code, row.key) }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- 批量导入 -->
+      <!-- 导入成绩 -->
       <div class="section" v-if="selectedEvent">
-        <h2 class="section-title">导入方式</h2>
-        
-        <div class="import-tabs">
-          <button 
-            v-for="tab in importTabs" 
-            :key="tab.id"
-            :class="['tab', { active: activeTab === tab.id }]"
-            @click="activeTab = tab.id"
-          >
-            {{ tab.label }}
-          </button>
-        </div>
+        <h2 class="section-title">导入成绩</h2>
 
-        <!-- 单条录入 -->
-        <div v-show="activeTab === 'single'" class="import-section">
-          <form @submit.prevent="addSingleScore" class="single-form">
-            <div class="form-group">
-              <label for="name">姓名 *</label>
-              <input 
-                id="name"
-                v-model="singleScore.name" 
-                type="text"
-                placeholder="选手姓名"
-                required
-                class="form-input"
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="club">俱乐部</label>
-              <input 
-                id="club"
-                v-model="singleScore.club" 
-                type="text"
-                placeholder="俱乐部名称"
-                class="form-input"
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="bow-type">弓种 *</label>
-              <select v-model="singleScore.bow_type" id="bow-type" required class="form-input">
-                <option value="">请选择</option>
-                <option v-for="bow in bowTypes" :key="bow.code" :value="bow.code">
-                  {{ bow.name }}
-                </option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="distance">距离 *</label>
-              <select v-model="singleScore.distance" id="distance" required class="form-input">
-                <option value="">请选择</option>
-                <option v-for="distance in distances" :key="distance.code" :value="distance.code">
-                  {{ distance.name }}
-                </option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="format">赛制 *</label>
-              <select v-model="singleScore.format" id="format" required class="form-input">
-                <option value="">请选择</option>
-                <option v-for="format in competitionFormats" :key="format.code" :value="format.code">
-                  {{ format.name }}
-                </option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="rank">排名 *</label>
-              <input 
-                id="rank"
-                v-model.number="singleScore.rank" 
-                type="number"
-                min="1"
-                placeholder="排名"
-                required
-                class="form-input"
-              />
-            </div>
-
-            <button type="submit" class="btn-add">
-              + 添加成绩
-            </button>
-          </form>
-
-          <!-- 已添加的成绩列表 -->
-          <div v-if="batchScores.length > 0" class="scores-preview">
-            <h3>待导入成绩 ({{ batchScores.length }}条)</h3>
-            <table class="preview-table">
-              <thead>
-                <tr>
-                  <th>姓名</th>
-                  <th>俱乐部</th>
-                  <th>弓种</th>
-                  <th>距离</th>
-                  <th>赛制</th>
-                  <th>排名</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(score, index) in batchScores" :key="index">
-                  <td>{{ score.name }}</td>
-                  <td>{{ score.club || '-' }}</td>
-                  <td>{{ getBowTypeLabel(score.bow_type) }}</td>
-                  <td>{{ score.distance }}</td>
-                  <td>{{ getFormatLabel(score.format) }}</td>
-                  <td>{{ score.rank }}</td>
-                  <td>
-                    <button @click="batchScores.splice(index, 1)" class="btn-remove-small">
-                      删除
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- CSV/Excel导入 -->
-        <div v-show="activeTab === 'bulk'" class="import-section">
+        <div class="import-section">
           <div class="upload-area">
             <input 
               type="file"
@@ -211,12 +96,52 @@
               支持格式：Excel (.xlsx, .xls) 或 CSV<br/>
               <strong>列标题需包括（推荐英文或中文）：</strong><br/>
               <span style="color: #667eea;">姓名</span>、<span style="color: #667eea;">俱乐部</span>、<span style="color: #667eea;">弓种</span>、<span style="color: #667eea;">距离</span>、<span style="color: #667eea;">赛制</span>、<span style="color: #667eea;">排名</span><br/>
-              <em style="font-size: 12px; color: #999;">弓种、距离、赛制的值支持使用字典名称（如"无瞄弓"、"10米"、"排位赛"）或代码（如"sightless"、"10m"、"ranking"）</em><br/>
+              <em style="font-size: 12px; color: #999;">弓种、距离、赛制的值支持使用字典名称（如"光弓"、"10米"、"排位赛"）或代码（如"barebow"、"10m"、"ranking"）</em><br/>
+              <strong>弓种枚举：</strong>{{ bowTypeEnumText }}<br/>
+              <strong>距离枚举：</strong>{{ distanceEnumText }}<br/>
+              <strong>赛制枚举：</strong>{{ formatEnumText }}<br/>
               系统会自动识别列标题并匹配字段
             </p>
           </div>
           <div v-if="uploadedFileName" class="file-info">
             已选择：{{ uploadedFileName }}
+          </div>
+
+          <div v-if="batchScores.length > 0" class="scores-preview">
+            <h3>待导入成绩 ({{ batchScores.length }}条，合法 {{ validScoreCount }} / 异常 {{ invalidScoreCount }})</h3>
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th>姓名</th>
+                  <th>俱乐部</th>
+                  <th>弓种</th>
+                  <th>距离</th>
+                  <th>赛制</th>
+                  <th>排名</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(score, index) in batchScores" :key="index" :class="{ 'row-error': !score.__valid }">
+                  <td>{{ score.name }}</td>
+                  <td>{{ score.club || '-' }}</td>
+                  <td>{{ getBowTypeLabel(score.bow_type) }}</td>
+                  <td>{{ score.distance }}</td>
+                  <td>{{ getFormatLabel(score.format) }}</td>
+                  <td>{{ score.rank }}</td>
+                  <td>
+                    <span v-if="score.__valid" class="status-tag status-ok">通过</span>
+                    <span v-else class="status-tag status-error" :title="score.__errors.join('；')">异常</span>
+                  </td>
+                  <td>
+                    <button @click="batchScores.splice(index, 1)" class="btn-remove-small">
+                      删除
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -234,9 +159,9 @@
             @click="submitImport"
             v-if="batchScores.length > 0"
             class="btn-submit"
-            :disabled="importLoading"
+            :disabled="importLoading || invalidScoreCount > 0"
           >
-            {{ importLoading ? '导入中...' : `确认导入 (${batchScores.length}条)` }}
+            {{ importLoading ? '导入中...' : `确认导入 (${validScoreCount}条)` }}
           </button>
         </div>
       </div>
@@ -253,7 +178,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { eventAPI, scoreAPI, dictionaryAPI } from '@/api'
 import * as XLSX from 'xlsx'
@@ -262,7 +187,6 @@ const router = useRouter()
 const events = ref([])
 const selectedEventId = ref('')
 const selectedEvent = ref(null)
-const activeTab = ref('single')
 const batchScores = ref([])
 const importLoading = ref(false)
 const successMessage = ref('')
@@ -274,20 +198,23 @@ const fileInput = ref(null)
 const bowTypes = ref([])
 const distances = ref([])
 const competitionFormats = ref([])
+const competitionGroups = ref([])
 
-const importTabs = [
-  { id: 'single', label: '逐条录入' },
-  { id: 'bulk', label: '批量导入' }
+const countRows = [
+  { key: 'individual_participant_count', label: '个人（排位/淘汰）' },
+  { key: 'mixed_doubles_team_count', label: '混双（队伍）' },
+  { key: 'team_count', label: '团体（队伍）' }
 ]
 
-const singleScore = ref({
-  name: '',
-  club: '',
-  bow_type: '',
-  distance: '',
-  format: '',
-  rank: null
+const sortedDistances = computed(() => {
+  return [...distances.value].sort((a, b) => parseInt(b.code, 10) - parseInt(a.code, 10))
 })
+
+const bowTypeEnumText = computed(() => bowTypes.value.map(item => `${item.name}(${item.code})`).join('、'))
+const distanceEnumText = computed(() => distances.value.map(item => `${item.name}(${item.code})`).join('、'))
+const formatEnumText = computed(() => competitionFormats.value.map(item => `${item.name}(${item.code})`).join('、'))
+const validScoreCount = computed(() => batchScores.value.filter(item => item.__valid).length)
+const invalidScoreCount = computed(() => batchScores.value.filter(item => !item.__valid).length)
 
 // 获取弓种标签
 const getBowTypeLabel = (type) => {
@@ -313,6 +240,25 @@ const getFormatLabel = (format) => {
   return labels[format] || format
 }
 
+const getGroupCode = (bowType, distance) => {
+  const found = competitionGroups.value.find(
+    item => item.bow_type === bowType && item.distance === distance
+  )
+  return found ? `${found.group_code}组` : '-'
+}
+
+const shouldShowDistance = (distance) => {
+  return competitionGroups.value.some(item => item.distance === distance)
+}
+
+const getConfigCount = (bowType, distance, key) => {
+  const config = selectedEvent.value?.configurations?.find(
+    item => item.bow_type === bowType && item.distance === distance
+  )
+  if (!config) return '-'
+  return config[key] ?? 0
+}
+
 // 加载字典数据
 const loadDictionaries = async () => {
   try {
@@ -321,6 +267,7 @@ const loadDictionaries = async () => {
       bowTypes.value = response.data.bowTypes || []
       distances.value = response.data.distances || []
       competitionFormats.value = response.data.competitionFormats || []
+      competitionGroups.value = response.data.competitionGroups || []
     }
   } catch (error) {
     console.error('加载字典数据失败:', error)
@@ -351,36 +298,6 @@ const onEventSelected = async () => {
     errorMessage.value = '加载赛事信息失败'
     console.error('Error loading event:', error)
   }
-}
-
-// 添加单条成绩
-const addSingleScore = () => {
-  if (!singleScore.value.name || !singleScore.value.bow_type || !singleScore.value.distance || !singleScore.value.format || !singleScore.value.rank) {
-    errorMessage.value = '请填写必填项'
-    return
-  }
-
-  batchScores.value.push({
-    event_id: parseInt(selectedEventId.value),
-    name: singleScore.value.name,
-    club: singleScore.value.club || '',
-    bow_type: singleScore.value.bow_type,
-    distance: singleScore.value.distance,
-    format: singleScore.value.format,
-    rank: singleScore.value.rank
-  })
-
-  // 重置表单
-  singleScore.value = {
-    name: '',
-    club: '',
-    bow_type: '',
-    distance: '',
-    format: '',
-    rank: null
-  }
-  
-  errorMessage.value = ''
 }
 
 // 文件选择
@@ -523,7 +440,7 @@ const parseExcelData = (jsonData) => {
   const formatMap = createValueToCodeMap(competitionFormats.value)
 
   // 转换字典值为代码
-  const convertToCode = (value, valueMap, fieldName) => {
+  const convertToCode = (value, valueMap) => {
     const trimmedValue = (value || '').toString().trim()
     if (!trimmedValue) return trimmedValue
 
@@ -543,6 +460,13 @@ const parseExcelData = (jsonData) => {
     return trimmedValue
   }
 
+  const bowCodeSet = new Set((bowTypes.value || []).map(item => item.code))
+  const distanceCodeSet = new Set((distances.value || []).map(item => item.code))
+  const formatCodeSet = new Set((competitionFormats.value || []).map(item => item.code))
+  const eventConfigSet = new Set(
+    (selectedEvent.value?.configurations || []).map(item => `${item.bow_type}|${item.distance}`)
+  )
+
   // 解析数据行
   const newScores = []
   for (let i = 1; i < jsonData.length; i++) {
@@ -556,16 +480,22 @@ const parseExcelData = (jsonData) => {
     let bow_type = (row[columnMapping.bow_type] || '').toString().trim()
     let distance = (row[columnMapping.distance] || '').toString().trim()
     let format = (row[columnMapping.format] || '').toString().trim()
-    const rank = parseInt(row[columnMapping.rank])
+    const rank = parseInt(row[columnMapping.rank], 10)
 
     // 转换字典值为代码
-    bow_type = convertToCode(bow_type, bowTypeMap, 'bow_type')
-    distance = convertToCode(distance, distanceMap, 'distance')
-    format = convertToCode(format, formatMap, 'format')
+    bow_type = convertToCode(bow_type, bowTypeMap)
+    distance = convertToCode(distance, distanceMap)
+    format = convertToCode(format, formatMap)
 
-    // 基本验证
-    if (!name || !bow_type || !distance || !format || isNaN(rank) || rank < 1) {
-      continue
+    const rowErrors = []
+    if (!name) rowErrors.push('姓名不能为空')
+    if (!club) rowErrors.push('俱乐部不能为空')
+    if (!bow_type || !bowCodeSet.has(bow_type)) rowErrors.push(`弓种无效：${bow_type || '-'}`)
+    if (!distance || !distanceCodeSet.has(distance)) rowErrors.push(`距离无效：${distance || '-'}`)
+    if (!format || !formatCodeSet.has(format)) rowErrors.push(`赛制无效：${format || '-'}`)
+    if (!Number.isInteger(rank) || rank < 1) rowErrors.push('排名必须是正整数')
+    if (bow_type && distance && !eventConfigSet.has(`${bow_type}|${distance}`)) {
+      rowErrors.push('该赛事未配置此弓种+距离')
     }
 
     newScores.push({
@@ -575,7 +505,9 @@ const parseExcelData = (jsonData) => {
       bow_type,
       distance,
       format,
-      rank
+      rank,
+      __valid: rowErrors.length === 0,
+      __errors: rowErrors
     })
   }
 
@@ -585,14 +517,24 @@ const parseExcelData = (jsonData) => {
   }
 
   batchScores.value = newScores
-  successMessage.value = `成功解析 ${newScores.length} 条成绩。`
-  activeTab.value = 'single'
+  const validCount = newScores.filter(item => item.__valid).length
+  const invalidCount = newScores.length - validCount
+  if (invalidCount > 0) {
+    successMessage.value = `已解析 ${newScores.length} 条：合法 ${validCount} 条，异常 ${invalidCount} 条（请修正后导入）`
+  } else {
+    successMessage.value = `成功解析 ${newScores.length} 条成绩，全部合法。`
+  }
 }
 
 // 提交导入
 const submitImport = async () => {
   if (batchScores.value.length === 0) {
-    errorMessage.value = '请先添加成绩'
+    errorMessage.value = '请先上传并解析成绩文件'
+    return
+  }
+
+  if (invalidScoreCount.value > 0) {
+    errorMessage.value = `当前有 ${invalidScoreCount.value} 条异常数据，请删除或修正后再导入。`
     return
   }
 
@@ -647,7 +589,15 @@ const submitImport = async () => {
       if (errors.length > 0) {
         validationErrors.push(`第 ${lineNo} 条成绩（${score.name}）：${errors.join('；')}`)
       } else {
-        validScores.push(score)
+        validScores.push({
+          event_id: score.event_id,
+          name: score.name,
+          club: score.club,
+          bow_type: score.bow_type,
+          distance: score.distance,
+          format: score.format,
+          rank: score.rank
+        })
       }
     }
     
@@ -873,25 +823,52 @@ onMounted(() => {
       margin-bottom: 10px;
     }
   }
+}
 
-  .config-table {
-    width: 100%;
-    font-size: 12px;
-    border-collapse: collapse;
+.bow-config-group {
+  margin-bottom: 20px;
 
-    th {
-      background: transparent;
-      border-bottom: 1px solid #e0e0e0;
-      padding: 8px;
-      text-align: left;
-      font-weight: 600;
+  .bow-type-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #667eea;
+    margin: 10px 0 8px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #667eea;
+  }
+}
+
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.config-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  min-width: 400px;
+
+  th, td {
+    border: 1px solid #e0e0e0;
+    padding: 8px;
+    text-align: center;
+  }
+
+  th {
+    background: #f5f5f5;
+    font-weight: 600;
+    color: #333;
+  }
+
+  td {
+    background: white;
+
+    &.format-label {
+      font-weight: 500;
       color: #666;
-    }
-
-    td {
-      padding: 8px;
-      border-bottom: 1px solid #f0f0f0;
-      color: #333;
+      text-align: left;
+      background: #f9f9f9;
     }
   }
 }
@@ -932,59 +909,8 @@ onMounted(() => {
   }
 }
 
-.import-tabs {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid #e0e0e0;
-
-  .tab {
-    flex: 1;
-    padding: 10px;
-    background: transparent;
-    border: none;
-    border-bottom: 3px solid transparent;
-    color: #666;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s;
-
-    &.active {
-      color: #667eea;
-      border-bottom-color: #667eea;
-    }
-  }
-}
-
 .import-section {
   animation: fadeIn 0.3s ease;
-}
-
-.single-form {
-  margin-bottom: 20px;
-
-  .form-group {
-    margin-bottom: 12px;
-  }
-}
-
-.btn-add {
-  width: 100%;
-  padding: 10px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-bottom: 20px;
-
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-  }
 }
 
 .scores-preview {
@@ -1014,6 +940,31 @@ onMounted(() => {
       border-bottom: 1px solid #f0f0f0;
       color: #666;
     }
+
+    tr.row-error {
+      background: #fff5f5;
+    }
+  }
+}
+
+.status-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+
+  &.status-ok {
+    background: #eaf8ee;
+    color: #1e7b34;
+    border: 1px solid #b6e1c1;
+  }
+
+  &.status-error {
+    background: #ffecec;
+    color: #b42318;
+    border: 1px solid #f6b8b5;
+    cursor: help;
   }
 }
 
