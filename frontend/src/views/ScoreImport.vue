@@ -292,11 +292,11 @@ const singleScore = ref({
 // 获取弓种标签
 const getBowTypeLabel = (type) => {
   const labels = {
+    'barebow': '光弓',
+    'longbow': '美猎弓',
+    'traditional': '传统弓',
     'recurve': '反曲弓',
     'compound': '复合弓',
-    'barebow': '光弓',
-    'traditional': '传统弓',
-    'longbow': '美猎弓',
     'sightless': '无瞄弓'
   }
   return labels[type] || type

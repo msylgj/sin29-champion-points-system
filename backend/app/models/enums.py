@@ -32,9 +32,9 @@ class CompetitionFormat(str, enum.Enum):
 
 
 class Season(str, enum.Enum):
-    """季度枚举"""
-    Q1 = "Q1"  # 第一季度
-    Q2 = "Q2"  # 第二季度
-    Q3 = "Q3"  # 第三季度
-    Q4 = "Q4"  # 第四季度
+    """赛季枚举"""
+    SPRING = "春季赛"
+    SUMMER = "夏季赛"
+    AUTUMN = "秋季赛"
+    WINTER = "冬季赛"
 

@@ -100,7 +100,7 @@
             <div v-for="(athlete, index) in ranking.slice(0, 8)" :key="`${athlete.name}-${athlete.club}`" class="athlete-card">
               <div class="card-header">
                 <div class="rank-info">
-                  <span class="rank-number">{{ athlete.ranking }}</span>
+                  <span class="rank-number" :class="getTopRankClass(athlete.ranking)">{{ athlete.ranking }}</span>
                   <div class="name-info">
                     <div class="name">{{ athlete.name }}</div>
                     <div class="club">{{ athlete.club || '个人' }}</div>
@@ -147,6 +147,13 @@ const selectedYear = ref('')
 const selectedBowType = ref('')
 const availableYears = ref([])
 const bowTypes = ref([])
+
+const getTopRankClass = (rank) => {
+  if (rank === 1) return 'rank-first'
+  if (rank === 2) return 'rank-second'
+  if (rank === 3) return 'rank-third'
+  return ''
+}
 
 // 获取赛制标签
 const getFormatLabel = (format) => {
@@ -495,17 +502,19 @@ onMounted(async () => {
       border-bottom: 1px solid #f0f0f0;
 
       &.highlight {
-        background: #fffef0;
+        background: #f4f8ff;
         
         .col-rank {
           font-weight: 600;
-          color: #ff6b6b;
+          color: #1f4ea3;
         }
 
         .rank-badge {
-          background: linear-gradient(135deg, #ffd89b 0%, #ff6b6b 100%);
-          color: white;
+          background: linear-gradient(135deg, #edf4ff 0%, #cfe1ff 100%);
+          color: #1a3d80;
+          border: 1px solid #9dbaf0;
           font-weight: 600;
+          box-shadow: 0 2px 6px rgba(39, 94, 187, 0.2);
         }
       }
 
@@ -526,10 +535,12 @@ onMounted(async () => {
             display: inline-block;
             min-width: 30px;
             padding: 4px 8px;
-            background: #f0f0f0;
+            background: linear-gradient(135deg, #f4f8ff 0%, #dbe8ff 100%);
+            color: #275ebb;
+            border: 1px solid #b8cff5;
             border-radius: 4px;
             text-align: center;
-            font-weight: 500;
+            font-weight: 600;
           }
         }
 
@@ -591,16 +602,41 @@ onMounted(async () => {
         gap: 12px;
 
         .rank-number {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
+          background: linear-gradient(135deg, #f7faff 0%, #dce9ff 100%);
+          color: #1f4ea3;
           width: 36px;
           height: 36px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-weight: 600;
+          border: 2px solid #b7cff4;
+          font-weight: 700;
           font-size: 14px;
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+          box-shadow: 0 3px 10px rgba(39, 94, 187, 0.22);
+          flex-shrink: 0;
+
+          &.rank-first {
+            background: linear-gradient(135deg, #fff9e5 0%, #ffe4a3 100%);
+            color: #7a4a00;
+            border-color: #efc469;
+            box-shadow: 0 3px 10px rgba(173, 119, 22, 0.24);
+          }
+
+          &.rank-second {
+            background: linear-gradient(135deg, #f8fbff 0%, #dfe9f5 100%);
+            color: #41566f;
+            border-color: #b7c6d8;
+            box-shadow: 0 3px 10px rgba(102, 120, 143, 0.22);
+          }
+
+          &.rank-third {
+            background: linear-gradient(135deg, #fff3eb 0%, #f2c8ac 100%);
+            color: #6d3b25;
+            border-color: #d99d7a;
+            box-shadow: 0 3px 10px rgba(152, 90, 58, 0.22);
+          }
         }
 
         .name-info {

@@ -29,10 +29,10 @@
           <label for="season">赛季 *</label>
           <select v-model="formData.season" id="season" required class="form-input">
             <option value="">请选择赛季</option>
-            <option value="Q1">Q1（1-3月）</option>
-            <option value="Q2">Q2（4-6月）</option>
-            <option value="Q3">Q3（7-9月）</option>
-            <option value="Q4">Q4（10-12月）</option>
+            <option value="春季赛">春季赛（1-3月）</option>
+            <option value="夏季赛">夏季赛（4-6月）</option>
+            <option value="秋季赛">秋季赛（7-9月）</option>
+            <option value="冬季赛">冬季赛（10-12月）</option>
           </select>
           <small class="help-text">选择赛事所属的季度</small>
         </div>
@@ -52,7 +52,7 @@
               <thead>
                 <tr>
                   <th>人数类型</th>
-                  <th v-for="distance in distances" :key="distance.code">
+                  <th v-for="distance in sortedDistances" :key="distance.code" v-show="shouldShowDistance(distance.code)">
                     {{ distance.name }}
                     <br>
                     <small class="group-tag">{{ getGroupCode(bowType.code, distance.code) }}</small>
@@ -62,7 +62,7 @@
               <tbody>
                 <tr v-for="row in countRows" :key="row.key">
                   <td class="format-label">{{ row.label }}</td>
-                  <td v-for="distance in distances" :key="distance.code" class="input-cell">
+                  <td v-for="distance in sortedDistances" :key="distance.code" v-show="shouldShowDistance(distance.code)" class="input-cell" :class="{ 'disabled-cell': isInputDisabled(bowType.code, distance.code) }">
                     <input 
                       v-model.number="configTable[bowType.code][distance.code][row.key]"
                       type="number"
@@ -70,6 +70,8 @@
                       max="999"
                       class="table-input"
                       :placeholder="`0`"
+                      :disabled="isInputDisabled(bowType.code, distance.code)"
+                      :title="isInputDisabled(bowType.code, distance.code) ? '该组别未配置' : ''"
                     />
                   </td>
                 </tr>
@@ -124,6 +126,10 @@ const formData = ref({
   season: ''
 })
 
+const sortedDistances = computed(() => {
+  return [...distances.value].sort((a, b) => parseInt(b.code, 10) - parseInt(a.code, 10))
+})
+
 // 配置表数据结构：bow_type => format => distance => count
 const configTable = ref({})
 const countRows = [
@@ -137,6 +143,20 @@ const getGroupCode = (bowType, distance) => {
     item => item.bow_type === bowType && item.distance === distance
   )
   return found ? `${found.group_code}组` : '-'
+}
+
+// 检查是否应该显示该距离列
+const shouldShowDistance = (distance) => {
+  return competitionGroups.value.some(
+    item => item.distance === distance
+  )
+}
+
+// 检查是否应该禁用该输入框
+const isInputDisabled = (bowType, distance) => {
+  return !competitionGroups.value.some(
+    item => item.bow_type === bowType && item.distance === distance
+  )
 }
 
 // 初始化配置表
@@ -389,6 +409,11 @@ const submitForm = async () => {
 
 .input-cell {
   padding: 6px;
+
+  &.disabled-cell {
+    background-color: #f5f5f5;
+    opacity: 0.6;
+  }
 }
 
 .table-input {
@@ -398,12 +423,11 @@ const submitForm = async () => {
   border-radius: 4px;
   font-size: 13px;
   text-align: center;
-  font-family: inherit;
 
-  &:focus {
-    outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  &:disabled {
+    background-color: #f0f0f0;
+    cursor: not-allowed;
+    color: #999;
   }
 }
 

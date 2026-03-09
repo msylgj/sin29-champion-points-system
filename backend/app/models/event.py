@@ -15,7 +15,7 @@ class Event(Base):
     
     # 赛事基本信息
     year = Column(Integer, nullable=False)  # 年度
-    season = Column(String(10), nullable=False)  # 季度 (Q1, Q2, Q3, Q4)
+    season = Column(String(10), nullable=False)  # 赛季 (春季赛, 夏季赛, 秋季赛, 冬季赛)
     
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

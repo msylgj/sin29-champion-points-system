@@ -14,11 +14,11 @@ export const getBowTypeName = (code, bowTypes = []) => {
   
   // 备用硬编码标签（为了兼容没有字典数据的情况）
   const fallbackLabels = {
-    'recurve': '反曲弓',
-    'compound': '复合弓',
     'barebow': '光弓',
+    'longbow': '美猎弓',
     'traditional': '传统弓',
-    'longbow': '美猎弓'
+    'recurve': '反曲弓',
+    'compound': '复合弓'
   }
   return fallbackLabels[code] || code
 }

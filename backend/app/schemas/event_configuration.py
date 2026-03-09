@@ -3,7 +3,7 @@
 """
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Literal
 
 
 class EventConfigurationBase(BaseModel):
@@ -51,5 +51,5 @@ class EventConfigurationList(BaseModel):
 class CreateEventWithConfigs(BaseModel):
     """创建赛事及其配置"""
     year: int = Field(..., ge=2000, le=2100, description="年度")
-    season: str = Field(..., description="季度：Q1/Q2/Q3/Q4")
+    season: Literal["春季赛", "夏季赛", "秋季赛", "冬季赛"] = Field(..., description="赛季：春季赛/夏季赛/秋季赛/冬季赛")
     configurations: list[EventConfigurationCreate] = Field(..., description="赛事配置列表")
