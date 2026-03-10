@@ -86,6 +86,12 @@ export const eventAPI = {
   createWithConfigs: (data) => api.post('/events/with-configs', data)
 }
 
+export const eventConfigAPI = {
+  create: (data) => api.post('/event-configurations', data),
+  update: (id, data) => api.put(`/event-configurations/${id}`, data),
+  delete: (id) => api.delete(`/event-configurations/${id}`)
+}
+
 // ==================== 字典 API ====================
 export const dictionaryAPI = {
   getBowTypes: () => api.get('/dictionaries/bow-types'),

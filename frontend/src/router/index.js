@@ -22,7 +22,7 @@ const routes = [
     path: '/event-add',
     name: 'EventAdd',
     component: EventAdd,
-    meta: { title: '新增赛事', icon: '📅', showBottomNav: true }
+    meta: { title: '赛事配置', icon: '📅', showBottomNav: true }
   },
   {
     path: '/score-import',

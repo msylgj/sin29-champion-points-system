@@ -1,8 +1,8 @@
 <template>
   <div class="event-add-page safe-area">
     <div class="page-header">
-      <h1>新增赛事</h1>
-      <p class="subtitle">添加赛事并配置参赛信息</p>
+      <h1>赛事配置</h1>
+      <p class="subtitle">按年度和赛季配置参赛信息</p>
     </div>
 
     <form @submit.prevent="submitForm" class="form-container">
@@ -35,6 +35,7 @@
             <option value="冬季赛">冬季赛（10-12月）</option>
           </select>
           <small class="help-text">选择赛事所属的季度</small>
+          <small v-if="existingEventId" class="help-text">检测到该赛事已存在，已自动带入历史配置，保存后将更新该赛事配置</small>
         </div>
       </div>
 
@@ -87,7 +88,7 @@
           取消
         </button>
         <button type="submit" class="btn-submit" :disabled="loading">
-          {{ loading ? '保存中...' : '保存赛事' }}
+          {{ loading ? (existingEventId ? '更新中...' : '保存中...') : (existingEventId ? '更新配置' : '保存赛事') }}
         </button>
       </div>
     </form>
@@ -105,15 +106,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { eventAPI, dictionaryAPI } from '@/api'
+import { eventAPI, dictionaryAPI, eventConfigAPI } from '@/api'
 
 const router = useRouter()
 const currentYear = new Date().getFullYear()
 const loading = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
+const existingEventId = ref(null)
 
 // 字典数据
 const bowTypes = ref([])
@@ -176,6 +178,49 @@ const initConfigTable = () => {
   }
 }
 
+const applyConfigurationsToTable = (configurations = []) => {
+  initConfigTable()
+  configurations.forEach(config => {
+    const bowTypeMap = configTable.value[config.bow_type]
+    const distanceMap = bowTypeMap?.[config.distance]
+    if (!distanceMap) return
+
+    distanceMap.individual_participant_count = Number(config.individual_participant_count || 0)
+    distanceMap.mixed_doubles_team_count = Number(config.mixed_doubles_team_count || 0)
+    distanceMap.team_count = Number(config.team_count || 0)
+  })
+}
+
+const loadExistingEventConfigurations = async () => {
+  if (!formData.value.season || !bowTypes.value.length || !distances.value.length) {
+    existingEventId.value = null
+    initConfigTable()
+    return
+  }
+
+  try {
+    const response = await eventAPI.getList({
+      page: 1,
+      page_size: 1,
+      year: formData.value.year,
+      season: formData.value.season
+    })
+
+    const existingEvent = response.items?.[0]
+    if (existingEvent) {
+      existingEventId.value = existingEvent.id
+      applyConfigurationsToTable(existingEvent.configurations || [])
+    } else {
+      existingEventId.value = null
+      initConfigTable()
+    }
+  } catch (error) {
+    existingEventId.value = null
+    console.error('加载已存在赛事配置失败:', error)
+    initConfigTable()
+  }
+}
+
 // 加载字典数据
 const loadDictionaries = async () => {
   try {
@@ -198,6 +243,13 @@ onMounted(() => {
   loadDictionaries()
 })
 
+watch(
+  () => [formData.value.year, formData.value.season, bowTypes.value.length, distances.value.length],
+  () => {
+    loadExistingEventConfigurations()
+  }
+)
+
 // 将表格数据转换为配置数组
 const buildConfigurations = () => {
   const configs = []
@@ -218,6 +270,53 @@ const buildConfigurations = () => {
     })
   })
   return configs
+}
+
+const syncExistingEventConfigurations = async (eventId, configurations) => {
+  const detail = await eventAPI.getDetail(eventId)
+  const existingConfigs = detail.configurations || []
+
+  const existingMap = new Map(
+    existingConfigs.map(item => [`${item.bow_type}|${item.distance}`, item])
+  )
+  const newMap = new Map(
+    configurations.map(item => [`${item.bow_type}|${item.distance}`, item])
+  )
+
+  const updateOrCreateTasks = []
+
+  newMap.forEach((config, key) => {
+    const existing = existingMap.get(key)
+    if (existing) {
+      updateOrCreateTasks.push(
+        eventConfigAPI.update(existing.id, {
+          individual_participant_count: config.individual_participant_count,
+          mixed_doubles_team_count: config.mixed_doubles_team_count,
+          team_count: config.team_count
+        })
+      )
+    } else {
+      updateOrCreateTasks.push(
+        eventConfigAPI.create({
+          event_id: eventId,
+          bow_type: config.bow_type,
+          distance: config.distance,
+          individual_participant_count: config.individual_participant_count,
+          mixed_doubles_team_count: config.mixed_doubles_team_count,
+          team_count: config.team_count
+        })
+      )
+    }
+  })
+
+  const deleteTasks = []
+  existingMap.forEach((existing, key) => {
+    if (!newMap.has(key)) {
+      deleteTasks.push(eventConfigAPI.delete(existing.id))
+    }
+  })
+
+  await Promise.all([...updateOrCreateTasks, ...deleteTasks])
 }
 
 
@@ -244,14 +343,21 @@ const submitForm = async () => {
       season: formData.value.season,
       configurations
     }
-    const response = await eventAPI.createWithConfigs(payload)
-    successMessage.value = '赛事添加成功'
+
+    if (existingEventId.value) {
+      await syncExistingEventConfigurations(existingEventId.value, configurations)
+      successMessage.value = '赛事配置更新成功'
+    } else {
+      await eventAPI.createWithConfigs(payload)
+      successMessage.value = '赛事添加成功'
+    }
+
     setTimeout(() => {
       router.push('/score-import')
     }, 1500)
   } catch (error) {
-    errorMessage.value = error.message || '添加失败，请重试'
-    console.error('Error creating event:', error)
+    errorMessage.value = error.message || (existingEventId.value ? '更新失败，请重试' : '添加失败，请重试')
+    console.error('Error saving event config:', error)
   } finally {
     loading.value = false
   }

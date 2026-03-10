@@ -9,8 +9,8 @@
           <h1>导入成绩</h1>
           <p class="subtitle">为赛事导入参赛者成绩</p>
         </div>
-        <button class="btn-add-event" @click="navigateToAddEvent" title="新增赛事">
-          ➕ 新增赛事
+        <button class="btn-add-event" @click="navigateToAddEvent" title="赛事配置">
+          ➕ 赛事配置
         </button>
       </div>
     </div>
@@ -23,7 +23,7 @@
         <div v-if="events.length === 0" class="no-events-tip">
           <p>📋 当前无赛事记录，请先添加赛事</p>
           <button class="btn-add-event-inline" @click="navigateToAddEvent">
-            ➕ 新增赛事
+            ➕ 赛事配置
           </button>
         </div>
 
