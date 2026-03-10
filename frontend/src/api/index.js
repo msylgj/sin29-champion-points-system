@@ -67,7 +67,6 @@ api.interceptors.response.use(
 export const scoreAPI = {
   getList: (params = {}) => api.get('/scores', { params }),
   getDetail: (id) => api.get(`/scores/${id}`),
-  create: (data) => api.post('/scores', data),
   update: (id, data) => api.put(`/scores/${id}`, data),
   delete: (id) => api.delete(`/scores/${id}`),
   batchImport: (data) => api.post('/scores/batch/import', data),

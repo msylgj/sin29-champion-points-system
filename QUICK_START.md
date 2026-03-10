@@ -100,6 +100,7 @@ curl -X POST http://localhost:8000/api/auth/login \
 
 公开接口：
 
+- `GET /`
 - `GET /api/health`
 - `GET /api/dictionaries`
 - `GET /api/scores/annual-ranking/{year}/{bow_type}`
@@ -108,9 +109,14 @@ curl -X POST http://localhost:8000/api/auth/login \
 
 管理接口（需认证）：
 
-- `GET|POST|PUT|DELETE /api/events...`
-- `GET|POST|PUT|DELETE /api/event-configurations...`
-- `GET|POST|PUT|DELETE /api/scores...`
+- `GET|POST /api/events`
+- `GET|PUT|DELETE /api/events/{event_id}`
+- `POST /api/events/with-configs`
+- `POST /api/event-configurations`
+- `GET|PUT|DELETE /api/event-configurations/{config_id}`
+- `GET /api/event-configurations/event/{event_id}`
+- `GET /api/scores`
+- `GET|PUT|DELETE /api/scores/{score_id}`
 - `POST /api/scores/batch/import`
 
 ## 7. 常用命令

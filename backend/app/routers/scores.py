@@ -1,29 +1,16 @@
 """
 成绩 API 路由 - 简化版本
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas.score import (
-    ScoreCreate, ScoreUpdate, ScoreRead, ScoreList, ScoreBatchImport
+    ScoreUpdate, ScoreRead, ScoreList, ScoreBatchImport
 )
 from app.services.score_service import ScoreService
-from app.models.event import Event
-from io import BytesIO
 from app.security import verify_admin_token
 
 router = APIRouter(prefix="/api/scores", tags=["成绩管理"])
-
-
-@router.post("", response_model=ScoreRead, summary="录入单条成绩")
-def create_score(score: ScoreCreate, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
-    """录入单条成绩"""
-    try:
-        return ScoreService.create_score(db, score)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"创建失败：{str(e)}")
 
 
 @router.get("/{score_id}", response_model=ScoreRead, summary="获取成绩详情")
