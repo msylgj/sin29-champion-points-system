@@ -282,7 +282,6 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { eventAPI, scoreAPI, dictionaryAPI } from '@/api'
-import * as XLSX from 'xlsx'
 
 const router = useRouter()
 const events = ref([])
@@ -670,13 +669,20 @@ const onFileSelected = async (event) => {
       const reader = new FileReader()
       reader.onload = (e) => {
         try {
-          const data = new Uint8Array(e.target.result)
-          const workbook = XLSX.read(data, { type: 'array' })
-          const sheetName = workbook.SheetNames[0]
-          const worksheet = workbook.Sheets[sheetName]
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
-          
-          parseExcelData(jsonData)
+          const loadExcel = async () => {
+            const XLSX = await import('xlsx')
+            const data = new Uint8Array(e.target.result)
+            const workbook = XLSX.read(data, { type: 'array' })
+            const sheetName = workbook.SheetNames[0]
+            const worksheet = workbook.Sheets[sheetName]
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+
+            parseExcelData(jsonData)
+          }
+
+          loadExcel().catch((error) => {
+            errorMessage.value = 'Excel 文件解析失败：' + error.message
+          })
         } catch (error) {
           errorMessage.value = 'Excel 文件解析失败：' + error.message
         }

@@ -1,9 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-// 新的三个主要页面
-import EventAdd from '@/views/EventAdd.vue'
-import ScoreImport from '@/views/ScoreImport.vue'
-import PointsDisplay from '@/views/PointsDisplay.vue'
+const EventAdd = () => import('@/views/EventAdd.vue')
+const ScoreImport = () => import('@/views/ScoreImport.vue')
+const PointsDisplay = () => import('@/views/PointsDisplay.vue')
 
 const routes = [
   {

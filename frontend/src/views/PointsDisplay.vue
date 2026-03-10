@@ -159,7 +159,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { scoreAPI, dictionaryAPI, eventAPI, authAPI } from '@/api'
 import { useRouter } from 'vue-router'
-import * as XLSX from 'xlsx'
 
 const router = useRouter()
 const loading = ref(false)
@@ -257,8 +256,10 @@ const loadRanking = async () => {
 }
 
 // 导出 Excel
-const exportToExcel = () => {
+const exportToExcel = async () => {
   if (ranking.value.length === 0) return
+
+  const XLSX = await import('xlsx')
 
   const headers = ['排名', '姓名', '俱乐部', '积分', '参赛次数']
   const rows = ranking.value.map(athlete => [

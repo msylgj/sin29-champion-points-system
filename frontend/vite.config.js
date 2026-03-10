@@ -18,5 +18,18 @@ export default defineConfig({
         changeOrigin: true
       }
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('/xlsx/')) return 'vendor-xlsx'
+          if (id.includes('/vue/') || id.includes('/vue-router/')) return 'vendor-vue'
+          if (id.includes('/vant/')) return 'vendor-vant'
+          return 'vendor'
+        }
+      }
+    }
   }
 })
