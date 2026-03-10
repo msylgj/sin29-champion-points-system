@@ -71,9 +71,6 @@ export const scoreAPI = {
   update: (id, data) => api.put(`/scores/${id}`, data),
   delete: (id) => api.delete(`/scores/${id}`),
   batchImport: (data) => api.post('/scores/batch/import', data),
-  recalculate: () => api.post('/scores/recalculate'),
-  getAthleteScores: (athleteId, params = {}) => 
-    api.get(`/scores/athlete/${athleteId}/scores`, { params }),
   getEventRanking: (eventId, params = {}) =>
     api.get(`/scores/event/${eventId}/ranking`, { params }),
   getAnnualRanking: (year, bowType) =>

@@ -92,6 +92,12 @@ class ScoreService:
             db_score.name = score_update.name
         if score_update.club is not None:
             db_score.club = score_update.club
+        if score_update.bow_type is not None:
+            db_score.bow_type = score_update.bow_type
+        if score_update.distance is not None:
+            db_score.distance = score_update.distance
+        if score_update.format is not None:
+            db_score.format = score_update.format
         if score_update.rank is not None:
             db_score.rank = score_update.rank
 
@@ -259,121 +265,3 @@ class ScoreService:
             item['highlight'] = idx <= 8
         
         return result
-
-        scores = query.order_by(desc(Score.created_at)).offset(skip).limit(limit).all()
-        return scores, total
-
-    @staticmethod
-    def update_score(
-        db: Session,
-        score_id: int,
-        score_update: ScoreUpdate
-    ) -> Optional[Score]:
-        """更新成绩"""
-        db_score = db.query(Score).filter(Score.id == score_id).first()
-        if not db_score:
-            return None
-
-        # 兼容当前 schema：允许编辑姓名、俱乐部、弓种、距离、赛制、排名
-        if score_update.name is not None:
-            db_score.name = score_update.name
-        if score_update.club is not None:
-            db_score.club = score_update.club
-        if score_update.bow_type is not None:
-            db_score.bow_type = score_update.bow_type
-        if score_update.distance is not None:
-            db_score.distance = score_update.distance
-        if score_update.format is not None:
-            db_score.format = score_update.format
-        if score_update.rank is not None:
-            db_score.rank = score_update.rank
-
-        db.commit()
-        db.refresh(db_score)
-        return db_score
-
-    @staticmethod
-    def delete_score(db: Session, score_id: int) -> bool:
-        """删除成绩"""
-        db_score = db.query(Score).filter(Score.id == score_id).first()
-        if not db_score:
-            return False
-
-        db.delete(db_score)
-        db.commit()
-        return True
-
-    @staticmethod
-    def batch_create_scores(db: Session, scores_data: List[ScoreCreate]) -> List[Score]:
-        """批量创建成绩"""
-        db_scores = []
-
-        for score_data in scores_data:
-            # 验证赛事是否存在
-            event = db.query(Event).filter(Event.id == score_data.event_id).first()
-            if not event:
-                raise ValueError(f"赛事 ID {score_data.event_id} 不存在")
-
-            db_score = Score(
-                event_id=score_data.event_id,
-                name=score_data.name,
-                club=score_data.club,
-                bow_type=score_data.bow_type,
-                distance=score_data.distance,
-                format=score_data.format,
-                rank=score_data.rank
-            )
-
-            db_scores.append(db_score)
-
-        db.add_all(db_scores)
-        db.commit()
-
-        for score in db_scores:
-            db.refresh(score)
-
-        return db_scores
-
-    @staticmethod
-    def recalculate_all_scores(db: Session) -> int:
-        """重新计算所有成绩的积分"""
-        scores = db.query(Score).filter(Score.is_valid == 1).all()
-        calculator = ScoringCalculator()
-
-        for score in scores:
-            if score.rank:
-                final_points = calculator.calculate_points(
-                    rank=score.rank,
-                    competition_format=score.competition_format,
-                    bow_type=score.bow_type,
-                    distance=score.distance,
-                    participant_count=score.participant_count
-                )
-                base_points = calculator.calculate_base_points(
-                    rank=score.rank,
-                    competition_format=score.competition_format
-                )
-            else:
-                base_points = 0.0
-                final_points = 0.0
-
-            score.base_points = base_points
-            score.points = final_points
-
-        db.commit()
-        return len(scores)
-
-    @staticmethod
-    def get_athlete_scores(
-        db: Session,
-        name: str,
-        club: str = ""
-    ) -> List[Score]:
-        """获取运动员的所有成绩 (基于名称和俱乐部)"""
-        query = db.query(Score).filter(
-            and_(
-                Score.name == name,
-                Score.club == club
-            )
-        )
-        return query.order_by(desc(Score.id)).all()
