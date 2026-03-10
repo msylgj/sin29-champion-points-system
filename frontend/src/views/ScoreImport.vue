@@ -46,30 +46,35 @@
         <!-- 选中赛事的配置信息 -->
         <div v-if="selectedEvent" class="event-info">
           <div class="info-card">
-            <div class="info-title">赛事配置</div>
-            <div v-for="bowType in bowTypes" :key="bowType.code" class="bow-config-group">
-              <h3 class="bow-type-title">{{ bowType.name }}</h3>
-              <div class="table-wrapper">
-                <table class="config-table">
-                  <thead>
-                    <tr>
-                      <th>人数类型</th>
-                      <th v-for="distance in sortedDistances" :key="distance.code" v-show="shouldShowDistance(distance.code)">
-                        {{ distance.name }}
-                        <br>
-                        <small class="group-tag">{{ getGroupCode(bowType.code, distance.code) }}</small>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="row in countRows" :key="row.key">
-                      <td class="format-label">{{ row.label }}</td>
-                      <td v-for="distance in sortedDistances" :key="distance.code" v-show="shouldShowDistance(distance.code)">
-                        {{ getConfigCount(bowType.code, distance.code, row.key) }}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+            <button type="button" class="config-toggle" @click="showEventConfig = !showEventConfig">
+              <span class="info-title">赛事配置</span>
+              <span class="toggle-icon">{{ showEventConfig ? '收起 ▲' : '展开 ▼' }}</span>
+            </button>
+            <div v-if="showEventConfig">
+              <div v-for="bowType in bowTypes" :key="bowType.code" class="bow-config-group">
+                <h3 class="bow-type-title">{{ bowType.name }}</h3>
+                <div class="table-wrapper">
+                  <table class="config-table">
+                    <thead>
+                      <tr>
+                        <th>人数类型</th>
+                        <th v-for="distance in sortedDistances" :key="distance.code" v-show="shouldShowDistance(distance.code)">
+                          {{ distance.name }}
+                          <br>
+                          <small class="group-tag">{{ getGroupCode(bowType.code, distance.code) }}</small>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="row in countRows" :key="row.key">
+                        <td class="format-label">{{ row.label }}</td>
+                        <td v-for="distance in sortedDistances" :key="distance.code" v-show="shouldShowDistance(distance.code)">
+                          {{ getConfigCount(bowType.code, distance.code, row.key) }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
@@ -165,6 +170,102 @@
           </button>
         </div>
       </div>
+
+      <!-- 成绩管理 -->
+      <div class="section" v-if="selectedEvent">
+        <h2 class="section-title">成绩管理</h2>
+        <p class="section-help">仅支持查看和编辑当前赛事已有成绩，不支持新增。</p>
+
+        <div v-if="managedScoresLoading" class="empty-tip">成绩加载中...</div>
+        <div v-else-if="managedScores.length === 0" class="empty-tip">当前赛事暂无成绩</div>
+        <div v-else>
+          <div class="bow-tabs">
+            <button
+              v-for="tab in managedBowTabs"
+              :key="tab.code"
+              type="button"
+              class="bow-tab"
+              :class="{ active: tab.code === activeManageBowType }"
+              @click="activeManageBowType = tab.code"
+            >
+              {{ tab.name }}
+            </button>
+          </div>
+
+          <div class="manage-tools">
+            <div class="manage-tool-left">
+              <input
+                v-model="manageNameKeyword"
+                class="manage-search-input"
+                type="text"
+                placeholder="按姓名搜索"
+              />
+            </div>
+            <div class="manage-tool-right">
+              <label class="checkbox-inline">
+                <input type="checkbox" v-model="showModifiedOnly" />
+                仅显示已修改行
+              </label>
+              <button
+                type="button"
+                class="btn-batch-save"
+                :disabled="batchSavingCurrentTab || modifiedCurrentTabCount === 0"
+                @click="saveCurrentTabModifiedScores"
+              >
+                {{ batchSavingCurrentTab ? '批量保存中...' : `保存当前弓种修改 (${modifiedCurrentTabCount})` }}
+              </button>
+            </div>
+          </div>
+
+          <div class="table-wrapper manage-table-wrap">
+            <table class="manage-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>姓名</th>
+                  <th>俱乐部</th>
+                  <th>弓种</th>
+                  <th>距离</th>
+                  <th>赛制</th>
+                  <th>排名</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="score in filteredManagedScores" :key="score.id" :class="{ 'row-modified': isManagedScoreModified(score) }">
+                  <td>{{ score.id }}</td>
+                  <td><input v-model="score.name" class="cell-input" type="text" /></td>
+                  <td><input v-model="score.club" class="cell-input" type="text" /></td>
+                  <td>
+                    <select v-model="score.bow_type" class="cell-input">
+                      <option v-for="item in bowTypes" :key="item.code" :value="item.code">{{ item.name }}</option>
+                    </select>
+                  </td>
+                  <td>
+                    <select v-model="score.distance" class="cell-input">
+                      <option v-for="item in distances" :key="item.code" :value="item.code">{{ item.name }}</option>
+                    </select>
+                  </td>
+                  <td>
+                    <select v-model="score.format" class="cell-input">
+                      <option v-for="item in competitionFormats" :key="item.code" :value="item.code">{{ item.name }}</option>
+                    </select>
+                  </td>
+                  <td><input v-model.number="score.rank" class="cell-input" type="number" min="1" /></td>
+                  <td class="action-cell">
+                    <button type="button" class="btn-row-save" :disabled="savingScoreIds.has(score.id)" @click="saveManagedScore(score)">
+                      {{ savingScoreIds.has(score.id) ? '保存中...' : '保存' }}
+                    </button>
+                    <button type="button" class="btn-row-reset" :disabled="savingScoreIds.has(score.id)" @click="resetManagedScore(score.id)">
+                      重置
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 提示信息 -->
@@ -193,6 +294,16 @@ const successMessage = ref('')
 const errorMessage = ref('')
 const uploadedFileName = ref('')
 const fileInput = ref(null)
+const showEventConfig = ref(false)
+
+const managedScores = ref([])
+const managedScoresLoading = ref(false)
+const activeManageBowType = ref('')
+const managedOriginalMap = ref({})
+const savingScoreIds = ref(new Set())
+const showModifiedOnly = ref(false)
+const batchSavingCurrentTab = ref(false)
+const manageNameKeyword = ref('')
 
 // 字典数据
 const bowTypes = ref([])
@@ -215,6 +326,72 @@ const distanceEnumText = computed(() => distances.value.map(item => `${item.name
 const formatEnumText = computed(() => competitionFormats.value.map(item => `${item.name}(${item.code})`).join('、'))
 const validScoreCount = computed(() => batchScores.value.filter(item => item.__valid).length)
 const invalidScoreCount = computed(() => batchScores.value.filter(item => !item.__valid).length)
+const managedBowTabs = computed(() => {
+  const bowSet = new Set((managedScores.value || []).map(item => item.bow_type))
+  const tabs = bowTypes.value.filter(item => bowSet.has(item.code))
+  return tabs
+})
+const currentTabManagedScores = computed(() => {
+  if (!activeManageBowType.value) return []
+  return managedScores.value.filter(item => item.bow_type === activeManageBowType.value)
+})
+const modifiedCurrentTabCount = computed(() => {
+  return currentTabManagedScores.value.filter(item => isManagedScoreModified(item)).length
+})
+const filteredManagedScores = computed(() => {
+  if (!activeManageBowType.value) return []
+  const keyword = (manageNameKeyword.value || '').trim().toLowerCase()
+  const currentTabScores = managedScores.value.filter(item => {
+    if (item.bow_type !== activeManageBowType.value) return false
+    if (showModifiedOnly.value && !isManagedScoreModified(item)) return false
+    if (keyword && !(item.name || '').toLowerCase().includes(keyword)) return false
+    return true
+  })
+
+  // 默认排序：距离(大到小)、赛制、排名
+  return [...currentTabScores].sort((a, b) => {
+    const compareText = (left, right) => (left || '').localeCompare((right || ''), 'zh-CN')
+    const compareNumber = (left, right) => Number(left || 0) - Number(right || 0)
+    const parseDistance = (value) => {
+      const match = String(value || '').match(/\d+/)
+      return match ? Number(match[0]) : 0
+    }
+
+    const byDistanceDesc = parseDistance(b.distance) - parseDistance(a.distance)
+    if (byDistanceDesc !== 0) return byDistanceDesc
+
+    const byFormat = compareText(a.format, b.format)
+    if (byFormat !== 0) return byFormat
+
+    const byRank = compareNumber(a.rank, b.rank)
+    return byRank
+  })
+})
+
+const normalizeManagedScore = (score = {}) => ({
+  name: (score.name || '').trim(),
+  club: (score.club || '').trim(),
+  bow_type: score.bow_type || '',
+  distance: score.distance || '',
+  format: score.format || '',
+  rank: Number(score.rank || 0)
+})
+
+const isManagedScoreModified = (score) => {
+  const original = managedOriginalMap.value[score.id]
+  if (!original) return false
+
+  const currentNormalized = normalizeManagedScore(score)
+  const originalNormalized = normalizeManagedScore(original)
+  return [
+    'name',
+    'club',
+    'bow_type',
+    'distance',
+    'format',
+    'rank'
+  ].some(key => currentNormalized[key] !== originalNormalized[key])
+}
 
 // 获取弓种标签
 const getBowTypeLabel = (type) => {
@@ -284,16 +461,192 @@ const loadEvents = async () => {
   }
 }
 
+const snapshotManagedScores = () => {
+  const snapshot = {}
+  managedScores.value.forEach(item => {
+    snapshot[item.id] = { ...item }
+  })
+  managedOriginalMap.value = snapshot
+}
+
+const loadManagedScores = async () => {
+  if (!selectedEventId.value) {
+    managedScores.value = []
+    managedOriginalMap.value = {}
+    activeManageBowType.value = ''
+    return
+  }
+
+  managedScoresLoading.value = true
+  try {
+    const pageSize = 100
+    let page = 1
+    let total = 0
+    const all = []
+
+    do {
+      const response = await scoreAPI.getList({
+        page,
+        page_size: pageSize,
+        event_id: selectedEventId.value
+      })
+      const items = response.items || []
+      total = Number(response.total || 0)
+      all.push(...items)
+      page += 1
+    } while (all.length < total)
+
+    managedScores.value = all.map(item => ({
+      id: item.id,
+      event_id: item.event_id,
+      name: item.name || '',
+      club: item.club || '',
+      bow_type: item.bow_type || '',
+      distance: item.distance || '',
+      format: item.format || '',
+      rank: Number(item.rank || 0)
+    }))
+    snapshotManagedScores()
+
+    const tabs = managedBowTabs.value
+    if (tabs.length > 0) {
+      const hasCurrent = tabs.some(item => item.code === activeManageBowType.value)
+      activeManageBowType.value = hasCurrent ? activeManageBowType.value : tabs[0].code
+    } else {
+      activeManageBowType.value = ''
+    }
+  } catch (error) {
+    console.error('加载成绩管理数据失败:', error)
+    errorMessage.value = '加载成绩失败'
+    managedScores.value = []
+    managedOriginalMap.value = {}
+    activeManageBowType.value = ''
+  } finally {
+    managedScoresLoading.value = false
+  }
+}
+
+const validateManagedScore = (score) => {
+  if (!score.name || !score.name.trim()) return '姓名不能为空'
+  if (!score.bow_type) return '请选择弓种'
+  if (!score.distance) return '请选择距离'
+  if (!score.format) return '请选择赛制'
+  if (!Number.isInteger(Number(score.rank)) || Number(score.rank) < 1) return '排名必须是正整数'
+  return ''
+}
+
+const saveManagedScore = async (score) => {
+  const validationMsg = validateManagedScore(score)
+  if (validationMsg) {
+    errorMessage.value = `成绩 ID ${score.id}：${validationMsg}`
+    return false
+  }
+
+  const set = new Set(savingScoreIds.value)
+  set.add(score.id)
+  savingScoreIds.value = set
+  errorMessage.value = ''
+
+  try {
+    const payload = {
+      name: score.name.trim(),
+      club: score.club?.trim() || undefined,
+      bow_type: score.bow_type,
+      distance: score.distance,
+      format: score.format,
+      rank: Number(score.rank)
+    }
+    const updated = await scoreAPI.update(score.id, payload)
+    const idx = managedScores.value.findIndex(item => item.id === score.id)
+    if (idx >= 0) {
+      managedScores.value[idx] = {
+        id: updated.id,
+        event_id: updated.event_id,
+        name: updated.name || '',
+        club: updated.club || '',
+        bow_type: updated.bow_type || '',
+        distance: updated.distance || '',
+        format: updated.format || '',
+        rank: Number(updated.rank || 0)
+      }
+    }
+    snapshotManagedScores()
+    successMessage.value = `成绩 ID ${score.id} 保存成功`
+    return true
+  } catch (error) {
+    errorMessage.value = error.detail || error.message || '保存失败，请重试'
+    console.error('保存成绩失败:', error)
+    return false
+  } finally {
+    const nextSet = new Set(savingScoreIds.value)
+    nextSet.delete(score.id)
+    savingScoreIds.value = nextSet
+  }
+}
+
+const saveCurrentTabModifiedScores = async () => {
+  const changedScores = currentTabManagedScores.value.filter(item => isManagedScoreModified(item))
+  if (changedScores.length === 0) {
+    errorMessage.value = '当前弓种没有待保存的修改'
+    return
+  }
+
+  batchSavingCurrentTab.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  let successCount = 0
+  const failedItems = []
+
+  for (const score of changedScores) {
+    const validationMsg = validateManagedScore(score)
+    if (validationMsg) {
+      failedItems.push(`ID ${score.id}：${validationMsg}`)
+      continue
+    }
+
+    const ok = await saveManagedScore(score)
+    if (ok) {
+      successCount += 1
+    } else {
+      failedItems.push(`ID ${score.id}：保存失败`)
+    }
+  }
+
+  if (failedItems.length > 0) {
+    errorMessage.value = `批量保存完成，成功 ${successCount} 条，失败 ${failedItems.length} 条\n${failedItems.join('\n')}`
+  } else {
+    successMessage.value = `批量保存成功，共 ${successCount} 条`
+  }
+
+  batchSavingCurrentTab.value = false
+}
+
+const resetManagedScore = (scoreId) => {
+  const original = managedOriginalMap.value[scoreId]
+  if (!original) return
+  const idx = managedScores.value.findIndex(item => item.id === scoreId)
+  if (idx >= 0) {
+    managedScores.value[idx] = { ...original }
+  }
+}
+
 // 赛事选择
 const onEventSelected = async () => {
   if (!selectedEventId.value) {
     selectedEvent.value = null
+    showEventConfig.value = false
+    managedScores.value = []
+    managedOriginalMap.value = {}
+    activeManageBowType.value = ''
     return
   }
 
   try {
     const response = await eventAPI.getDetail(selectedEventId.value)
     selectedEvent.value = response
+    showEventConfig.value = false
+    await loadManagedScores()
   } catch (error) {
     errorMessage.value = '加载赛事信息失败'
     console.error('Error loading event:', error)
@@ -779,6 +1132,12 @@ onMounted(() => {
     margin: 0 0 15px;
     color: #333;
   }
+
+  .section-help {
+    font-size: 12px;
+    color: #888;
+    margin: -6px 0 12px;
+  }
 }
 
 .form-group {
@@ -822,6 +1181,183 @@ onMounted(() => {
       color: #666;
       margin-bottom: 10px;
     }
+
+    .config-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      padding: 0;
+      margin-bottom: 6px;
+
+      .toggle-icon {
+        font-size: 12px;
+        color: #667eea;
+      }
+    }
+  }
+}
+
+.empty-tip {
+  padding: 12px;
+  border-radius: 6px;
+  background: #f7f8fc;
+  color: #666;
+  font-size: 13px;
+}
+
+.bow-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  .bow-tab {
+    border: 1px solid #ccd4f5;
+    background: #f7f8ff;
+    color: #4f5c99;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+
+    &.active {
+      background: #667eea;
+      border-color: #667eea;
+      color: #fff;
+    }
+  }
+}
+
+.manage-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+
+  .checkbox-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #4f5680;
+    font-size: 12px;
+  }
+
+  .manage-tool-left {
+    display: flex;
+    align-items: center;
+  }
+
+  .manage-tool-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+  }
+
+  .manage-search-input {
+    border: 1px solid #d7deef;
+    border-radius: 6px;
+    padding: 7px 10px;
+    min-width: 180px;
+    font-size: 12px;
+    color: #333;
+    background: #fff;
+  }
+
+  .btn-batch-save {
+    border: none;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 12px;
+    background: #4d79ff;
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .btn-batch-save:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.manage-table-wrap {
+  max-height: 420px;
+  border: 1px solid #eceff7;
+  border-radius: 8px;
+}
+
+.manage-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 920px;
+
+  th,
+  td {
+    border-bottom: 1px solid #f0f2f8;
+    padding: 8px;
+    text-align: left;
+    font-size: 12px;
+    vertical-align: middle;
+    background: #fff;
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f6f8fd;
+    color: #3b4370;
+    font-weight: 600;
+  }
+
+  .cell-input {
+    width: 100%;
+    border: 1px solid #d9deef;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 12px;
+    color: #333;
+    background: #fff;
+  }
+
+  .action-cell {
+    white-space: nowrap;
+  }
+
+  .btn-row-save,
+  .btn-row-reset {
+    border: none;
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .btn-row-save {
+    background: #4d79ff;
+    color: #fff;
+    margin-right: 6px;
+  }
+
+  .btn-row-reset {
+    background: #eef1fb;
+    color: #4c5684;
+  }
+
+  .btn-row-save:disabled,
+  .btn-row-reset:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  tr.row-modified td {
+    background: #fff9e8;
   }
 }
 
