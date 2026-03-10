@@ -1,4 +1,6 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createMemoryHistory } from 'vue-router'
+
+const INTERNAL_ROUTE_KEY = 'internal_route_full_path'
 
 const EventAdd = () => import('@/views/EventAdd.vue')
 const ScoreImport = () => import('@/views/ScoreImport.vue')
@@ -32,12 +34,27 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createMemoryHistory(import.meta.env.BASE_URL),
   routes,
   scrollBehavior() {
     return { top: 0 }
   }
 })
+
+// 统一地址栏为固定基础路径，避免暴露内部页面路径
+const basePath = import.meta.env.BASE_URL || '/'
+if (typeof window !== 'undefined') {
+  const normalizedBasePath = basePath.endsWith('/') ? basePath : `${basePath}/`
+  if (window.location.pathname !== normalizedBasePath) {
+    window.history.replaceState(window.history.state, '', normalizedBasePath)
+  }
+}
+
+// 刷新后恢复上次内部页面状态（仅影响内存路由，不改变地址栏）
+const savedInternalRoute = sessionStorage.getItem(INTERNAL_ROUTE_KEY)
+if (savedInternalRoute) {
+  router.replace(savedInternalRoute).catch(() => {})
+}
 
 router.beforeEach((to, from, next) => {
   document.title = to.meta.title || '射箭积分系统'
@@ -53,6 +70,10 @@ router.beforeEach((to, from, next) => {
   }
 
   next()
+})
+
+router.afterEach((to) => {
+  sessionStorage.setItem(INTERNAL_ROUTE_KEY, to.fullPath)
 })
 
 export default router

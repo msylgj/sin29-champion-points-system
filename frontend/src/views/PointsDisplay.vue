@@ -2,7 +2,8 @@
   <div class="points-display-page safe-area">
     <div class="page-header">
       <div class="header-top">
-        <div>
+        <span class="header-spacer" aria-hidden="true"></span>
+        <div class="header-title-wrap">
           <h1>积分排名</h1>
           <p class="subtitle">查看年度弓种积分排名</p>
         </div>
@@ -158,9 +159,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { scoreAPI, dictionaryAPI, eventAPI, authAPI } from '@/api'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
+const route = useRoute()
 const loading = ref(false)
 const ranking = ref([])
 const selectedYear = ref('')
@@ -354,12 +356,11 @@ onMounted(async () => {
   await initYears()
   await loadDictionaries()
   
-  // 总是设置弓种（从URL或默认值）
+  // 总是设置弓种（从内部路由状态或默认值）
   if (bowTypes.value.length > 0) {
-    const urlParams = new URLSearchParams(window.location.search)
-    const bowTypeParam = urlParams.get('bowType')
+    const bowTypeParam = route.query.bowType
     
-    if (bowTypeParam && bowTypes.value.some(b => b.code === bowTypeParam)) {
+    if (typeof bowTypeParam === 'string' && bowTypeParam && bowTypes.value.some(b => b.code === bowTypeParam)) {
       selectedBowType.value = bowTypeParam
     } else {
       selectedBowType.value = bowTypes.value[0].code
@@ -390,6 +391,11 @@ onMounted(async () => {
     justify-content: space-between;
     align-items: flex-start;
     gap: 15px;
+  }
+
+  .header-title-wrap {
+    flex: 1;
+    text-align: center;
   }
 
   h1 {
@@ -423,6 +429,12 @@ onMounted(async () => {
     &:active {
       transform: scale(0.95);
     }
+  }
+
+  .header-spacer {
+    width: 88px;
+    height: 1px;
+    flex-shrink: 0;
   }
 }
 
@@ -678,19 +690,17 @@ onMounted(async () => {
         gap: 12px;
 
         .rank-number {
-          background: linear-gradient(135deg, #f7faff 0%, #dce9ff 100%);
-          color: #1f4ea3;
+          background: #f5f6f8;
+          color: #6f7785;
           width: 36px;
           height: 36px;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          border: 2px solid #b7cff4;
+          border: 1px solid #d8dde6;
           font-weight: 700;
           font-size: 14px;
-          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
-          box-shadow: 0 3px 10px rgba(39, 94, 187, 0.22);
           flex-shrink: 0;
 
           &.rank-first {
