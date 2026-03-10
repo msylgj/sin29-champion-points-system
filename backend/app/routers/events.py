@@ -10,12 +10,13 @@ from app.schemas.event_configuration import CreateEventWithConfigs
 from app.models.event import Event
 from app.models.event_configuration import EventConfiguration
 from app.services.event_configuration_service import EventConfigurationService
+from app.security import verify_admin_token
 
 router = APIRouter(prefix="/api/events", tags=["赛事管理"])
 
 
 @router.post("", response_model=EventRead, summary="创建赛事")
-def create_event(event: EventCreate, db: Session = Depends(get_db)):
+def create_event(event: EventCreate, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
     """创建新赛事"""
     # 检查年度+季度是否已存在
     existing = db.query(Event).filter(
@@ -35,7 +36,7 @@ def create_event(event: EventCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/with-configs", summary="创建赛事及其配置")
-def create_event_with_configs(event_data: CreateEventWithConfigs, db: Session = Depends(get_db)):
+def create_event_with_configs(event_data: CreateEventWithConfigs, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
     """创建赛事并同时添加配置"""
     try:
         # 创建赛事
@@ -85,7 +86,7 @@ def create_event_with_configs(event_data: CreateEventWithConfigs, db: Session = 
 
 
 @router.get("/{event_id}", summary="获取赛事详情")
-def get_event(event_id: int, db: Session = Depends(get_db)):
+def get_event(event_id: int, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
     """获取单个赛事的详细信息"""
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
@@ -120,7 +121,8 @@ def list_events(
     page_size: int = Query(10, ge=1, le=100),
     year: int = Query(None),
     season: str = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: dict = Depends(verify_admin_token)
 ):
     """获取赛事列表，支持按年度和季度筛选"""
     query = db.query(Event)
@@ -175,7 +177,8 @@ def list_events(
 def update_event(
     event_id: int,
     event_update: EventUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: dict = Depends(verify_admin_token)
 ):
     """更新赛事信息"""
     db_event = db.query(Event).filter(Event.id == event_id).first()
@@ -189,7 +192,7 @@ def update_event(
 
 
 @router.delete("/{event_id}", summary="删除赛事")
-def delete_event(event_id: int, db: Session = Depends(get_db)):
+def delete_event(event_id: int, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
     """删除赛事及其关联的所有成绩和配置"""
     db_event = db.query(Event).filter(Event.id == event_id).first()
     if not db_event:

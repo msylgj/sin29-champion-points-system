@@ -10,12 +10,13 @@ from app.schemas.score import (
 from app.services.score_service import ScoreService
 from app.models.event import Event
 from io import BytesIO
+from app.security import verify_admin_token
 
 router = APIRouter(prefix="/api/scores", tags=["成绩管理"])
 
 
 @router.post("", response_model=ScoreRead, summary="录入单条成绩")
-def create_score(score: ScoreCreate, db: Session = Depends(get_db)):
+def create_score(score: ScoreCreate, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
     """录入单条成绩"""
     try:
         return ScoreService.create_score(db, score)
@@ -26,7 +27,7 @@ def create_score(score: ScoreCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{score_id}", response_model=ScoreRead, summary="获取成绩详情")
-def get_score(score_id: int, db: Session = Depends(get_db)):
+def get_score(score_id: int, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
     """获取单条成绩详情"""
     score = ScoreService.get_score_by_id(db, score_id)
     if not score:
@@ -42,7 +43,8 @@ def list_scores(
     bow_type: str = Query(None),
     format: str = Query(None),
     name: str = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: dict = Depends(verify_admin_token)
 ):
     """获取成绩列表，支持多条件筛选"""
     skip = (page - 1) * page_size
@@ -67,7 +69,8 @@ def list_scores(
 def update_score(
     score_id: int,
     score_update: ScoreUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: dict = Depends(verify_admin_token)
 ):
     """更新成绩信息"""
     score = ScoreService.update_score(db, score_id, score_update)
@@ -77,7 +80,7 @@ def update_score(
 
 
 @router.delete("/{score_id}", summary="删除成绩")
-def delete_score(score_id: int, db: Session = Depends(get_db)):
+def delete_score(score_id: int, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
     """删除成绩"""
     success = ScoreService.delete_score(db, score_id)
     if not success:
@@ -88,7 +91,8 @@ def delete_score(score_id: int, db: Session = Depends(get_db)):
 @router.post("/batch/import", response_model=list[ScoreRead], summary="批量导入成绩")
 def batch_import_scores(
     batch_import: ScoreBatchImport,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _auth: dict = Depends(verify_admin_token)
 ):
     """批量导入成绩"""
     try:

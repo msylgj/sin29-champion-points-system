@@ -1,5 +1,7 @@
 import axios from 'axios'
 
+const ADMIN_TOKEN_KEY = 'admin_auth_token'
+
 // 确定API基础URL
 // 在生产/容器中使用环境变量，本地开发中使用相对路径（通过Vite proxy）
 const getBaseURL = () => {
@@ -22,8 +24,10 @@ const api = axios.create({
 api.interceptors.request.use(
   config => {
     const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY)
+    const authToken = adminToken || token
+    if (authToken) {
+      config.headers.Authorization = `Bearer ${authToken}`
     }
     return config
   },
@@ -41,7 +45,7 @@ api.interceptors.response.use(
       switch (error.response.status) {
         case 401:
           localStorage.removeItem('token')
-          window.location.href = '/login'
+          localStorage.removeItem(ADMIN_TOKEN_KEY)
           break
         case 403:
           console.error('无权限访问')
@@ -90,6 +94,10 @@ export const eventConfigAPI = {
   create: (data) => api.post('/event-configurations', data),
   update: (id, data) => api.put(`/event-configurations/${id}`, data),
   delete: (id) => api.delete(`/event-configurations/${id}`)
+}
+
+export const authAPI = {
+  login: (password) => api.post('/auth/login', { password })
 }
 
 // ==================== 字典 API ====================

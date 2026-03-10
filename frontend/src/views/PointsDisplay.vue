@@ -130,13 +130,34 @@
           📥 导出为 Excel
         </button>
       </div>
+
+      <div v-if="showAuthDialog" class="auth-dialog-mask" @click.self="closeAuthDialog">
+        <div class="auth-dialog">
+          <h3>管理认证</h3>
+          <p class="auth-tip">请输入管理密码以继续访问管理页面</p>
+          <input
+            v-model="adminPassword"
+            type="password"
+            class="auth-input"
+            placeholder="请输入管理密码"
+            @keyup.enter="submitAdminAuth"
+          />
+          <div v-if="authError" class="auth-error">{{ authError }}</div>
+          <div class="auth-actions">
+            <button type="button" class="btn-auth-cancel" @click="closeAuthDialog">取消</button>
+            <button type="button" class="btn-auth-submit" :disabled="authLoading" @click="submitAdminAuth">
+              {{ authLoading ? '验证中...' : '确认' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { scoreAPI, dictionaryAPI, eventAPI } from '@/api'
+import { scoreAPI, dictionaryAPI, eventAPI, authAPI } from '@/api'
 import { useRouter } from 'vue-router'
 import * as XLSX from 'xlsx'
 
@@ -147,6 +168,11 @@ const selectedYear = ref('')
 const selectedBowType = ref('')
 const availableYears = ref([])
 const bowTypes = ref([])
+const showAuthDialog = ref(false)
+const adminPassword = ref('')
+const authLoading = ref(false)
+const authError = ref('')
+const pendingManageRoute = ref('/score-import')
 
 const getTopRankClass = (rank) => {
   if (rank === 1) return 'rank-first'
@@ -270,10 +296,53 @@ const exportToExcel = () => {
 
 // 导航到管理页面（成绩导入）
 const navigateToManage = () => {
-  router.push('/score-import')
+  const token = localStorage.getItem('admin_auth_token')
+  if (token) {
+    router.push('/score-import')
+    return
+  }
+  pendingManageRoute.value = '/score-import'
+  showAuthDialog.value = true
+  adminPassword.value = ''
+  authError.value = ''
+}
+
+const closeAuthDialog = () => {
+  showAuthDialog.value = false
+  adminPassword.value = ''
+  authError.value = ''
+}
+
+const submitAdminAuth = async () => {
+  if (!adminPassword.value) {
+    authError.value = '请输入管理密码'
+    return
+  }
+
+  authLoading.value = true
+  authError.value = ''
+  try {
+    const response = await authAPI.login(adminPassword.value)
+    localStorage.setItem('admin_auth_token', response.access_token)
+    const targetPath = pendingManageRoute.value || '/score-import'
+    closeAuthDialog()
+    router.push(targetPath)
+  } catch (error) {
+    authError.value = error.detail || '密码验证失败'
+  } finally {
+    authLoading.value = false
+  }
 }
 
 onMounted(async () => {
+  const urlParams = new URLSearchParams(window.location.search)
+  const authRequired = urlParams.get('authRequired')
+  const redirect = urlParams.get('redirect')
+  if (authRequired === '1') {
+    pendingManageRoute.value = redirect || '/score-import'
+    showAuthDialog.value = true
+  }
+
   // 首先加载年份和字典
   await initYears()
   await loadDictionaries()
@@ -728,6 +797,82 @@ onMounted(async () => {
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     }
+  }
+}
+
+.auth-dialog-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 999;
+}
+
+.auth-dialog {
+  width: min(420px, 100%);
+  background: #fff;
+  border-radius: 10px;
+  padding: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+
+  h3 {
+    margin: 0 0 8px;
+    font-size: 18px;
+    color: #333;
+  }
+
+  .auth-tip {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: #666;
+  }
+
+  .auth-input {
+    width: 100%;
+    border: 1px solid #d7deef;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .auth-error {
+    margin-top: 8px;
+    color: #d14343;
+    font-size: 12px;
+  }
+
+  .auth-actions {
+    margin-top: 14px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .btn-auth-cancel,
+  .btn-auth-submit {
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .btn-auth-cancel {
+    background: #eff1f7;
+    color: #444;
+  }
+
+  .btn-auth-submit {
+    background: #4d79ff;
+    color: #fff;
+  }
+
+  .btn-auth-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 }
 

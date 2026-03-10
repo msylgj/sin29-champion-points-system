@@ -22,13 +22,13 @@ const routes = [
     path: '/event-add',
     name: 'EventAdd',
     component: EventAdd,
-    meta: { title: '赛事配置', icon: '📅', showBottomNav: true }
+    meta: { title: '赛事配置', icon: '📅', showBottomNav: true, requiresAdminAuth: true }
   },
   {
     path: '/score-import',
     name: 'ScoreImport',
     component: ScoreImport,
-    meta: { title: '导入成绩', icon: '📊', showBottomNav: true }
+    meta: { title: '导入成绩', icon: '📊', showBottomNav: true, requiresAdminAuth: true }
   }
 ]
 
@@ -42,6 +42,19 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   document.title = to.meta.title || '射箭积分系统'
+
+  const adminToken = localStorage.getItem('admin_auth_token')
+  if (to.meta.requiresAdminAuth && !adminToken) {
+    next({
+      path: '/points-display',
+      query: {
+        authRequired: '1',
+        redirect: to.fullPath
+      }
+    })
+    return
+  }
+
   next()
 })
 
