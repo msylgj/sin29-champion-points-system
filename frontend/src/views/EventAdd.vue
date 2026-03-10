@@ -1,8 +1,16 @@
 <template>
   <div class="event-add-page safe-area">
     <div class="page-header">
-      <h1>赛事配置</h1>
-      <p class="subtitle">按年度和赛季配置参赛信息</p>
+      <div class="header-top">
+        <button class="btn-back" @click="$router.push('/score-import')" title="返回导入成绩">
+          ← 返回
+        </button>
+        <div class="header-title-wrap">
+          <h1>赛事配置</h1>
+          <p class="subtitle">按年度和赛季配置参赛信息</p>
+        </div>
+        <span class="header-spacer" aria-hidden="true"></span>
+      </div>
     </div>
 
     <form @submit.prevent="submitForm" class="form-container">
@@ -376,6 +384,18 @@ const submitForm = async () => {
   padding: 30px 20px 20px;
   margin-bottom: 20px;
 
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .header-title-wrap {
+    flex: 1;
+    text-align: center;
+  }
+
   h1 {
     margin: 0 0 5px;
     font-size: 28px;
@@ -386,6 +406,33 @@ const submitForm = async () => {
     margin: 0;
     opacity: 0.9;
     font-size: 14px;
+  }
+
+  .btn-back {
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.3s;
+    white-space: nowrap;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+  }
+
+  .header-spacer {
+    width: 70px;
+    height: 1px;
+    flex-shrink: 0;
   }
 }
 

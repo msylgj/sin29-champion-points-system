@@ -44,12 +44,10 @@ router.beforeEach((to, from, next) => {
 
   const adminToken = localStorage.getItem('admin_auth_token')
   if (to.meta.requiresAdminAuth && !adminToken) {
+    sessionStorage.setItem('admin_auth_required', '1')
+    sessionStorage.setItem('admin_auth_redirect', to.fullPath)
     next({
-      path: '/points-display',
-      query: {
-        authRequired: '1',
-        redirect: to.fullPath
-      }
+      path: '/points-display'
     })
     return
   }

@@ -336,12 +336,18 @@ const submitAdminAuth = async () => {
 }
 
 onMounted(async () => {
-  const urlParams = new URLSearchParams(window.location.search)
-  const authRequired = urlParams.get('authRequired')
-  const redirect = urlParams.get('redirect')
-  if (authRequired === '1') {
-    pendingManageRoute.value = redirect || '/score-import'
-    showAuthDialog.value = true
+  const adminToken = localStorage.getItem('admin_auth_token')
+
+  const storageAuthRequired = sessionStorage.getItem('admin_auth_required')
+  const storageRedirect = sessionStorage.getItem('admin_auth_redirect')
+
+  if (storageAuthRequired === '1') {
+    pendingManageRoute.value = storageRedirect || '/score-import'
+    if (!adminToken) {
+      showAuthDialog.value = true
+    }
+    sessionStorage.removeItem('admin_auth_required')
+    sessionStorage.removeItem('admin_auth_redirect')
   }
 
   // 首先加载年份和字典

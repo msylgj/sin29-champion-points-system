@@ -2,7 +2,7 @@
   <div class="score-import-page safe-area">
     <div class="page-header">
       <div class="header-top">
-        <button class="btn-back" @click="$router.back()" title="返回积分排名">
+        <button class="btn-back" @click="$router.push('/points-display')" title="返回积分排名">
           ← 返回
         </button>
         <div>
@@ -154,7 +154,7 @@
         <div class="import-actions">
           <button 
             type="button"
-            @click="$router.back()"
+            @click="$router.push('/points-display')"
             class="btn-cancel"
           >
             取消
