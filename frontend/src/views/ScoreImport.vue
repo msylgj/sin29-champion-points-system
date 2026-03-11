@@ -128,7 +128,11 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(score, index) in batchScores" :key="index" :class="{ 'row-error': !score.__valid }">
+                <tr
+                  v-for="(score, index) in batchScores"
+                  :key="index"
+                  :class="{ 'row-error': !score.__valid, 'row-duplicate': score.__valid && score.__duplicate }"
+                >
                   <td>{{ score.name }}</td>
                   <td>{{ score.club || '-' }}</td>
                   <td>{{ getBowTypeLabel(score.bow_type) }}</td>
@@ -136,7 +140,8 @@
                   <td>{{ getFormatLabel(score.format) }}</td>
                   <td>{{ score.rank }}</td>
                   <td>
-                    <span v-if="score.__valid" class="status-tag status-ok">通过</span>
+                    <span v-if="score.__valid && score.__duplicate" class="status-tag status-duplicate" title="与已有成绩重复，导入时将覆盖原记录">重复（将覆盖）</span>
+                    <span v-else-if="score.__valid" class="status-tag status-ok">通过</span>
                     <span v-else class="status-tag status-error" :title="score.__errors.join('；')">异常</span>
                   </td>
                   <td>
@@ -325,6 +330,7 @@ const distanceEnumText = computed(() => distances.value.map(item => `${item.name
 const formatEnumText = computed(() => competitionFormats.value.map(item => `${item.name}(${item.code})`).join('、'))
 const validScoreCount = computed(() => batchScores.value.filter(item => item.__valid).length)
 const invalidScoreCount = computed(() => batchScores.value.filter(item => !item.__valid).length)
+const duplicateScoreCount = computed(() => batchScores.value.filter(item => item.__valid && item.__duplicate).length)
 const managedBowTabs = computed(() => {
   const bowSet = new Set((managedScores.value || []).map(item => item.bow_type))
   const tabs = bowTypes.value.filter(item => bowSet.has(item.code))
@@ -661,55 +667,47 @@ const onFileSelected = async (event) => {
   errorMessage.value = ''
   successMessage.value = ''
 
-  try {
-    const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
-    
-    if (isExcel) {
-      // Excel 文件处理
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        try {
-          const loadExcel = async () => {
-            const XLSX = await import('xlsx')
-            const data = new Uint8Array(e.target.result)
-            const workbook = XLSX.read(data, { type: 'array' })
-            const sheetName = workbook.SheetNames[0]
-            const worksheet = workbook.Sheets[sheetName]
-            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
-
-            parseExcelData(jsonData)
-          }
-
-          loadExcel().catch((error) => {
-            errorMessage.value = 'Excel 文件解析失败：' + error.message
-          })
-        } catch (error) {
-          errorMessage.value = 'Excel 文件解析失败：' + error.message
-        }
-      }
-      reader.readAsArrayBuffer(file)
-    } else if (file.name.endsWith('.csv')) {
-      // CSV 文件处理
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        try {
-          const csv = e.target.result
-          const lines = csv.split('\n')
-          const jsonData = lines.map(line => 
-            line.split(',').map(p => p.trim())
-          )
-          parseExcelData(jsonData)
-        } catch (error) {
-          errorMessage.value = 'CSV 文件解析失败：' + error.message
-        }
-      }
-      reader.readAsText(file)
-    } else {
-      errorMessage.value = '请上传 .xlsx, .xls 或 .csv 格式的文件'
-    }
-  } catch (error) {
-    errorMessage.value = '文件处理失败：' + error.message
+  const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
+  if (!isExcel && !file.name.endsWith('.csv')) {
+    errorMessage.value = '请上传 .xlsx, .xls 或 .csv 格式的文件'
+    return
   }
+
+  const reader = new FileReader()
+  reader.onerror = () => {
+    errorMessage.value = '文件读取失败，请重试'
+  }
+
+  if (isExcel) {
+    reader.onload = async (e) => {
+      try {
+        const XLSX = await import('xlsx')
+        const data = new Uint8Array(e.target.result)
+        const workbook = XLSX.read(data, { type: 'array' })
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+        parseExcelData(jsonData)
+      } catch (error) {
+        errorMessage.value = 'Excel 文件解析失败：' + error.message
+      }
+    }
+    reader.readAsArrayBuffer(file)
+    return
+  }
+
+  // CSV 文件处理
+  reader.onload = (e) => {
+    try {
+      const csv = e.target.result
+      const lines = csv.split('\n')
+      const jsonData = lines.map(line => line.split(',').map(p => p.trim()))
+      parseExcelData(jsonData)
+    } catch (error) {
+      errorMessage.value = 'CSV 文件解析失败：' + error.message
+    }
+  }
+  reader.readAsText(file)
 }
 
 // 解析 Excel/CSV 数据
@@ -722,10 +720,10 @@ const parseExcelData = (jsonData) => {
   // 字段映射 - 支持多种列名变体
   const fieldMappings = {
     name: ['姓名', 'name', '名字', '选手', '参赛者'],
-    club: ['俱乐部', 'club', '组织', '队伍', '俱乐部名称'],
+    club: ['俱乐部', 'club', '箭馆', '队伍', '俱乐部名称'],
     bow_type: ['弓种', 'bow_type', 'bow', '弓类', '弓的类型'],
     distance: ['距离', 'distance', '比赛距离', '距离(m)', '距离m'],
-    format: ['赛制', 'format', '比赛格式', '赛制格式', '竞赛形式'],
+    format: ['赛制', 'format', '比赛', '赛制格式', '竞赛形式'],
     rank: ['排名', 'rank', '名次', '成绩排名', 'rank号']
   }
 
@@ -738,8 +736,7 @@ const parseExcelData = (jsonData) => {
 
   // 创建字段映射
   const columnMapping = {}
-  const requiredFields = ['name', 'distance', 'format', 'rank']
-  const allRequiredFieldsPresent = []
+  const requiredFields = ['name', 'club', 'bow_type', 'distance', 'format', 'rank']
 
   // 尝试匹配每个字段
   for (const [fieldName, aliases] of Object.entries(fieldMappings)) {
@@ -747,37 +744,24 @@ const parseExcelData = (jsonData) => {
       const headerValue = (headerRow[colIndex] || '').toString().trim().toLowerCase()
       if (aliases.some(alias => headerValue === alias.toLowerCase())) {
         columnMapping[fieldName] = colIndex
-        if (requiredFields.includes(fieldName)) {
-          allRequiredFieldsPresent.push(fieldName)
-        }
         break
       }
     }
   }
 
   // 验证必需字段
-  const missingFields = requiredFields.filter(f => !allRequiredFieldsPresent.includes(f))
+  const missingFields = requiredFields.filter(f => columnMapping[f] === undefined)
   if (missingFields.length > 0) {
     const fieldLabels = {
       'name': '姓名',
+      'club': '俱乐部',
+      'bow_type': '弓种',
       'distance': '距离',
       'format': '赛制',
       'rank': '排名'
     }
     const missingLabels = missingFields.map(f => fieldLabels[f]).join('、')
-    errorMessage.value = `Excel 文件缺少必需字段：${missingLabels}。列标题应包括：姓名、距离、赛制、排名`
-    return
-  }
-
-  // 验证弓种字段
-  if (!columnMapping['bow_type']) {
-    errorMessage.value = `Excel 文件缺少"弓种"字段。请确保列标题包括：姓名、俱乐部、弓种、距离、赛制、排名`
-    return
-  }
-
-  // 验证俱乐部字段
-  if (!columnMapping['club']) {
-    errorMessage.value = `Excel 文件缺少"俱乐部"字段。请确保列标题为（按顺序）：姓名、俱乐部、弓种、距离、赛制、排名`
+    errorMessage.value = `Excel 文件缺少必需字段：${missingLabels}。列标题应包括：姓名、俱乐部、弓种、距离、赛制、排名`
     return
   }
 
@@ -822,8 +806,17 @@ const parseExcelData = (jsonData) => {
   const bowCodeSet = new Set((bowTypes.value || []).map(item => item.code))
   const distanceCodeSet = new Set((distances.value || []).map(item => item.code))
   const formatCodeSet = new Set((competitionFormats.value || []).map(item => item.code))
-  const eventConfigSet = new Set(
-    (selectedEvent.value?.configurations || []).map(item => `${item.bow_type}|${item.distance}`)
+  const normalizeKeyPart = (value) => {
+    return (value || '').toString().trim().toLowerCase()
+  }
+  const existingScoreKeySet = new Set(
+    (managedScores.value || []).map(item => [
+      normalizeKeyPart(item.name),
+      normalizeKeyPart(item.club),
+      normalizeKeyPart(item.bow_type),
+      normalizeKeyPart(item.distance),
+      normalizeKeyPart(item.format)
+    ].join('|'))
   )
 
   // 解析数据行
@@ -853,9 +846,15 @@ const parseExcelData = (jsonData) => {
     if (!distance || !distanceCodeSet.has(distance)) rowErrors.push(`距离无效：${distance || '-'}`)
     if (!format || !formatCodeSet.has(format)) rowErrors.push(`赛制无效：${format || '-'}`)
     if (!Number.isInteger(rank) || rank < 1) rowErrors.push('排名必须是正整数')
-    if (bow_type && distance && !eventConfigSet.has(`${bow_type}|${distance}`)) {
-      rowErrors.push('该赛事未配置此弓种+距离')
-    }
+
+    const scoreUniqueKey = [
+      normalizeKeyPart(name),
+      normalizeKeyPart(club),
+      normalizeKeyPart(bow_type),
+      normalizeKeyPart(distance),
+      normalizeKeyPart(format)
+    ].join('|')
+    const isDuplicate = rowErrors.length === 0 && existingScoreKeySet.has(scoreUniqueKey)
 
     newScores.push({
       event_id: parseInt(selectedEventId.value),
@@ -866,7 +865,8 @@ const parseExcelData = (jsonData) => {
       format,
       rank,
       __valid: rowErrors.length === 0,
-      __errors: rowErrors
+      __errors: rowErrors,
+      __duplicate: isDuplicate
     })
   }
 
@@ -878,10 +878,11 @@ const parseExcelData = (jsonData) => {
   batchScores.value = newScores
   const validCount = newScores.filter(item => item.__valid).length
   const invalidCount = newScores.length - validCount
+  const duplicateCount = newScores.filter(item => item.__valid && item.__duplicate).length
   if (invalidCount > 0) {
-    successMessage.value = `已解析 ${newScores.length} 条：合法 ${validCount} 条，异常 ${invalidCount} 条（请修正后导入）`
+    successMessage.value = `已解析 ${newScores.length} 条：合法 ${validCount} 条，异常 ${invalidCount} 条，重复 ${duplicateCount} 条（重复导入将覆盖）`
   } else {
-    successMessage.value = `成功解析 ${newScores.length} 条成绩，全部合法。`
+    successMessage.value = `成功解析 ${newScores.length} 条成绩，全部合法；其中重复 ${duplicateCount} 条（导入将覆盖）。`
   }
 }
 
@@ -902,55 +903,25 @@ const submitImport = async () => {
   successMessage.value = ''
 
   try {
-    // 再次验证数据
-    const validScores = []
-    const validationErrors = []
-    
-    for (let i = 0; i < batchScores.value.length; i++) {
-      const score = batchScores.value[i]
-      const lineNo = i + 1
-      const errors = []
-      
-      if (!score.event_id || !Number.isInteger(score.event_id) || score.event_id < 1) {
-        errors.push(`无效的赛事ID`)
-      }
-      if (!score.name || score.name.length === 0) {
-        errors.push(`选手姓名不能为空`)
-      }
-      if (!score.bow_type || score.bow_type.length === 0) {
-        errors.push(`弓种不能为空`)
-      }
-      if (!score.distance || score.distance.length === 0) {
-        errors.push(`距离不能为空`)
-      }
-      if (!score.format || score.format.length === 0) {
-        errors.push(`赛制不能为空`)
-      }
-      if (!Number.isInteger(score.rank) || score.rank < 1) {
-        errors.push(`排名必须是正整数`)
-      }
-      
-      if (errors.length > 0) {
-        validationErrors.push(`第 ${lineNo} 条成绩（${score.name}）：${errors.join('；')}`)
-      } else {
-        validScores.push({
-          event_id: score.event_id,
-          name: score.name,
-          club: score.club,
-          bow_type: score.bow_type,
-          distance: score.distance,
-          format: score.format,
-          rank: score.rank
-        })
-      }
-    }
-    
-    if (validationErrors.length > 0) {
-      throw new Error(validationErrors.join('\n'))
-    }
+    const validScores = batchScores.value
+      .filter(item => item.__valid)
+      .map(item => ({
+        event_id: item.event_id,
+        name: item.name,
+        club: item.club,
+        bow_type: item.bow_type,
+        distance: item.distance,
+        format: item.format,
+        rank: item.rank
+      }))
 
     await scoreAPI.batchImport({ scores: validScores })
-    successMessage.value = `成功导入 ${batchScores.value.length} 条成绩`
+    const duplicateCount = duplicateScoreCount.value
+    if (duplicateCount > 0) {
+      successMessage.value = `成功导入 ${batchScores.value.length} 条成绩，其中覆盖更新 ${duplicateCount} 条重复成绩`
+    } else {
+      successMessage.value = `成功导入 ${batchScores.value.length} 条成绩`
+    }
     
     // 获取导入成绩中的首个弓种，用于跳转时传递参数
     const firstBowType = batchScores.value.length > 0 ? batchScores.value[0].bow_type : ''
@@ -1471,6 +1442,10 @@ onMounted(() => {
     tr.row-error {
       background: #fff5f5;
     }
+
+    tr.row-duplicate {
+      background: #fffaf0;
+    }
   }
 }
 
@@ -1491,6 +1466,13 @@ onMounted(() => {
     background: #ffecec;
     color: #b42318;
     border: 1px solid #f6b8b5;
+    cursor: help;
+  }
+
+  &.status-duplicate {
+    background: #fff6df;
+    color: #8a5a00;
+    border: 1px solid #f2d18b;
     cursor: help;
   }
 }

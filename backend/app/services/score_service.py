@@ -26,30 +26,6 @@ class ScoreService:
         return config.individual_participant_count
 
     @staticmethod
-    def create_score(db: Session, score: ScoreCreate) -> Score:
-        """创建成绩"""
-        # 验证赛事是否存在
-        event = db.query(Event).filter(Event.id == score.event_id).first()
-        if not event:
-            raise ValueError(f"赛事 ID {score.event_id} 不存在")
-
-        # 创建成绩记录
-        db_score = Score(
-            event_id=score.event_id,
-            name=score.name,
-            club=score.club,
-            bow_type=score.bow_type,
-            distance=score.distance,
-            format=score.format,
-            rank=score.rank
-        )
-
-        db.add(db_score)
-        db.commit()
-        db.refresh(db_score)
-        return db_score
-
-    @staticmethod
     def list_scores(
         db: Session,
         skip: int = 0,
@@ -102,11 +78,52 @@ class ScoreService:
 
     @staticmethod
     def batch_create_scores(db: Session, scores: List[ScoreCreate]) -> List[Score]:
-        """批量创建成绩"""
+        """批量创建成绩；若同赛事下键重复则覆盖更新 rank"""
         result = []
+
+        # 确保涉及的赛事存在
+        event_ids = {item.event_id for item in scores}
+        existing_events = db.query(Event.id).filter(Event.id.in_(event_ids)).all()
+        existing_event_id_set = {item[0] for item in existing_events}
+        missing_event_ids = event_ids - existing_event_id_set
+        if missing_event_ids:
+            first_missing = sorted(missing_event_ids)[0]
+            raise ValueError(f"赛事 ID {first_missing} 不存在")
+
         for score in scores:
-            created = ScoreService.create_score(db, score)
+            existing = db.query(Score).filter(
+                and_(
+                    Score.event_id == score.event_id,
+                    Score.name == score.name,
+                    Score.club == score.club,
+                    Score.bow_type == score.bow_type,
+                    Score.distance == score.distance,
+                    Score.format == score.format,
+                )
+            ).first()
+
+            if existing:
+                existing.rank = score.rank
+                db.flush()
+                result.append(existing)
+                continue
+
+            created = Score(
+                event_id=score.event_id,
+                name=score.name,
+                club=score.club,
+                bow_type=score.bow_type,
+                distance=score.distance,
+                format=score.format,
+                rank=score.rank
+            )
+            db.add(created)
+            db.flush()
             result.append(created)
+
+        db.commit()
+        for item in result:
+            db.refresh(item)
         return result
 
     @staticmethod
