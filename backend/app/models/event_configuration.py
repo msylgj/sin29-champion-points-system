@@ -1,7 +1,6 @@
 """
 赛事配置模型
 """
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index
 from sqlalchemy.sql import func
 from app.database import Base

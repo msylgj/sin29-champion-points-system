@@ -1,7 +1,6 @@
 """
 赛事模型 - 简化版本
 """
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, Index
 from sqlalchemy.sql import func
 from app.database import Base

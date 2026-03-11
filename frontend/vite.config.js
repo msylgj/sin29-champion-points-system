@@ -1,8 +1,16 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const envRoot = fileURLToPath(new URL('../', import.meta.url))
+  const env = loadEnv(mode, envRoot, '')
+  const allowedHosts = (env.VITE_ALLOWED_HOSTS || '')
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean)
+
+  return {
   plugins: [vue()],
   resolve: {
     alias: {
@@ -17,7 +25,8 @@ export default defineConfig({
         target: 'http://backend:8000',
         changeOrigin: true
       }
-    }
+    },
+    allowedHosts
   },
   build: {
     rollupOptions: {
@@ -26,10 +35,10 @@ export default defineConfig({
           if (!id.includes('node_modules')) return
           if (id.includes('/xlsx/')) return 'vendor-xlsx'
           if (id.includes('/vue/') || id.includes('/vue-router/')) return 'vendor-vue'
-          if (id.includes('/vant/')) return 'vendor-vant'
           return 'vendor'
         }
       }
     }
   }
+}
 })

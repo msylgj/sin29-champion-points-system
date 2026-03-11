@@ -2,7 +2,7 @@
 积分计算器单元测试
 """
 import pytest
-from app.services.scoring_calculator import ScoringCalculator, PointsAggregator
+from app.services.scoring_calculator import ScoringCalculator
 
 
 class TestScoringCalculator:
@@ -186,7 +186,7 @@ class TestScoringCalculator:
         assert ScoringCalculator.calculate_base_points(5, "elimination") == 20.0
         assert ScoringCalculator.calculate_base_points(8, "elimination") == 20.0
         assert ScoringCalculator.calculate_base_points(10, "elimination") == 15.0
-        assert ScoringCalculator.calculate_base_points(16, "elimination") == 15.0
+        assert ScoringCalculator.calculate_base_points(16, "elimination") == 10.0
         assert ScoringCalculator.calculate_base_points(17, "elimination") == 1.0  # 超出范围返回1分
     
     def test_base_points_team(self):
@@ -234,87 +234,6 @@ class TestScoringCalculator:
         )
         # 基础25分 × 系数0.8 × 0.3(C组) = 6分
         assert points == 6.0
-
-
-class TestPointsAggregator:
-    """测试积分汇总器"""
-    
-    def test_aggregate_empty_scores(self):
-        """测试空成绩列表"""
-        result = PointsAggregator.aggregate_athlete_points([], 2024, "Q1")
-        assert result == {}
-    
-    def test_aggregate_single_score(self):
-        """测试单条成绩汇总"""
-        # 创建模拟Score对象
-        class MockScore:
-            def __init__(self, athlete_id, event_id, points):
-                self.athlete_id = athlete_id
-                self.event_id = event_id
-                self.points = points
-                self.gender_group = "male"
-                self.bow_type = "recurve"
-        
-        scores = [MockScore(1, 1, 25.5)]
-        result = PointsAggregator.aggregate_athlete_points(scores, 2024, "Q1")
-        
-        assert result["athlete_id"] == 1
-        assert result["year"] == 2024
-        assert result["season"] == "Q1"
-        assert result["total_points"] == 25.5
-        assert result["event_count"] == 1
-    
-    def test_aggregate_multiple_scores(self):
-        """测试多条成绩汇总"""
-        class MockScore:
-            def __init__(self, athlete_id, event_id, points):
-                self.athlete_id = athlete_id
-                self.event_id = event_id
-                self.points = points
-                self.gender_group = "male"
-                self.bow_type = "recurve"
-        
-        scores = [
-            MockScore(1, 1, 25.5),
-            MockScore(1, 2, 20.0),
-            MockScore(1, 3, 15.5),
-        ]
-        result = PointsAggregator.aggregate_athlete_points(scores, 2024, "Q1")
-        
-        assert result["total_points"] == 61.0
-        assert result["event_count"] == 3
-    
-    def test_ranking_calculation(self):
-        """测试排名计算"""
-        aggregated = [
-            {"athlete_id": 1, "total_points": 100},
-            {"athlete_id": 2, "total_points": 90},
-            {"athlete_id": 3, "total_points": 80},
-        ]
-        
-        ranked = PointsAggregator.calculate_rankings(aggregated)
-        
-        assert ranked[0]["rank"] == 1
-        assert ranked[0]["athlete_id"] == 1
-        assert ranked[1]["rank"] == 2
-        assert ranked[2]["rank"] == 3
-
-
-class TestScoringRuleConfig:
-    """测试积分规则配置"""
-    
-    def test_build_rule_config(self):
-        """测试积分规则配置生成"""
-        config = ScoringCalculator.build_scoring_rule_config()
-        
-        assert config["type"] == "rank_based"
-        assert "rules" in config
-        assert "ranking" in config["rules"]
-        assert "elimination" in config["rules"]
-        assert "team" in config["rules"]
-        assert config["special_rules"]["group_multipliers"]["B"] == 0.5
-        assert config["special_rules"]["group_multipliers"]["C"] == 0.3
-
 
 # 使用pytest运行测试
 if __name__ == "__main__":

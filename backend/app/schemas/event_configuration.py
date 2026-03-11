@@ -42,12 +42,6 @@ class EventConfigurationRead(EventConfigurationBase):
         from_attributes = True
 
 
-class EventConfigurationList(BaseModel):
-    """赛事配置列表响应"""
-    items: list[EventConfigurationRead]
-    total: int
-
-
 class CreateEventWithConfigs(BaseModel):
     """创建赛事及其配置"""
     year: int = Field(..., ge=2000, le=2100, description="年度")

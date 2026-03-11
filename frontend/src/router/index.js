@@ -11,25 +11,25 @@ const routes = [
     path: '/',
     name: 'Home',
     component: PointsDisplay,
-    meta: { title: '积分排名', icon: '🏆', showBottomNav: true }
+    meta: { title: '积分排名' }
   },
   {
     path: '/points-display',
     name: 'PointsDisplay',
     component: PointsDisplay,
-    meta: { title: '积分排名', icon: '🏆', showBottomNav: true }
+    meta: { title: '积分排名' }
   },
   {
     path: '/event-add',
     name: 'EventAdd',
     component: EventAdd,
-    meta: { title: '赛事配置', icon: '📅', showBottomNav: true, requiresAdminAuth: true }
+    meta: { title: '赛事配置', requiresAdminAuth: true }
   },
   {
     path: '/score-import',
     name: 'ScoreImport',
     component: ScoreImport,
-    meta: { title: '导入成绩', icon: '📊', showBottomNav: true, requiresAdminAuth: true }
+    meta: { title: '导入成绩', requiresAdminAuth: true }
   }
 ]
 

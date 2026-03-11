@@ -5,34 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
 from app.database import get_db
-from app.schemas.event import EventCreate, EventUpdate, EventRead, EventList
-from app.schemas.event_configuration import CreateEventWithConfigs
+from app.schemas.event_configuration import CreateEventWithConfigs, EventConfigurationBase
 from app.models.event import Event
 from app.models.event_configuration import EventConfiguration
 from app.services.event_configuration_service import EventConfigurationService
 from app.security import verify_admin_token
 
 router = APIRouter(prefix="/api/events", tags=["赛事管理"])
-
-
-@router.post("", response_model=EventRead, summary="创建赛事")
-def create_event(event: EventCreate, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
-    """创建新赛事"""
-    # 检查年度+季度是否已存在
-    existing = db.query(Event).filter(
-        and_(Event.year == event.year, Event.season == event.season)
-    ).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="该年度季度的赛事已存在")
-    
-    db_event = Event(
-        year=event.year,
-        season=event.season
-    )
-    db.add(db_event)
-    db.commit()
-    db.refresh(db_event)
-    return db_event
 
 
 @router.post("/with-configs", summary="创建赛事及其配置")
@@ -58,7 +37,6 @@ def create_event_with_configs(event_data: CreateEventWithConfigs, db: Session = 
         for config in event_data.configurations:
             config_dict = config.dict()
             config_dict['event_id'] = db_event.id
-            from app.schemas.event_configuration import EventConfigurationBase
             # 创建完整的配置模型用于数据库操作
             full_config = EventConfigurationBase(**config_dict)
             configs_with_event_id.append(full_config)
@@ -172,33 +150,4 @@ def list_events(
         "page_size": page_size
     }
 
-
-@router.put("/{event_id}", response_model=EventRead, summary="更新赛事")
-def update_event(
-    event_id: int,
-    event_update: EventUpdate,
-    db: Session = Depends(get_db),
-    _auth: dict = Depends(verify_admin_token)
-):
-    """更新赛事信息"""
-    db_event = db.query(Event).filter(Event.id == event_id).first()
-    if not db_event:
-        raise HTTPException(status_code=404, detail="赛事不存在")
-
-    # 赛事无可更新的字段
-    db.commit()
-    db.refresh(db_event)
-    return db_event
-
-
-@router.delete("/{event_id}", summary="删除赛事")
-def delete_event(event_id: int, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
-    """删除赛事及其关联的所有成绩和配置"""
-    db_event = db.query(Event).filter(Event.id == event_id).first()
-    if not db_event:
-        raise HTTPException(status_code=404, detail="赛事不存在")
-
-    db.delete(db_event)
-    db.commit()
-    return {"message": "赛事已删除"}
 

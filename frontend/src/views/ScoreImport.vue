@@ -906,21 +906,6 @@ const submitImport = async () => {
     const validScores = []
     const validationErrors = []
     
-    // 构建字典映射
-    const bowTypeMap = {}
-    const formatMap = {}
-    const distanceMap = {}
-    
-    bowTypes.value.forEach(b => {
-      bowTypeMap[b.code] = b.name
-    })
-    competitionFormats.value.forEach(f => {
-      formatMap[f.code] = f.name
-    })
-    distances.value.forEach(d => {
-      distanceMap[d.code] = d.name
-    })
-    
     for (let i = 0; i < batchScores.value.length; i++) {
       const score = batchScores.value[i]
       const lineNo = i + 1
@@ -964,7 +949,7 @@ const submitImport = async () => {
       throw new Error(validationErrors.join('\n'))
     }
 
-    const response = await scoreAPI.batchImport({ scores: validScores })
+    await scoreAPI.batchImport({ scores: validScores })
     successMessage.value = `成功导入 ${batchScores.value.length} 条成绩`
     
     // 获取导入成绩中的首个弓种，用于跳转时传递参数

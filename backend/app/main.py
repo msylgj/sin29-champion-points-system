@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
-from app.routers import health, scores, events, event_configuration, dictionary, auth
+from app.routers import scores, events, event_configuration, dictionary, auth
 from app.database import Base, engine
 from sqlalchemy import text
 
@@ -23,7 +23,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(health.router, prefix="/api", tags=["健康检查"])
 app.include_router(auth.router, tags=["认证"])
 app.include_router(scores.router, tags=["成绩管理"])
 app.include_router(events.router, tags=["赛事管理"])

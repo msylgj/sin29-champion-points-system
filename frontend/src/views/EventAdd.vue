@@ -128,7 +128,6 @@ const existingEventId = ref(null)
 // 字典数据
 const bowTypes = ref([])
 const distances = ref([])
-const competitionFormats = ref([])
 const competitionGroups = ref([])
 
 const formData = ref({
@@ -236,7 +235,6 @@ const loadDictionaries = async () => {
     if (response.success && response.data) {
       bowTypes.value = response.data.bowTypes || []
       distances.value = response.data.distances || []
-      competitionFormats.value = response.data.competitionFormats || []
       competitionGroups.value = response.data.competitionGroups || []
       initConfigTable()
     }

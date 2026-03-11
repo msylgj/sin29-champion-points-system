@@ -2,11 +2,11 @@
 赛事配置服务
 """
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc
+from sqlalchemy import and_
 from app.models.event_configuration import EventConfiguration
 from app.models.event import Event
 from app.schemas.event_configuration import EventConfigurationBase, EventConfigurationUpdate
-from typing import Optional, List, Tuple
+from typing import Optional
 
 
 class EventConfigurationService:
@@ -45,37 +45,6 @@ class EventConfigurationService:
         return db_config
 
     @staticmethod
-    def get_configuration_by_id(db: Session, config_id: int) -> Optional[EventConfiguration]:
-        """根据ID获取赛事配置"""
-        return db.query(EventConfiguration).filter(EventConfiguration.id == config_id).first()
-
-    @staticmethod
-    def get_configuration_by_key(
-        db: Session,
-        event_id: int,
-        bow_type: str,
-        distance: str
-    ) -> Optional[EventConfiguration]:
-        """根据赛事+弓种+距离获取配置"""
-        return db.query(EventConfiguration).filter(
-            and_(
-                EventConfiguration.event_id == event_id,
-                EventConfiguration.bow_type == bow_type,
-                EventConfiguration.distance == distance
-            )
-        ).first()
-
-    @staticmethod
-    def list_configurations_by_event(
-        db: Session,
-        event_id: int
-    ) -> List[EventConfiguration]:
-        """获取某赛事的所有配置"""
-        return db.query(EventConfiguration).filter(
-            EventConfiguration.event_id == event_id
-        ).all()
-
-    @staticmethod
     def update_configuration(
         db: Session,
         config_id: int,
@@ -107,14 +76,3 @@ class EventConfigurationService:
         db.commit()
         return True
 
-    @staticmethod
-    def batch_create_configurations(
-        db: Session,
-        configs: List[EventConfigurationBase]
-    ) -> List[EventConfiguration]:
-        """批量创建赛事配置"""
-        result = []
-        for config in configs:
-            created = EventConfigurationService.create_configuration(db, config)
-            result.append(created)
-        return result

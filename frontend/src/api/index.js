@@ -66,12 +66,8 @@ api.interceptors.response.use(
 // ==================== 成绩 API ====================
 export const scoreAPI = {
   getList: (params = {}) => api.get('/scores', { params }),
-  getDetail: (id) => api.get(`/scores/${id}`),
   update: (id, data) => api.put(`/scores/${id}`, data),
-  delete: (id) => api.delete(`/scores/${id}`),
   batchImport: (data) => api.post('/scores/batch/import', data),
-  getEventRanking: (eventId, params = {}) =>
-    api.get(`/scores/event/${eventId}/ranking`, { params }),
   getAnnualRanking: (year, bowType) =>
     api.get(`/scores/annual-ranking/${year}/${bowType}`)
 }
@@ -80,9 +76,6 @@ export const scoreAPI = {
 export const eventAPI = {
   getList: (params = {}) => api.get('/events', { params }),
   getDetail: (id) => api.get(`/events/${id}`),
-  create: (data) => api.post('/events', data),
-  update: (id, data) => api.put(`/events/${id}`, data),
-  delete: (id) => api.delete(`/events/${id}`),
   createWithConfigs: (data) => api.post('/events/with-configs', data)
 }
 
@@ -98,9 +91,6 @@ export const authAPI = {
 
 // ==================== 字典 API ====================
 export const dictionaryAPI = {
-  getBowTypes: () => api.get('/dictionaries/bow-types'),
-  getDistances: () => api.get('/dictionaries/distances'),
-  getCompetitionFormats: () => api.get('/dictionaries/competition-formats'),
   getAll: () => api.get('/dictionaries')
 }
 

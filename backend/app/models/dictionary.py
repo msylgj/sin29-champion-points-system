@@ -1,7 +1,6 @@
 """
 字典模型 - 枚举和常量的数据库表示
 """
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, Text
 from sqlalchemy.sql import func
 from app.database import Base

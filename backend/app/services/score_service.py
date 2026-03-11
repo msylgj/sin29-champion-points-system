@@ -50,11 +50,6 @@ class ScoreService:
         return db_score
 
     @staticmethod
-    def get_score_by_id(db: Session, score_id: int) -> Optional[Score]:
-        """根据ID获取成绩"""
-        return db.query(Score).filter(Score.id == score_id).first()
-
-    @staticmethod
     def list_scores(
         db: Session,
         skip: int = 0,
@@ -106,83 +101,12 @@ class ScoreService:
         return db_score
 
     @staticmethod
-    def delete_score(db: Session, score_id: int) -> bool:
-        """删除成绩"""
-        db_score = db.query(Score).filter(Score.id == score_id).first()
-        if not db_score:
-            return False
-        db.delete(db_score)
-        db.commit()
-        return True
-
-    @staticmethod
     def batch_create_scores(db: Session, scores: List[ScoreCreate]) -> List[Score]:
         """批量创建成绩"""
         result = []
         for score in scores:
             created = ScoreService.create_score(db, score)
             result.append(created)
-        return result
-
-    @staticmethod
-    def get_scores_by_event_and_bow(
-        db: Session,
-        event_id: int,
-        bow_type: str,
-        distance: str,
-        format: str = "ranking"
-    ) -> List[Dict]:
-        """获取某赛事某弓种的所有成绩，并计算积分
-        
-        返回排序后的列表，每项包含成绩信息和动态计算的积分
-        """
-        # 获取赛事配置，得到参赛人数
-        config = db.query(EventConfiguration).filter(
-            and_(
-                EventConfiguration.event_id == event_id,
-                EventConfiguration.bow_type == bow_type,
-                EventConfiguration.distance == distance
-            )
-        ).first()
-        
-        if not config:
-            raise ValueError(f"未找到该赛事配置：事件{event_id}, 弓种{bow_type}, 距离{distance}, 格式{format}")
-        
-        participant_count = ScoreService._get_participant_count_for_format(config, format)
-        
-        # 获取该比赛的所有成绩，并按排名排序
-        scores = db.query(Score).filter(
-            and_(
-                Score.event_id == event_id,
-                Score.bow_type == bow_type,
-                Score.distance == distance,
-                Score.format == format
-            )
-        ).order_by(Score.rank).all()
-        
-        # 计算积分并组装返回数据
-        result = []
-        for idx, score in enumerate(scores, 1):
-            points = ScoringCalculator.calculate_points(
-                rank=score.rank,
-                competition_format=score.format,
-                bow_type=score.bow_type,
-                distance=score.distance,
-                participant_count=participant_count
-            )
-            result.append({
-                'id': score.id,
-                'display_rank': idx,  # 显示排名（按显示顺序）
-                'official_rank': score.rank,  # 官方排名
-                'name': score.name,
-                'club': score.club,
-                'bow_type': score.bow_type,
-                'distance': score.distance,
-                'format': score.format,
-                'points': points,
-                'highlight': idx <= 8  # 前8名突出显示
-            })
-        
         return result
 
     @staticmethod
@@ -195,8 +119,6 @@ class ScoreService:
         
         返回该弓种在该年度的所有选手及其总积分排名
         """
-        from sqlalchemy import and_
-        
         # 获取该年度该弓种的所有成绩
         scores = db.query(Score).filter(
             Score.bow_type == bow_type
@@ -224,8 +146,8 @@ class ScoreService:
                 )
             ).first()
             
-            # 如果没有配置，使用默认人数（10）而不是跳过
-            participant_count = ScoreService._get_participant_count_for_format(config, score.format) if config else 10
+            # 如果没有配置，使用默认人数（8）而不是跳过
+            participant_count = ScoreService._get_participant_count_for_format(config, score.format) if config else 8
             
             # 计算积分
             points = ScoringCalculator.calculate_points(

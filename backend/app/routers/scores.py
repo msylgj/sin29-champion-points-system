@@ -13,15 +13,6 @@ from app.security import verify_admin_token
 router = APIRouter(prefix="/api/scores", tags=["成绩管理"])
 
 
-@router.get("/{score_id}", response_model=ScoreRead, summary="获取成绩详情")
-def get_score(score_id: int, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
-    """获取单条成绩详情"""
-    score = ScoreService.get_score_by_id(db, score_id)
-    if not score:
-        raise HTTPException(status_code=404, detail="成绩不存在")
-    return score
-
-
 @router.get("", response_model=ScoreList, summary="获取成绩列表")
 def list_scores(
     page: int = Query(1, ge=1),
@@ -66,15 +57,6 @@ def update_score(
     return score
 
 
-@router.delete("/{score_id}", summary="删除成绩")
-def delete_score(score_id: int, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
-    """删除成绩"""
-    success = ScoreService.delete_score(db, score_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="成绩不存在")
-    return {"message": "成绩已删除"}
-
-
 @router.post("/batch/import", response_model=list[ScoreRead], summary="批量导入成绩")
 def batch_import_scores(
     batch_import: ScoreBatchImport,
@@ -88,31 +70,6 @@ def batch_import_scores(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"导入失败：{str(e)}")
-
-
-@router.get("/event/{event_id}/ranking", summary="获取赛事积分排名")
-def get_event_ranking(
-    event_id: int,
-    bow_type: str = Query(...),
-    distance: str = Query(...),
-    format: str = Query("ranking"),
-    db: Session = Depends(get_db)
-):
-    """获取某赛事某弓种某距离的成绩排名和动态计算的积分"""
-    try:
-        scores = ScoreService.get_scores_by_event_and_bow(db, event_id, bow_type, distance, format)
-        return {
-            "event_id": event_id,
-            "bow_type": bow_type,
-            "distance": distance,
-            "format": format,
-            "scores": scores,
-            "total": len(scores)
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"获取排名失败：{str(e)}")
 
 
 @router.get("/annual-ranking/{year}/{bow_type}", summary="获取年度弓种积分排名")

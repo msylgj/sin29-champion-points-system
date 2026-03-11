@@ -157,7 +157,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { scoreAPI, dictionaryAPI, eventAPI, authAPI } from '@/api'
 import { useRouter, useRoute } from 'vue-router'
 
