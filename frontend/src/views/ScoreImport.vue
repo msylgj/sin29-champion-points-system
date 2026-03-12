@@ -155,6 +155,15 @@
           </div>
         </div>
 
+        <div v-if="parseSuccessMessage || parseErrorMessage" class="import-feedback">
+          <div v-if="parseSuccessMessage" class="import-message import-message-success">
+            {{ parseSuccessMessage }}
+          </div>
+          <div v-if="parseErrorMessage" class="import-message import-message-error">
+            {{ parseErrorMessage }}
+          </div>
+        </div>
+
         <!-- 导入按钮 -->
         <div class="import-actions">
           <button 
@@ -273,6 +282,13 @@
       </div>
     </div>
 
+    <div v-if="submitSuccessMessage" class="submit-floating-message submit-floating-success">
+      {{ submitSuccessMessage }}
+    </div>
+    <div v-if="submitErrorMessage" class="submit-floating-message submit-floating-error">
+      {{ submitErrorMessage }}
+    </div>
+
     <!-- 提示信息 -->
     <div v-if="successMessage" class="success-message">
       {{ successMessage }}
@@ -284,7 +300,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { eventAPI, scoreAPI, dictionaryAPI } from '@/api'
 
@@ -296,9 +312,14 @@ const batchScores = ref([])
 const importLoading = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
+const parseSuccessMessage = ref('')
+const parseErrorMessage = ref('')
+const submitSuccessMessage = ref('')
+const submitErrorMessage = ref('')
 const uploadedFileName = ref('')
 const fileInput = ref(null)
 const showEventConfig = ref(false)
+let submitMessageTimer = null
 
 const managedScores = ref([])
 const managedScoresLoading = ref(false)
@@ -308,6 +329,13 @@ const savingScoreIds = ref(new Set())
 const showModifiedOnly = ref(false)
 const batchSavingCurrentTab = ref(false)
 const manageNameKeyword = ref('')
+
+const seasonOrderMap = {
+  '春季赛': 1,
+  '夏季赛': 2,
+  '秋季赛': 3,
+  '冬季赛': 4
+}
 
 // 字典数据
 const bowTypes = ref([])
@@ -441,6 +469,69 @@ const getConfigCount = (bowType, distance, key) => {
   return config[key] ?? 0
 }
 
+const clearParseMessages = () => {
+  parseSuccessMessage.value = ''
+  parseErrorMessage.value = ''
+}
+
+const clearSubmitMessages = () => {
+  submitSuccessMessage.value = ''
+  submitErrorMessage.value = ''
+}
+
+const showSubmitMessage = (type, message) => {
+  clearSubmitMessages()
+
+  if (type === 'success') {
+    submitSuccessMessage.value = message
+  } else {
+    submitErrorMessage.value = message
+  }
+
+  if (submitMessageTimer) {
+    clearTimeout(submitMessageTimer)
+  }
+  submitMessageTimer = setTimeout(() => {
+    clearSubmitMessages()
+  }, 5000)
+}
+
+const getSeasonOrder = (season) => {
+  if (!season) return 0
+  if (seasonOrderMap[season]) return seasonOrderMap[season]
+
+  const normalized = String(season).trim()
+  if (normalized.includes('春')) return 1
+  if (normalized.includes('夏')) return 2
+  if (normalized.includes('秋')) return 3
+  if (normalized.includes('冬')) return 4
+  return 0
+}
+
+const compareEventsByYearAndSeasonDesc = (left, right) => {
+  const yearDiff = Number(right?.year || 0) - Number(left?.year || 0)
+  if (yearDiff !== 0) return yearDiff
+
+  const seasonDiff = getSeasonOrder(right?.season) - getSeasonOrder(left?.season)
+  if (seasonDiff !== 0) return seasonDiff
+
+  return Number(right?.id || 0) - Number(left?.id || 0)
+}
+
+const selectLatestEvent = async () => {
+  if (!events.value.length) {
+    selectedEventId.value = ''
+    selectedEvent.value = null
+    return
+  }
+
+  const latestEvent = [...events.value].sort(compareEventsByYearAndSeasonDesc)[0]
+  if (!latestEvent) return
+
+  selectedEventId.value = latestEvent.id
+  await onEventSelected()
+}
+
 // 加载字典数据
 const loadDictionaries = async () => {
   try {
@@ -461,8 +552,12 @@ const loadEvents = async () => {
   try {
     const response = await eventAPI.getList({ page: 1, page_size: 100 })
     events.value = response.items || []
+    await selectLatestEvent()
     // 如果列表为空，显示友好提示
   } catch (error) {
+    events.value = []
+    selectedEventId.value = ''
+    selectedEvent.value = null
   }
 }
 
@@ -664,18 +759,17 @@ const onFileSelected = async (event) => {
   if (!file) return
 
   uploadedFileName.value = file.name
-  errorMessage.value = ''
-  successMessage.value = ''
+  clearParseMessages()
 
   const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
   if (!isExcel && !file.name.endsWith('.csv')) {
-    errorMessage.value = '请上传 .xlsx, .xls 或 .csv 格式的文件'
+    parseErrorMessage.value = '请上传 .xlsx, .xls 或 .csv 格式的文件'
     return
   }
 
   const reader = new FileReader()
   reader.onerror = () => {
-    errorMessage.value = '文件读取失败，请重试'
+    parseErrorMessage.value = '文件读取失败，请重试'
   }
 
   if (isExcel) {
@@ -689,7 +783,7 @@ const onFileSelected = async (event) => {
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
         parseExcelData(jsonData)
       } catch (error) {
-        errorMessage.value = 'Excel 文件解析失败：' + error.message
+        parseErrorMessage.value = 'Excel 文件解析失败：' + error.message
       }
     }
     reader.readAsArrayBuffer(file)
@@ -704,7 +798,7 @@ const onFileSelected = async (event) => {
       const jsonData = lines.map(line => line.split(',').map(p => p.trim()))
       parseExcelData(jsonData)
     } catch (error) {
-      errorMessage.value = 'CSV 文件解析失败：' + error.message
+      parseErrorMessage.value = 'CSV 文件解析失败：' + error.message
     }
   }
   reader.readAsText(file)
@@ -712,8 +806,10 @@ const onFileSelected = async (event) => {
 
 // 解析 Excel/CSV 数据
 const parseExcelData = (jsonData) => {
+  clearParseMessages()
+
   if (!jsonData || jsonData.length === 0) {
-    errorMessage.value = '文件为空'
+    parseErrorMessage.value = '文件为空'
     return
   }
 
@@ -730,7 +826,7 @@ const parseExcelData = (jsonData) => {
   // 获取第一行作为列标题
   const headerRow = jsonData[0]
   if (!headerRow) {
-    errorMessage.value = '无法读取列标题'
+    parseErrorMessage.value = '无法读取列标题'
     return
   }
 
@@ -761,7 +857,7 @@ const parseExcelData = (jsonData) => {
       'rank': '排名'
     }
     const missingLabels = missingFields.map(f => fieldLabels[f]).join('、')
-    errorMessage.value = `Excel 文件缺少必需字段：${missingLabels}。列标题应包括：姓名、俱乐部、弓种、距离、赛制、排名`
+    parseErrorMessage.value = `Excel 文件缺少必需字段：${missingLabels}。列标题应包括：姓名、俱乐部、弓种、距离、赛制、排名`
     return
   }
 
@@ -871,7 +967,7 @@ const parseExcelData = (jsonData) => {
   }
 
   if (newScores.length === 0) {
-    errorMessage.value = '文件中没有有效的成绩数据'
+    parseErrorMessage.value = '文件中没有有效的成绩数据'
     return
   }
 
@@ -880,27 +976,27 @@ const parseExcelData = (jsonData) => {
   const invalidCount = newScores.length - validCount
   const duplicateCount = newScores.filter(item => item.__valid && item.__duplicate).length
   if (invalidCount > 0) {
-    successMessage.value = `已解析 ${newScores.length} 条：合法 ${validCount} 条，异常 ${invalidCount} 条，重复 ${duplicateCount} 条（重复导入将覆盖）`
+    parseSuccessMessage.value = `已解析 ${newScores.length} 条：合法 ${validCount} 条，异常 ${invalidCount} 条，重复 ${duplicateCount} 条（重复导入将覆盖）`
   } else {
-    successMessage.value = `成功解析 ${newScores.length} 条成绩，全部合法；其中重复 ${duplicateCount} 条（导入将覆盖）。`
+    parseSuccessMessage.value = `成功解析 ${newScores.length} 条成绩，全部合法；其中重复 ${duplicateCount} 条（重复导入将覆盖）。`
   }
 }
 
 // 提交导入
 const submitImport = async () => {
   if (batchScores.value.length === 0) {
-    errorMessage.value = '请先上传并解析成绩文件'
+    parseErrorMessage.value = '请先上传并解析成绩文件'
     return
   }
 
   if (invalidScoreCount.value > 0) {
-    errorMessage.value = `当前有 ${invalidScoreCount.value} 条异常数据，请删除或修正后再导入。`
+    parseErrorMessage.value = `当前有 ${invalidScoreCount.value} 条异常数据，请删除或修正后再导入。`
     return
   }
 
+  clearParseMessages()
   importLoading.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
+  clearSubmitMessages()
 
   try {
     const validScores = batchScores.value
@@ -918,23 +1014,19 @@ const submitImport = async () => {
     await scoreAPI.batchImport({ scores: validScores })
     const duplicateCount = duplicateScoreCount.value
     if (duplicateCount > 0) {
-      successMessage.value = `成功导入 ${batchScores.value.length} 条成绩，其中覆盖更新 ${duplicateCount} 条重复成绩`
+      showSubmitMessage('success', `成功导入 ${batchScores.value.length} 条成绩，其中覆盖更新 ${duplicateCount} 条重复成绩`)
     } else {
-      successMessage.value = `成功导入 ${batchScores.value.length} 条成绩`
+      showSubmitMessage('success', `成功导入 ${batchScores.value.length} 条成绩`)
     }
     
-    // 获取导入成绩中的首个弓种，用于跳转时传递参数
-    const firstBowType = batchScores.value.length > 0 ? batchScores.value[0].bow_type : ''
     batchScores.value = []
-    
-    setTimeout(() => {
-      // 跳转到PointsDisplay，并传递弓种参数
-      if (firstBowType) {
-        router.push(`/points-display?bowType=${firstBowType}`)
-      } else {
-        router.push('/points-display')
-      }
-    }, 1500)
+    uploadedFileName.value = ''
+    if (fileInput.value) {
+      fileInput.value.value = ''
+    }
+
+    // 导入成功后保持在当前页，并刷新当前赛事成绩管理区
+    await loadManagedScores()
   } catch (error) {
     let errorMsg = '导入失败，请重试'
     
@@ -1003,7 +1095,7 @@ const submitImport = async () => {
       errorMsg = '导入失败，详情请查看控制台'
     }
     
-    errorMessage.value = errorMsg
+    showSubmitMessage('error', errorMsg)
     console.error('Error importing scores:', error)
   } finally {
     importLoading.value = false
@@ -1018,8 +1110,16 @@ const navigateToAddEvent = () => {
 onMounted(() => {
   errorMessage.value = ''
   successMessage.value = ''
+  clearParseMessages()
+  clearSubmitMessages()
   loadDictionaries()
   loadEvents()
+})
+
+onUnmounted(() => {
+  if (submitMessageTimer) {
+    clearTimeout(submitMessageTimer)
+  }
 })
 </script>
 
@@ -1574,6 +1674,63 @@ onMounted(() => {
   }
 }
 
+.import-feedback {
+  margin-top: 16px;
+
+  .import-message {
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 13px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+  }
+
+  .import-message + .import-message {
+    margin-top: 8px;
+  }
+
+  .import-message-success {
+    background: #eaf8ee;
+    color: #1e7b34;
+    border: 1px solid #b6e1c1;
+  }
+
+  .import-message-error {
+    background: #ffecec;
+    color: #b42318;
+    border: 1px solid #f6b8b5;
+  }
+}
+
+.submit-floating-message {
+  position: fixed;
+  top: 16%;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: min(520px, calc(100vw - 32px));
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  z-index: 1200;
+  animation: slideDownFade 0.25s ease;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.submit-floating-success {
+  background: #2ed573;
+  color: #fff;
+}
+
+.submit-floating-error {
+  background: #ff4757;
+  color: #fff;
+}
+
 .success-message {
   position: fixed;
   bottom: 90px;
@@ -1626,6 +1783,17 @@ onMounted(() => {
   }
   to {
     transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideDownFade {
+  from {
+    transform: translate(-50%, -8px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
     opacity: 1;
   }
 }
