@@ -2,19 +2,8 @@ import axios from 'axios'
 
 const ADMIN_TOKEN_KEY = 'admin_auth_token'
 
-// 确定API基础URL
-// 在生产/容器中使用环境变量，本地开发中使用相对路径（通过Vite proxy）
-const getBaseURL = () => {
-  // 如果是生产构建或容器环境，使用VITE_API_BASE_URL
-  if (import.meta.env.VITE_API_BASE_URL && import.meta.env.MODE === 'production') {
-    return import.meta.env.VITE_API_BASE_URL
-  }
-  // 开发环境默认使用相对路径（通过Vite proxy: /api -> http://backend:8000/api）
-  return '/api'
-}
-
 const api = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: '/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'

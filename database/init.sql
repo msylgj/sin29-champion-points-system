@@ -142,29 +142,3 @@ CREATE TABLE IF NOT EXISTS scores (
 CREATE INDEX IF NOT EXISTS idx_score_event ON scores(event_id);
 CREATE INDEX IF NOT EXISTS idx_score_event_name ON scores(event_id, name);
 CREATE INDEX IF NOT EXISTS idx_score_event_bow_format ON scores(event_id, bow_type, distance, format);
-
--- ============================================================================
--- 示例数据：赛事
-INSERT INTO events (year, season) VALUES
-    (2024, '春季赛'),
-    (2024, '夏季赛'),
-    (2024, '秋季赛'),
-    (2024, '冬季赛')
-ON CONFLICT DO NOTHING;
-
--- 示例数据：赛事配置
-INSERT INTO event_configurations (event_id, bow_type, distance, individual_participant_count, mixed_doubles_team_count, team_count) VALUES
-    (1, 'recurve', '18m', 20, 8, 6),
-    (1, 'recurve', '30m', 20, 8, 6),
-    (1, 'compound', '18m', 15, 6, 4),
-    (1, 'compound', '30m', 15, 6, 4)
-ON CONFLICT DO NOTHING;
-
--- 示例数据：成绩
-INSERT INTO scores (event_id, name, club, bow_type, distance, format, rank) VALUES
-    (1, '张三', '射箭俱乐部A', 'recurve', '18m', 'ranking', 1),
-    (1, '李四', '射箭俱乐部B', 'recurve', '18m', 'ranking', 2),
-    (1, '王五', '射箭俱乐部A', 'recurve', '18m', 'ranking', 3),
-    (1, '赵六', '射箭俱乐部C', 'compound', '18m', 'ranking', 1),
-    (1, '孙七', '射箭俱乐部B', 'compound', '18m', 'ranking', 2)
-ON CONFLICT DO NOTHING;
