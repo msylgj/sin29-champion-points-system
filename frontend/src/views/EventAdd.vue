@@ -43,7 +43,12 @@
             <option value="冬季赛">冬季赛（10-12月）</option>
           </select>
           <small class="help-text">选择赛事所属的季度</small>
-          <small v-if="existingEventId" class="help-text">检测到该赛事已存在，已自动带入历史配置，保存后将更新该赛事配置</small>
+        </div>
+
+        <div v-if="existingEventId" class="event-exist-feedback">
+          <div class="import-message import-message-success">
+            检测到该赛事已存在，已自动带入历史配置，保存后将更新该赛事配置
+          </div>
         </div>
       </div>
 
@@ -102,7 +107,7 @@
     </form>
 
     <!-- 成功提示 -->
-    <div v-if="successMessage" class="success-message">
+    <div v-if="successMessage" class="submit-floating-message submit-floating-success">
       {{ successMessage }}
     </div>
 
@@ -497,6 +502,26 @@ const submitForm = async () => {
     margin-top: 4px;
   }
 }
+
+.event-exist-feedback {
+  margin-top: 4px;
+
+  .import-message {
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 13px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+  }
+
+  .import-message-success {
+    background: #eaf8ee;
+    color: #1e7b34;
+    border: 1px solid #b6e1c1;
+  }
+}
+
 .bow-config-group {
   margin-bottom: 30px;
 
@@ -625,17 +650,27 @@ const submitForm = async () => {
   }
 }
 
-.success-message {
+.submit-floating-message {
   position: fixed;
-  bottom: 90px;
-  left: 15px;
-  right: 15px;
-  padding: 12px 15px;
-  background: #2ed573;
-  color: white;
-  border-radius: 6px;
+  top: 16%;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: min(520px, calc(100vw - 32px));
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: 8px;
   font-size: 14px;
-  animation: slideUp 0.3s ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  z-index: 1200;
+  animation: slideDownFade 0.25s ease;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.submit-floating-success {
+  background: #2ed573;
+  color: #fff;
 }
 
 .error-message {
@@ -658,6 +693,17 @@ const submitForm = async () => {
   }
   to {
     transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideDownFade {
+  from {
+    transform: translate(-50%, -8px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
     opacity: 1;
   }
 }
