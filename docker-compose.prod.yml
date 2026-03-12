@@ -23,9 +23,8 @@ services:
 
   # Python FastAPI 后端服务
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_NAMESPACE}/sin29-system-backend:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: sin29_backend_prod
     restart: unless-stopped
     environment:
@@ -42,9 +41,8 @@ services:
 
   # Vue.js 前端服务（生产模式 - Nginx）
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ${DOCKERHUB_NAMESPACE}/sin29-system-frontend:${IMAGE_TAG:-latest}
+    pull_policy: always
     container_name: sin29_frontend_prod
     restart: unless-stopped
     ports:
