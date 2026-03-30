@@ -29,6 +29,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${DB_USER:-archery_user}:${DB_PASSWORD:-archery_pass}@database:5432/${DB_NAME:-archery_db}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
       PYTHONUNBUFFERED: 1
     ports:
       - "${BACKEND_PORT:-8000}:8000"
