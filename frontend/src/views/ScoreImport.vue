@@ -650,7 +650,7 @@ const saveManagedScore = async (score) => {
   try {
     const payload = {
       name: score.name.trim(),
-      club: score.club?.trim() || undefined,
+      club: score.club?.trim() ?? '',
       bow_type: score.bow_type,
       distance: score.distance,
       format: score.format,
@@ -924,7 +924,7 @@ const parseExcelData = (jsonData) => {
     }
 
     const name = (row[columnMapping.name] || '').toString().trim()
-    const club = (row[columnMapping.club] || '').toString().trim()
+    let club = (row[columnMapping.club] || '').toString().trim()
     let bow_type = (row[columnMapping.bow_type] || '').toString().trim()
     let distance = (row[columnMapping.distance] || '').toString().trim()
     let format = (row[columnMapping.format] || '').toString().trim()
@@ -935,9 +935,18 @@ const parseExcelData = (jsonData) => {
     distance = convertToCode(distance, distanceMap)
     format = convertToCode(format, formatMap)
 
+    // 当俱乐部为空时，自动从同弓种的成绩中按姓名匹配俱乐部
+    if (!club && name && bow_type) {
+      const matched = (managedScores.value || []).find(
+        item => (item.name || '').trim() === name && item.bow_type === bow_type && (item.club || '').trim()
+      )
+      if (matched) {
+        club = matched.club.trim()
+      }
+    }
+
     const rowErrors = []
     if (!name) rowErrors.push('姓名不能为空')
-    if (!club) rowErrors.push('俱乐部不能为空')
     if (!bow_type || !bowCodeSet.has(bow_type)) rowErrors.push(`弓种无效：${bow_type || '-'}`)
     if (!distance || !distanceCodeSet.has(distance)) rowErrors.push(`距离无效：${distance || '-'}`)
     if (!format || !formatCodeSet.has(format)) rowErrors.push(`赛制无效：${format || '-'}`)

@@ -46,7 +46,7 @@ class ScoreCreate(ScoreBase):
 class ScoreUpdate(BaseModel):
     """更新成绩请求"""
     name: Optional[str] = Field(None, min_length=1, max_length=100)
-    club: Optional[str] = Field(None, min_length=1, max_length=100)
+    club: Optional[str] = Field(None, max_length=100)
     bow_type: Optional[str] = None
     distance: Optional[str] = None
     format: Optional[str] = None

@@ -51,6 +51,8 @@ services:
       dockerfile: Dockerfile.dev
     container_name: sin29_frontend
     restart: unless-stopped
+    environment:
+      VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS:-}
     ports:
       - "${FRONTEND_PORT:-8080}:8080"
     networks:
