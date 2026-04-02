@@ -5,6 +5,27 @@ import pytest
 from app.services.scoring_calculator import ScoringCalculator
 
 
+# 测试用组别映射（与数据库 competition_groups 表一致）
+TEST_COMPETITION_GROUPS = {
+    ("barebow", "50m"): "S",
+    ("traditional", "30m"): "A",
+    ("longbow", "30m"): "A",
+    ("barebow", "30m"): "A",
+    ("recurve", "30m"): "A",
+    ("compound", "50m"): "A",
+    ("traditional", "18m"): "B",
+    ("longbow", "18m"): "B",
+    ("barebow", "18m"): "B",
+    ("recurve", "18m"): "B",
+    ("compound", "30m"): "B",
+    ("traditional", "10m"): "C",
+    ("longbow", "10m"): "C",
+    ("barebow", "10m"): "C",
+    ("recurve", "10m"): "C",
+    ("compound", "18m"): "C",
+}
+
+
 class TestScoringCalculator:
     """测试积分计算器"""
     
@@ -13,18 +34,20 @@ class TestScoringCalculator:
         points = ScoringCalculator.calculate_points(
             rank=1,
             competition_format="ranking",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="30m",
             participant_count=20
         )
         # 基础25分 × 系数0.8 = 20分
         assert points == 20.0
-    
+
     def test_ranking_points_rank1_18m(self):
         """测试排位赛排名第1名、18米的积分（B组系数0.5）"""
         points = ScoringCalculator.calculate_points(
             rank=1,
             competition_format="ranking",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="18m",
             participant_count=20
@@ -37,42 +60,46 @@ class TestScoringCalculator:
         points = ScoringCalculator.calculate_points(
             rank=1,
             competition_format="ranking",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="10m",
             participant_count=20
         )
         # 基础25分 × 系数0.8 × 0.3(C组) = 6分
         assert points == 6.0
-    
+
     def test_ranking_points_rank5_30m(self):
         """测试排位赛排名第5名、30米的积分"""
         points = ScoringCalculator.calculate_points(
             rank=5,
             competition_format="ranking",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="30m",
             participant_count=20
         )
         # 基础10分 × 系数0.8 = 8分
         assert points == 8.0
-    
+
     def test_ranking_points_large_group(self):
         """测试排位赛大分组（128人以上）的系数"""
         points = ScoringCalculator.calculate_points(
             rank=1,
             competition_format="ranking",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="30m",
             participant_count=200
         )
         # 基础25分 × 系数1.4 = 35分
         assert points == 35.0
-    
+
     def test_ranking_points_beyond_limit(self):
         """测试排位赛超出获得原额基础积分范囲的排名（获得1分）"""
         points = ScoringCalculator.calculate_points(
             rank=10,
             competition_format="ranking",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="30m",
             participant_count=20
@@ -80,60 +107,65 @@ class TestScoringCalculator:
         # 排名10超出限制（8名），但仍获得1分基础积分
         # 1分 × 系数0.8 = 0.8分
         assert points == 0.8
-    
+
     def test_elimination_points_rank1(self):
         """测试淘汰赛排名第1名的积分"""
         points = ScoringCalculator.calculate_points(
             rank=1,
             competition_format="elimination",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="30m",
             participant_count=50
         )
         # 基础45分 × 系数1.0 = 45分
         assert points == 45.0
-    
+
     def test_elimination_points_rank10(self):
         """测试淘汰赛排名第10名的积分"""
         points = ScoringCalculator.calculate_points(
             rank=10,
             competition_format="elimination",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="30m",
             participant_count=50
         )
         # 9-16名统一15分 × 系数1.0 = 15分
         assert points == 15.0
-    
+
     def test_elimination_points_rank10_18m(self):
         """测试淘汰赛排名第10名、18米的积分（B组系数0.5）"""
         points = ScoringCalculator.calculate_points(
             rank=10,
             competition_format="elimination",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="18m",
             participant_count=50
         )
         # 15分 × 0.5(B组) = 7.5分
         assert points == 7.5
-    
+
     def test_team_points_rank1(self):
         """测试团体赛排名第1名的积分"""
         points = ScoringCalculator.calculate_points(
             rank=1,
             competition_format="team",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="30m",
             participant_count=5  # 5队参赛
         )
         # 基础20分 × 系数0.8 = 16分
         assert points == 16.0
-    
+
     def test_team_points_rank5(self):
         """测试团体赛排名第5名的积分"""
         points = ScoringCalculator.calculate_points(
             rank=5,
             competition_format="team",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="30m",
             participant_count=10
@@ -202,6 +234,7 @@ class TestScoringCalculator:
         points = ScoringCalculator.calculate_points(
             rank=20,
             competition_format="elimination",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="30m",
             participant_count=50
@@ -209,12 +242,13 @@ class TestScoringCalculator:
         # 排名20超出限制（16名），但仍获得1分基础积分
         # 1分 × 系数1.0 = 1.0分
         assert points == 1.0
-    
+
     def test_team_points_beyond_limit(self):
         """测试团体赛超出原额基础积分限制的排名（获得1分）"""
         points = ScoringCalculator.calculate_points(
             rank=10,
             competition_format="team",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="recurve",
             distance="30m",
             participant_count=5  # 5队，限制前4队
@@ -228,6 +262,7 @@ class TestScoringCalculator:
         points = ScoringCalculator.calculate_points(
             rank=1,
             competition_format="ranking",
+            competition_groups=TEST_COMPETITION_GROUPS,
             bow_type="compound",
             distance="18m",
             participant_count=20

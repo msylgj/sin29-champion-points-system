@@ -13,12 +13,12 @@ settings = get_settings()
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def hash_plaintext_password(password: str) -> str:
+def _hash_plaintext_password(password: str) -> str:
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
 def verify_plaintext_password(password: str) -> bool:
-    encrypted = hash_plaintext_password(password)
+    encrypted = _hash_plaintext_password(password)
     return hmac.compare_digest(encrypted, (settings.secret_key or "").strip())
 
 

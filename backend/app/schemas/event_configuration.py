@@ -9,7 +9,7 @@ from typing import Literal
 class EventConfigurationBase(BaseModel):
     """赛事配置基础数据"""
     event_id: int = Field(..., description="赛事ID")
-    bow_type: str = Field(..., description="弓种：recurve/compound/traditional/longbow/barebow/sightless")
+    bow_type: str = Field(..., description="弓种：recurve/compound/traditional/longbow/barebow")
     distance: str = Field(..., description="距离：10m/18m/30m/50m/70m")
     individual_participant_count: int = Field(0, ge=0, description="个人赛人数（排位/淘汰共用）")
     mixed_doubles_team_count: int = Field(0, ge=0, description="混双队伍数")
@@ -18,7 +18,7 @@ class EventConfigurationBase(BaseModel):
 
 class EventConfigurationCreate(BaseModel):
     """创建赛事配置请求 - 不包含 event_id，由后端分配"""
-    bow_type: str = Field(..., description="弓种：recurve/compound/traditional/longbow/barebow/sightless")
+    bow_type: str = Field(..., description="弓种：recurve/compound/traditional/longbow/barebow")
     distance: str = Field(..., description="距离：10m/18m/30m/50m/70m")
     individual_participant_count: int = Field(0, ge=0, description="个人赛人数（排位/淘汰共用）")
     mixed_doubles_team_count: int = Field(0, ge=0, description="混双队伍数")

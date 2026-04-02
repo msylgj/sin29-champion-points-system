@@ -1,7 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-const INTERNAL_ROUTE_KEY = 'internal_route_full_path'
-
 const EventAdd = () => import('@/views/EventAdd.vue')
 const ScoreImport = () => import('@/views/ScoreImport.vue')
 const PointsDisplay = () => import('@/views/PointsDisplay.vue')
@@ -9,9 +7,7 @@ const PointsDisplay = () => import('@/views/PointsDisplay.vue')
 const routes = [
   {
     path: '/',
-    name: 'Home',
-    component: PointsDisplay,
-    meta: { title: '积分排名' }
+    redirect: '/points-display'
   },
   {
     path: '/points-display',
@@ -55,10 +51,6 @@ router.beforeEach((to, from, next) => {
   }
 
   next()
-})
-
-router.afterEach((to) => {
-  sessionStorage.setItem(INTERNAL_ROUTE_KEY, to.fullPath)
 })
 
 export default router

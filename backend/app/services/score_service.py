@@ -6,6 +6,7 @@ from sqlalchemy import and_, desc
 from app.models.score import Score
 from app.models.event import Event
 from app.models.event_configuration import EventConfiguration
+from app.models.dictionary import CompetitionGroupDict
 from app.schemas.score import ScoreCreate, ScoreUpdate
 from app.services.scoring_calculator import ScoringCalculator
 from typing import Optional, List, Tuple, Dict
@@ -140,6 +141,13 @@ class ScoreService:
         scores = db.query(Score).filter(
             Score.bow_type == bow_type
         ).all()
+
+        # 预加载组别配置
+        group_rows = db.query(CompetitionGroupDict).all()
+        competition_groups = {
+            (row.bow_type, row.distance): row.group_code
+            for row in group_rows
+        }
         
         # 按赛事过滤年度
         filtered_scores = []
@@ -170,6 +178,7 @@ class ScoreService:
             points = ScoringCalculator.calculate_points(
                 rank=score.rank,
                 competition_format=score.format,
+                competition_groups=competition_groups,
                 bow_type=score.bow_type,
                 distance=score.distance,
                 participant_count=participant_count

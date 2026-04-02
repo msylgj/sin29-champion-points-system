@@ -83,4 +83,3 @@ export const dictionaryAPI = {
   getAll: () => api.get('/dictionaries')
 }
 
-export default api
