@@ -32,7 +32,7 @@
      * 11-14队: 1.2, 1-8名获得基础积分
      * 14队以上: 1.4, 1-8名获得基础积分
 """
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 
 class ScoringCalculator:
@@ -74,22 +74,6 @@ class ScoringCalculator:
         (15, float('inf')): (1.4, 8)  # 15队以上：系数1.4，1-8名获得基础积分
     }
 
-    # 比赛组别字典（弓种+距离 -> 组别）
-    COMPETITION_GROUPS = {
-        ("barebow", "50m"): "S",
-        ("traditional", "30m"): "A",
-        ("longbow", "30m"): "A",
-        ("barebow", "30m"): "A",
-        ("recurve", "30m"): "A",
-        ("compound", "50m"): "A",
-        ("sightless", "18m"): "B",
-        ("recurve", "18m"): "B",
-        ("compound", "30m"): "B",
-        ("sightless", "10m"): "C",
-        ("recurve", "10m"): "C",
-        ("compound", "18m"): "C",
-    }
-
     GROUP_MULTIPLIERS = {
         "S": 1.0,
         "A": 1.0,
@@ -98,13 +82,18 @@ class ScoringCalculator:
     }
 
     @staticmethod
-    def get_group_multiplier(bow_type: Optional[str], distance: str) -> float:
+    def get_group_multiplier(
+        bow_type: Optional[str],
+        distance: str,
+        competition_groups: Dict[tuple, str]
+    ) -> float:
         """
         获取组别积分系数
 
         Args:
             bow_type: 弓种
             distance: 距离
+            competition_groups: 从数据库加载的组别映射 {(bow_type, distance): group_code}
 
         Returns:
             组别系数（B=0.5, C=0.3, 其他=1.0）
@@ -112,7 +101,7 @@ class ScoringCalculator:
         if not bow_type:
             return 1.0
 
-        group_code = ScoringCalculator.COMPETITION_GROUPS.get((bow_type, distance))
+        group_code = competition_groups.get((bow_type, distance))
         if not group_code:
             return 1.0
         return ScoringCalculator.GROUP_MULTIPLIERS.get(group_code, 1.0)
@@ -177,6 +166,7 @@ class ScoringCalculator:
     def calculate_points(
         rank: int,
         competition_format: str,
+        competition_groups: Dict[tuple, str],
         bow_type: Optional[str] = None,
         distance: str = "30m",
         participant_count: Optional[int] = None
@@ -194,6 +184,7 @@ class ScoringCalculator:
         Args:
             rank: 排名（1开始）
             competition_format: 赛制 ('ranking', 'elimination', 'mixed_doubles', 'team')
+            competition_groups: 从数据库加载的组别映射 {(bow_type, distance): group_code}
             bow_type: 弓种（用于匹配组别系数）
             distance: 距离 (默认'30m')
             participant_count: 参赛人数（用于计算系数）
@@ -218,7 +209,7 @@ class ScoringCalculator:
         final_points = base_points * coefficient
         
         # 步骤5：组别系数调整
-        group_multiplier = ScoringCalculator.get_group_multiplier(bow_type, distance)
+        group_multiplier = ScoringCalculator.get_group_multiplier(bow_type, distance, competition_groups)
         final_points *= group_multiplier
         
         return round(final_points, 2)

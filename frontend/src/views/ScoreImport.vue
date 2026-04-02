@@ -428,26 +428,14 @@ const isManagedScoreModified = (score) => {
 
 // 获取弓种标签
 const getBowTypeLabel = (type) => {
-  const labels = {
-    'barebow': '光弓',
-    'longbow': '美猎弓',
-    'traditional': '传统弓',
-    'recurve': '反曲弓',
-    'compound': '复合弓',
-    'sightless': '无瞄弓'
-  }
-  return labels[type] || type
+  const found = bowTypes.value.find(item => item.code === type)
+  return found ? found.name : type
 }
 
 // 获取赛制标签
 const getFormatLabel = (format) => {
-  const labels = {
-    'ranking': '排位赛',
-    'elimination': '淘汰赛',
-    'mixed_doubles': '混双赛',
-    'team': '团体赛'
-  }
-  return labels[format] || format
+  const found = competitionFormats.value.find(item => item.code === format)
+  return found ? found.name : format
 }
 
 const getGroupCode = (bowType, distance) => {
