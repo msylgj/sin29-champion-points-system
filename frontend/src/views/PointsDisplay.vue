@@ -35,6 +35,21 @@
             </option>
           </select>
         </div>
+
+        <div class="filter-group">
+          <label for="name-search">姓名</label>
+          <input v-model="nameKeyword" id="name-search" class="filter-input" type="text" placeholder="输入姓名搜索" />
+        </div>
+
+        <div class="filter-group">
+          <label for="club-filter">俱乐部</label>
+          <select v-model="selectedClub" id="club-filter" class="filter-input">
+            <option value="">全部俱乐部</option>
+            <option v-for="club in availableClubs" :key="club" :value="club">
+              {{ club || '（无俱乐部）' }}
+            </option>
+          </select>
+        </div>
       </div>
 
       <!-- 排名表格 -->
@@ -48,7 +63,7 @@
           <p>请选择年度和弓种查看排名</p>
         </div>
 
-        <div v-else-if="ranking.length === 0" class="empty-state">
+        <div v-else-if="filteredRanking.length === 0" class="empty-state">
           <p>暂无该年度该弓种的成绩数据</p>
         </div>
 
@@ -57,15 +72,15 @@
           <div class="stats-summary">
             <div class="stat-item">
               <span class="stat-label">参赛人数</span>
-              <span class="stat-value">{{ ranking.length }}</span>
+              <span class="stat-value">{{ filteredRanking.length }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">最高积分</span>
-              <span class="stat-value">{{ ranking[0]?.total_points.toFixed(1) || 0 }}</span>
+              <span class="stat-value">{{ filteredRanking[0]?.total_points.toFixed(1) || 0 }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">冠军</span>
-              <span class="stat-value">{{ ranking[0]?.name || '-' }}</span>
+              <span class="stat-value">{{ filteredRanking[0]?.name || '-' }}</span>
             </div>
           </div>
 
@@ -81,7 +96,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(athlete, index) in ranking" :key="`${athlete.name}-${athlete.club}`" :class="{ 'highlight': athlete.highlight }">
+              <tr v-for="(athlete, index) in filteredRanking" :key="`${athlete.name}-${athlete.club}`" :class="{ 'highlight': athlete.highlight }">
                 <td class="col-rank">
                   <span class="rank-badge" :class="{ 'top-badge': athlete.highlight }">
                     {{ athlete.ranking }}
@@ -97,8 +112,8 @@
 
           <!-- 详细信息 -->
           <div class="detailed-rankings">
-            <h3 class="section-title">前8名详细信息</h3>
-            <div v-for="(athlete, index) in ranking.slice(0, 8)" :key="`${athlete.name}-${athlete.club}`" class="athlete-card">
+            <h3 class="section-title">{{ hasActiveFilter ? '详细信息' : '前8名详细信息' }}</h3>
+            <div v-for="(athlete, index) in hasActiveFilter ? filteredRanking : filteredRanking.slice(0, 8)" :key="`${athlete.name}-${athlete.club}`" class="athlete-card">
               <div class="card-header">
                 <div class="rank-info">
                   <span class="rank-number" :class="getTopRankClass(athlete.ranking)">{{ athlete.ranking }}</span>
@@ -126,7 +141,7 @@
       </div>
 
       <!-- 导出按钮 -->
-      <div v-if="ranking.length > 0" class="action-bar">
+      <div v-if="filteredRanking.length > 0" class="action-bar">
         <button @click="exportToExcel" class="btn-export">
           📥 导出为 Excel
         </button>
@@ -157,7 +172,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { scoreAPI, dictionaryAPI, eventAPI, authAPI } from '@/api'
 import { useRouter, useRoute } from 'vue-router'
 
@@ -174,6 +189,36 @@ const adminPassword = ref('')
 const authLoading = ref(false)
 const authError = ref('')
 const pendingManageRoute = ref('/score-import')
+const nameKeyword = ref('')
+const selectedClub = ref('')
+
+// 从排名数据中提取可用的俱乐部列表
+const availableClubs = computed(() => {
+  const clubs = new Set()
+  ranking.value.forEach(athlete => {
+    clubs.add(athlete.club || '')
+  })
+  return Array.from(clubs).sort((a, b) => {
+    if (!a) return 1
+    if (!b) return -1
+    return a.localeCompare(b, 'zh-CN')
+  })
+})
+
+// 根据姓名搜索和俱乐部筛选过滤排名
+const hasActiveFilter = computed(() => {
+  return (nameKeyword.value || '').trim() !== '' || selectedClub.value !== ''
+})
+
+const filteredRanking = computed(() => {
+  const keyword = (nameKeyword.value || '').trim().toLowerCase()
+  const club = selectedClub.value
+  return ranking.value.filter(athlete => {
+    if (keyword && !(athlete.name || '').toLowerCase().includes(keyword)) return false
+    if (club !== '' && (athlete.club || '') !== club) return false
+    return true
+  })
+})
 
 const getTopRankClass = (rank) => {
   if (rank === 1) return 'rank-first'
@@ -259,12 +304,12 @@ const loadRanking = async () => {
 
 // 导出 Excel
 const exportToExcel = async () => {
-  if (ranking.value.length === 0) return
+  if (filteredRanking.value.length === 0) return
 
   const XLSX = await import('xlsx')
 
   const headers = ['排名', '姓名', '俱乐部', '积分', '参赛次数']
-  const rows = ranking.value.map(athlete => [
+  const rows = filteredRanking.value.map(athlete => [
     athlete.ranking,
     athlete.name,
     athlete.club || '',
@@ -291,7 +336,8 @@ const exportToExcel = async () => {
 
   // 生成文件名
   const bowTypeLabel = bowTypes.value.find(b => b.code === selectedBowType.value)?.name || selectedBowType.value
-  const filename = `${selectedYear.value}年${bowTypeLabel}积分排名.xlsx`
+  const clubSuffix = selectedClub.value ? `_${selectedClub.value}` : ''
+  const filename = `${selectedYear.value}年${bowTypeLabel}积分排名${clubSuffix}.xlsx`
 
   // 导出文件
   XLSX.writeFile(workbook, filename)

@@ -5,7 +5,7 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig(({ mode }) => {
   const envRoot = fileURLToPath(new URL('../', import.meta.url))
   const env = loadEnv(mode, envRoot, '')
-  const allowedHosts = (env.VITE_ALLOWED_HOSTS || '')
+  const allowedHosts = (env.VITE_ALLOWED_HOSTS || process.env.VITE_ALLOWED_HOSTS || '')
     .split(',')
     .map(item => item.trim())
     .filter(Boolean)
