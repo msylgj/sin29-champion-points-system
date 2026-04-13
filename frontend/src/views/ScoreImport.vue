@@ -331,13 +331,6 @@ const showModifiedOnly = ref(false)
 const batchSavingCurrentTab = ref(false)
 const manageNameKeyword = ref('')
 
-const seasonOrderMap = {
-  '春季赛': 1,
-  '夏季赛': 2,
-  '秋季赛': 3,
-  '冬季赛': 4
-}
-
 // 字典数据
 const bowTypes = ref([])
 const distances = ref([])
@@ -491,14 +484,11 @@ const showSubmitMessage = (type, message) => {
 }
 
 const getSeasonOrder = (season) => {
-  if (!season) return 0
-  if (seasonOrderMap[season]) return seasonOrderMap[season]
-
-  const normalized = String(season).trim()
-  if (normalized.includes('春')) return 1
-  if (normalized.includes('夏')) return 2
-  if (normalized.includes('秋')) return 3
-  if (normalized.includes('冬')) return 4
+  const s = String(season || '').trim()
+  const seasonMap = { '春': 1, '夏': 2, '秋': 3, '冬': 4 }
+  for (const [k, v] of Object.entries(seasonMap)) {
+    if (s.includes(k)) return v
+  }
   return 0
 }
 
