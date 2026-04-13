@@ -902,9 +902,6 @@ const parseExcelData = (jsonData) => {
   const bowCodeSet = new Set((bowTypes.value || []).map(item => item.code))
   const distanceCodeSet = new Set((distances.value || []).map(item => item.code))
   const formatCodeSet = new Set((competitionFormats.value || []).map(item => item.code))
-  const normalizeKeyPart = (value) => {
-    return (value || '').toString().trim().toLowerCase()
-  }
   const existingScoreKeySet = new Set(
     (managedScores.value || []).map(item => [
       normalizeKeyPart(item.name),
@@ -1112,7 +1109,6 @@ const submitImport = async () => {
         rank: item.rank
       }))
 
-    const normalizeKeyPart = (value) => (value || '').toString().trim().toLowerCase()
     const dedupedScoresMap = new Map()
     validScores.forEach(item => {
       const uniqueKey = [
