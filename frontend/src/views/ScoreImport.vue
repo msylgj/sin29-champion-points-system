@@ -156,12 +156,12 @@
           </div>
         </div>
 
-        <div v-if="parseSuccessMessage || parseErrorMessage" class="import-feedback">
-          <div v-if="parseSuccessMessage" class="import-message import-message-success">
-            {{ parseSuccessMessage }}
+        <div v-if="parseMsg.successMsg.value || parseMsg.errorMsg.value" class="import-feedback">
+          <div v-if="parseMsg.successMsg.value" class="import-message import-message-success">
+            {{ parseMsg.successMsg.value }}
           </div>
-          <div v-if="parseErrorMessage" class="import-message import-message-error">
-            {{ parseErrorMessage }}
+          <div v-if="parseMsg.errorMsg.value" class="import-message import-message-error">
+            {{ parseMsg.errorMsg.value }}
           </div>
         </div>
 
@@ -283,27 +283,28 @@
       </div>
     </div>
 
-    <div v-if="submitSuccessMessage" class="submit-floating-message submit-floating-success">
-      {{ submitSuccessMessage }}
+    <div v-if="submitMsg.successMsg.value" class="submit-floating-message submit-floating-success">
+      {{ submitMsg.successMsg.value }}
     </div>
-    <div v-if="submitErrorMessage" class="submit-floating-message submit-floating-error">
-      {{ submitErrorMessage }}
+    <div v-if="submitMsg.errorMsg.value" class="submit-floating-message submit-floating-error">
+      {{ submitMsg.errorMsg.value }}
     </div>
 
     <!-- 提示信息 -->
-    <div v-if="successMessage" class="success-message">
-      {{ successMessage }}
+    <div v-if="pageMsg.successMsg.value" class="success-message">
+      {{ pageMsg.successMsg.value }}
     </div>
-    <div v-if="errorMessage" class="error-message">
-      {{ errorMessage }}
+    <div v-if="pageMsg.errorMsg.value" class="error-message">
+      {{ pageMsg.errorMsg.value }}
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { eventAPI, scoreAPI, dictionaryAPI } from '@/api'
+import { useMessage } from '@/composables/useMessage'
 
 const router = useRouter()
 const events = ref([])
@@ -311,16 +312,12 @@ const selectedEventId = ref('')
 const selectedEvent = ref(null)
 const batchScores = ref([])
 const importLoading = ref(false)
-const successMessage = ref('')
-const errorMessage = ref('')
-const parseSuccessMessage = ref('')
-const parseErrorMessage = ref('')
-const submitSuccessMessage = ref('')
-const submitErrorMessage = ref('')
+const pageMsg = useMessage()
+const parseMsg = useMessage()
+const submitMsg = useMessage(5000)
 const uploadedFileName = ref('')
 const fileInput = ref(null)
 const showEventConfig = ref(false)
-let submitMessageTimer = null
 
 const managedScores = ref([])
 const managedScoresLoading = ref(false)
@@ -456,33 +453,6 @@ const getConfigCount = (bowType, distance, key) => {
   return config[key] ?? 0
 }
 
-const clearParseMessages = () => {
-  parseSuccessMessage.value = ''
-  parseErrorMessage.value = ''
-}
-
-const clearSubmitMessages = () => {
-  submitSuccessMessage.value = ''
-  submitErrorMessage.value = ''
-}
-
-const showSubmitMessage = (type, message) => {
-  clearSubmitMessages()
-
-  if (type === 'success') {
-    submitSuccessMessage.value = message
-  } else {
-    submitErrorMessage.value = message
-  }
-
-  if (submitMessageTimer) {
-    clearTimeout(submitMessageTimer)
-  }
-  submitMessageTimer = setTimeout(() => {
-    clearSubmitMessages()
-  }, 5000)
-}
-
 const getSeasonOrder = (season) => {
   const s = String(season || '').trim()
   const seasonMap = { '春': 1, '夏': 2, '秋': 3, '冬': 4 }
@@ -607,7 +577,7 @@ const loadManagedScores = async () => {
     }
   } catch (error) {
     console.error('加载成绩管理数据失败:', error)
-    errorMessage.value = '加载成绩失败'
+    pageMsg.errorMsg.value = '加载成绩失败'
     managedScores.value = []
     managedOriginalMap.value = {}
     activeManageBowType.value = ''
@@ -628,14 +598,14 @@ const validateManagedScore = (score) => {
 const saveManagedScore = async (score) => {
   const validationMsg = validateManagedScore(score)
   if (validationMsg) {
-    errorMessage.value = `成绩 ID ${score.id}：${validationMsg}`
+    pageMsg.errorMsg.value = `成绩 ID ${score.id}：${validationMsg}`
     return false
   }
 
   const set = new Set(savingScoreIds.value)
   set.add(score.id)
   savingScoreIds.value = set
-  errorMessage.value = ''
+  pageMsg.errorMsg.value = ''
 
   try {
     const payload = {
@@ -661,10 +631,10 @@ const saveManagedScore = async (score) => {
       }
     }
     snapshotManagedScores()
-    successMessage.value = `成绩 ID ${score.id} 保存成功`
+    pageMsg.successMsg.value = `成绩 ID ${score.id} 保存成功`
     return true
   } catch (error) {
-    errorMessage.value = error.detail || error.message || '保存失败，请重试'
+    pageMsg.errorMsg.value = error.detail || error.message || '保存失败，请重试'
     console.error('保存成绩失败:', error)
     return false
   } finally {
@@ -677,13 +647,13 @@ const saveManagedScore = async (score) => {
 const saveCurrentTabModifiedScores = async () => {
   const changedScores = currentTabManagedScores.value.filter(item => isManagedScoreModified(item))
   if (changedScores.length === 0) {
-    errorMessage.value = '当前弓种没有待保存的修改'
+    pageMsg.errorMsg.value = '当前弓种没有待保存的修改'
     return
   }
 
   batchSavingCurrentTab.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
+  pageMsg.errorMsg.value = ''
+  pageMsg.successMsg.value = ''
 
   let successCount = 0
   const failedItems = []
@@ -704,9 +674,9 @@ const saveCurrentTabModifiedScores = async () => {
   }
 
   if (failedItems.length > 0) {
-    errorMessage.value = `批量保存完成，成功 ${successCount} 条，失败 ${failedItems.length} 条\n${failedItems.join('\n')}`
+    pageMsg.errorMsg.value = `批量保存完成，成功 ${successCount} 条，失败 ${failedItems.length} 条\n${failedItems.join('\n')}`
   } else {
-    successMessage.value = `批量保存成功，共 ${successCount} 条`
+    pageMsg.successMsg.value = `批量保存成功，共 ${successCount} 条`
   }
 
   batchSavingCurrentTab.value = false
@@ -738,7 +708,7 @@ const onEventSelected = async () => {
     showEventConfig.value = false
     await loadManagedScores()
   } catch (error) {
-    errorMessage.value = '加载赛事信息失败'
+    pageMsg.errorMsg.value = '加载赛事信息失败'
     console.error('Error loading event:', error)
   }
 }
@@ -749,17 +719,17 @@ const onFileSelected = async (event) => {
   if (!file) return
 
   uploadedFileName.value = file.name
-  clearParseMessages()
+  parseMsg.clear()
 
   const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
   if (!isExcel && !file.name.endsWith('.csv')) {
-    parseErrorMessage.value = '请上传 .xlsx, .xls 或 .csv 格式的文件'
+    parseMsg.errorMsg.value = '请上传 .xlsx, .xls 或 .csv 格式的文件'
     return
   }
 
   const reader = new FileReader()
   reader.onerror = () => {
-    parseErrorMessage.value = '文件读取失败，请重试'
+    parseMsg.errorMsg.value = '文件读取失败，请重试'
   }
 
   if (isExcel) {
@@ -773,7 +743,7 @@ const onFileSelected = async (event) => {
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
         parseExcelData(jsonData)
       } catch (error) {
-        parseErrorMessage.value = 'Excel 文件解析失败：' + error.message
+        parseMsg.errorMsg.value = 'Excel 文件解析失败：' + error.message
       }
     }
     reader.readAsArrayBuffer(file)
@@ -788,7 +758,7 @@ const onFileSelected = async (event) => {
       const jsonData = lines.map(line => line.split(',').map(p => p.trim()))
       parseExcelData(jsonData)
     } catch (error) {
-      parseErrorMessage.value = 'CSV 文件解析失败：' + error.message
+      parseMsg.errorMsg.value = 'CSV 文件解析失败：' + error.message
     }
   }
   reader.readAsText(file)
@@ -796,10 +766,10 @@ const onFileSelected = async (event) => {
 
 // 解析 Excel/CSV 数据
 const parseExcelData = (jsonData) => {
-  clearParseMessages()
+  parseMsg.clear()
 
   if (!jsonData || jsonData.length === 0) {
-    parseErrorMessage.value = '文件为空'
+    parseMsg.errorMsg.value = '文件为空'
     return
   }
 
@@ -816,7 +786,7 @@ const parseExcelData = (jsonData) => {
   // 获取第一行作为列标题
   const headerRow = jsonData[0]
   if (!headerRow) {
-    parseErrorMessage.value = '无法读取列标题'
+    parseMsg.errorMsg.value = '无法读取列标题'
     return
   }
 
@@ -847,7 +817,7 @@ const parseExcelData = (jsonData) => {
       'rank': '排名'
     }
     const missingLabels = missingFields.map(f => fieldLabels[f]).join('、')
-    parseErrorMessage.value = `Excel 文件缺少必需字段：${missingLabels}。列标题应包括：姓名、俱乐部、弓种、距离、赛制、排名`
+    parseMsg.errorMsg.value = `Excel 文件缺少必需字段：${missingLabels}。列标题应包括：姓名、俱乐部、弓种、距离、赛制、排名`
     return
   }
 
@@ -1003,7 +973,7 @@ const parseExcelData = (jsonData) => {
   const inFileDuplicateCount = newScores.filter(item => item.__valid && item.__duplicate_in_file).length
 
   if (newScores.length === 0) {
-    parseErrorMessage.value = '文件中没有有效的成绩数据'
+    parseMsg.errorMsg.value = '文件中没有有效的成绩数据'
     return
   }
 
@@ -1013,9 +983,9 @@ const parseExcelData = (jsonData) => {
   const duplicateCount = newScores.filter(item => item.__valid && item.__duplicate).length
   const inFileDuplicateToRemove = newScores.filter(item => item.__valid && item.__duplicate_in_file_to_remove).length
   if (invalidCount > 0) {
-    parseSuccessMessage.value = `已解析 ${newScores.length} 条：合法 ${validCount} 条，异常 ${invalidCount} 条；与已有成绩重复 ${duplicateCount} 条（重复导入将覆盖），文件内重复 ${inFileDuplicateCount} 条（其中将移除 ${inFileDuplicateToRemove} 条）`
+    parseMsg.successMsg.value = `已解析 ${newScores.length} 条：合法 ${validCount} 条，异常 ${invalidCount} 条；与已有成绩重复 ${duplicateCount} 条（重复导入将覆盖），文件内重复 ${inFileDuplicateCount} 条（其中将移除 ${inFileDuplicateToRemove} 条）`
   } else {
-    parseSuccessMessage.value = `成功解析 ${newScores.length} 条成绩，全部合法；与已有成绩重复 ${duplicateCount} 条（重复导入将覆盖），文件内重复 ${inFileDuplicateCount} 条（其中将移除 ${inFileDuplicateToRemove} 条）。`
+    parseMsg.successMsg.value = `成功解析 ${newScores.length} 条成绩，全部合法；与已有成绩重复 ${duplicateCount} 条（重复导入将覆盖），文件内重复 ${inFileDuplicateCount} 条（其中将移除 ${inFileDuplicateToRemove} 条）。`
   }
 }
 
@@ -1073,18 +1043,18 @@ const removeBatchScore = (index) => {
 // 提交导入
 const submitImport = async () => {
   if (batchScores.value.length === 0) {
-    parseErrorMessage.value = '请先上传并解析成绩文件'
+    parseMsg.errorMsg.value = '请先上传并解析成绩文件'
     return
   }
 
   if (invalidScoreCount.value > 0) {
-    parseErrorMessage.value = `当前有 ${invalidScoreCount.value} 条异常数据，请删除或修正后再导入。`
+    parseMsg.errorMsg.value = `当前有 ${invalidScoreCount.value} 条异常数据，请删除或修正后再导入。`
     return
   }
 
-  clearParseMessages()
+  parseMsg.clear()
   importLoading.value = true
-  clearSubmitMessages()
+  submitMsg.clear()
 
   try {
     const validScores = batchScores.value
@@ -1118,9 +1088,9 @@ const submitImport = async () => {
     const inFileDuplicateToRemove = inFileDuplicateToRemoveCount.value
     const existingDuplicateCount = existingDuplicateScoreCount.value
     if (duplicateCount > 0) {
-      showSubmitMessage('success', `成功导入 ${dedupedValidScores.length} 条成绩（原始合法 ${validScoreCount.value} 条）；其中与已有成绩重复 ${existingDuplicateCount} 条（覆盖更新），文件内重复 ${inFileDuplicateCount} 条（已移除 ${inFileDuplicateToRemove} 条）`)
+      submitMsg.show('success', `成功导入 ${dedupedValidScores.length} 条成绩（原始合法 ${validScoreCount.value} 条）；其中与已有成绩重复 ${existingDuplicateCount} 条（覆盖更新），文件内重复 ${inFileDuplicateCount} 条（已移除 ${inFileDuplicateToRemove} 条）`)
     } else {
-      showSubmitMessage('success', `成功导入 ${dedupedValidScores.length} 条成绩`)
+      submitMsg.show('success', `成功导入 ${dedupedValidScores.length} 条成绩`)
     }
     
     batchScores.value = []
@@ -1199,7 +1169,7 @@ const submitImport = async () => {
       errorMsg = '导入失败，详情请查看控制台'
     }
     
-    showSubmitMessage('error', errorMsg)
+    submitMsg.show('error', errorMsg)
     console.error('Error importing scores:', error)
   } finally {
     importLoading.value = false
@@ -1212,18 +1182,11 @@ const navigateToAddEvent = () => {
 }
 
 onMounted(() => {
-  errorMessage.value = ''
-  successMessage.value = ''
-  clearParseMessages()
-  clearSubmitMessages()
+  pageMsg.clear()
+  parseMsg.clear()
+  submitMsg.clear()
   loadDictionaries()
   loadEvents()
-})
-
-onUnmounted(() => {
-  if (submitMessageTimer) {
-    clearTimeout(submitMessageTimer)
-  }
 })
 </script>
 
