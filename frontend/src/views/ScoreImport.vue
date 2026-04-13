@@ -146,7 +146,7 @@
                     <span v-else class="status-tag status-error" :title="score.__errors.join('；')">异常</span>
                   </td>
                   <td>
-                    <button @click="batchScores.splice(index, 1)" class="btn-remove-small">
+                    <button @click="removeBatchScore(index)" class="btn-remove-small">
                       删除
                     </button>
                   </td>
@@ -343,6 +343,8 @@ const bowTypes = ref([])
 const distances = ref([])
 const competitionFormats = ref([])
 const competitionGroups = ref([])
+
+const normalizeKeyPart = (value) => (value || '').toString().trim().toLowerCase()
 
 const countRows = [
   { key: 'individual_participant_count', label: '个人（排位/淘汰）' },
@@ -1028,6 +1030,57 @@ const parseExcelData = (jsonData) => {
   } else {
     parseSuccessMessage.value = `成功解析 ${newScores.length} 条成绩，全部合法；与已有成绩重复 ${duplicateCount} 条（重复导入将覆盖），文件内重复 ${inFileDuplicateCount} 条（其中将移除 ${inFileDuplicateToRemove} 条）。`
   }
+}
+
+const recalcDuplicateFlags = () => {
+  const keyToIndexes = new Map()
+  batchScores.value.forEach((item, idx) => {
+    if (!item.__valid) return
+    const key = [
+      normalizeKeyPart(item.name),
+      normalizeKeyPart(item.club),
+      normalizeKeyPart(item.bow_type),
+      normalizeKeyPart(item.distance),
+      normalizeKeyPart(item.format)
+    ].join('|')
+    const arr = keyToIndexes.get(key) || []
+    arr.push(idx)
+    keyToIndexes.set(key, arr)
+  })
+
+  const existingScoreKeySet = new Set(
+    (managedScores.value || []).map(item => [
+      normalizeKeyPart(item.name),
+      normalizeKeyPart(item.club),
+      normalizeKeyPart(item.bow_type),
+      normalizeKeyPart(item.distance),
+      normalizeKeyPart(item.format)
+    ].join('|'))
+  )
+
+  batchScores.value.forEach((item, idx) => {
+    if (!item.__valid) return
+    const key = [
+      normalizeKeyPart(item.name),
+      normalizeKeyPart(item.club),
+      normalizeKeyPart(item.bow_type),
+      normalizeKeyPart(item.distance),
+      normalizeKeyPart(item.format)
+    ].join('|')
+    const indexes = keyToIndexes.get(key) || []
+    const isInFileDup = indexes.length > 1
+    const isFirstOccurrence = indexes[0] === idx
+    const isExistingDup = existingScoreKeySet.has(key)
+    item.__duplicate_in_file = isInFileDup
+    item.__duplicate_in_file_to_remove = isInFileDup && !isFirstOccurrence
+    item.__duplicate_with_existing = isExistingDup
+    item.__duplicate = item.__duplicate_in_file_to_remove || isExistingDup
+  })
+}
+
+const removeBatchScore = (index) => {
+  batchScores.value.splice(index, 1)
+  recalcDuplicateFlags()
 }
 
 // 提交导入
