@@ -49,7 +49,8 @@ class ScoreService:
             query = query.filter(Score.name.ilike(f"%{name}%"))
 
         total = query.count()
-        scores = query.order_by(desc(Score.created_at)).offset(skip).limit(limit).all()
+        # 使用 created_at + id 的稳定排序，避免同时间戳记录在分页时重复/遗漏
+        scores = query.order_by(desc(Score.created_at), desc(Score.id)).offset(skip).limit(limit).all()
         return scores, total
 
     @staticmethod

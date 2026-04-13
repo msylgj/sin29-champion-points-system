@@ -131,7 +131,7 @@
                 <tr
                   v-for="(score, index) in batchScores"
                   :key="index"
-                  :class="{ 'row-error': !score.__valid, 'row-duplicate': score.__valid && score.__duplicate }"
+                  :class="{ 'row-error': !score.__valid, 'row-duplicate': score.__valid && (score.__duplicate_with_existing || score.__duplicate_in_file_to_remove) }"
                 >
                   <td>{{ score.name }}</td>
                   <td>{{ score.club || '-' }}</td>
@@ -140,7 +140,8 @@
                   <td>{{ getFormatLabel(score.format) }}</td>
                   <td>{{ score.rank }}</td>
                   <td>
-                    <span v-if="score.__valid && score.__duplicate" class="status-tag status-duplicate" title="与已有成绩重复，导入时将覆盖原记录">重复（将覆盖）</span>
+                    <span v-if="score.__valid && score.__duplicate_in_file_to_remove" class="status-tag status-duplicate" title="Excel 中存在重复行，导入时该行将被移除">重复（将移除）</span>
+                    <span v-else-if="score.__valid && score.__duplicate_with_existing" class="status-tag status-duplicate" title="与已有成绩重复，导入时将覆盖原记录">重复（将覆盖）</span>
                     <span v-else-if="score.__valid" class="status-tag status-ok">通过</span>
                     <span v-else class="status-tag status-error" :title="score.__errors.join('；')">异常</span>
                   </td>
@@ -359,6 +360,9 @@ const formatEnumText = computed(() => competitionFormats.value.map(item => `${it
 const validScoreCount = computed(() => batchScores.value.filter(item => item.__valid).length)
 const invalidScoreCount = computed(() => batchScores.value.filter(item => !item.__valid).length)
 const duplicateScoreCount = computed(() => batchScores.value.filter(item => item.__valid && item.__duplicate).length)
+const inFileDuplicateScoreCount = computed(() => batchScores.value.filter(item => item.__valid && item.__duplicate_in_file).length)
+const inFileDuplicateToRemoveCount = computed(() => batchScores.value.filter(item => item.__valid && item.__duplicate_in_file_to_remove).length)
+const existingDuplicateScoreCount = computed(() => batchScores.value.filter(item => item.__valid && item.__duplicate_with_existing).length)
 const managedBowTabs = computed(() => {
   const bowSet = new Set((managedScores.value || []).map(item => item.bow_type))
   const tabs = bowTypes.value.filter(item => bowSet.has(item.code))
@@ -584,16 +588,22 @@ const loadManagedScores = async () => {
       page += 1
     } while (all.length < total)
 
-    managedScores.value = all.map(item => ({
-      id: item.id,
-      event_id: item.event_id,
-      name: item.name || '',
-      club: item.club || '',
-      bow_type: item.bow_type || '',
-      distance: item.distance || '',
-      format: item.format || '',
-      rank: Number(item.rank || 0)
-    }))
+    const uniqById = new Map()
+    all.forEach(item => {
+      if (!item || item.id == null) return
+      if (uniqById.has(item.id)) return
+      uniqById.set(item.id, {
+        id: item.id,
+        event_id: item.event_id,
+        name: item.name || '',
+        club: item.club || '',
+        bow_type: item.bow_type || '',
+        distance: item.distance || '',
+        format: item.format || '',
+        rank: Number(item.rank || 0)
+      })
+    })
+    managedScores.value = Array.from(uniqById.values())
     snapshotManagedScores()
 
     const tabs = managedBowTabs.value
@@ -903,6 +913,21 @@ const parseExcelData = (jsonData) => {
     ].join('|'))
   )
 
+  const clubByNameAndBow = new Map()
+  ;(managedScores.value || []).forEach(item => {
+    const mappedClub = (item.club || '').toString().trim()
+    const mappedName = (item.name || '').toString().trim()
+    const mappedBow = (item.bow_type || '').toString().trim()
+    if (!mappedClub || !mappedName || !mappedBow) return
+
+    const key = [normalizeKeyPart(mappedName), normalizeKeyPart(mappedBow)].join('|')
+    if (!clubByNameAndBow.has(key)) {
+      clubByNameAndBow.set(key, mappedClub)
+    }
+  })
+
+  const parsedScoreKeyToIndexes = new Map()
+
   // 解析数据行
   const newScores = []
   for (let i = 1; i < jsonData.length; i++) {
@@ -923,13 +948,13 @@ const parseExcelData = (jsonData) => {
     distance = convertToCode(distance, distanceMap)
     format = convertToCode(format, formatMap)
 
-    // 当俱乐部为空时，自动从同弓种的成绩中按姓名匹配俱乐部
-    if (!club && name && bow_type) {
-      const matched = (managedScores.value || []).find(
-        item => (item.name || '').trim() === name && item.bow_type === bow_type && (item.club || '').trim()
-      )
-      if (matched) {
-        club = matched.club.trim()
+    // 在解析阶段按“姓名+弓种”自动补全俱乐部：优先使用本次文件已解析映射，其次用已存在成绩映射
+    if (name && bow_type) {
+      const clubMapKey = [normalizeKeyPart(name), normalizeKeyPart(bow_type)].join('|')
+      if (club) {
+        clubByNameAndBow.set(clubMapKey, club)
+      } else if (clubByNameAndBow.has(clubMapKey)) {
+        club = clubByNameAndBow.get(clubMapKey) || ''
       }
     }
 
@@ -948,8 +973,7 @@ const parseExcelData = (jsonData) => {
       normalizeKeyPart(format)
     ].join('|')
     const isDuplicate = rowErrors.length === 0 && existingScoreKeySet.has(scoreUniqueKey)
-
-    newScores.push({
+    const parsedScoreItem = {
       event_id: parseInt(selectedEventId.value),
       name,
       club: club || '',
@@ -959,9 +983,35 @@ const parseExcelData = (jsonData) => {
       rank,
       __valid: rowErrors.length === 0,
       __errors: rowErrors,
-      __duplicate: isDuplicate
-    })
+      __duplicate: isDuplicate,
+      __duplicate_in_file: false,
+      __duplicate_in_file_to_remove: false,
+      __duplicate_with_existing: isDuplicate
+    }
+    newScores.push(parsedScoreItem)
+
+    if (rowErrors.length === 0) {
+      const currentIndex = newScores.length - 1
+      const indexes = parsedScoreKeyToIndexes.get(scoreUniqueKey) || []
+      indexes.push(currentIndex)
+      parsedScoreKeyToIndexes.set(scoreUniqueKey, indexes)
+    }
   }
+
+  // 标记文件内重复：同一键出现多次时，仅保留第一条为非“移除”，其余标为“重复（将移除）”
+  parsedScoreKeyToIndexes.forEach(indexes => {
+    if (indexes.length < 2) return
+    indexes.forEach((idx, order) => {
+      if (!newScores[idx]) return
+      newScores[idx].__duplicate_in_file = true
+      if (order > 0) {
+        newScores[idx].__duplicate_in_file_to_remove = true
+        newScores[idx].__duplicate = true
+      }
+    })
+  })
+
+  const inFileDuplicateCount = newScores.filter(item => item.__valid && item.__duplicate_in_file).length
 
   if (newScores.length === 0) {
     parseErrorMessage.value = '文件中没有有效的成绩数据'
@@ -972,10 +1022,11 @@ const parseExcelData = (jsonData) => {
   const validCount = newScores.filter(item => item.__valid).length
   const invalidCount = newScores.length - validCount
   const duplicateCount = newScores.filter(item => item.__valid && item.__duplicate).length
+  const inFileDuplicateToRemove = newScores.filter(item => item.__valid && item.__duplicate_in_file_to_remove).length
   if (invalidCount > 0) {
-    parseSuccessMessage.value = `已解析 ${newScores.length} 条：合法 ${validCount} 条，异常 ${invalidCount} 条，重复 ${duplicateCount} 条（重复导入将覆盖）`
+    parseSuccessMessage.value = `已解析 ${newScores.length} 条：合法 ${validCount} 条，异常 ${invalidCount} 条；与已有成绩重复 ${duplicateCount} 条（重复导入将覆盖），文件内重复 ${inFileDuplicateCount} 条（其中将移除 ${inFileDuplicateToRemove} 条）`
   } else {
-    parseSuccessMessage.value = `成功解析 ${newScores.length} 条成绩，全部合法；其中重复 ${duplicateCount} 条（重复导入将覆盖）。`
+    parseSuccessMessage.value = `成功解析 ${newScores.length} 条成绩，全部合法；与已有成绩重复 ${duplicateCount} 条（重复导入将覆盖），文件内重复 ${inFileDuplicateCount} 条（其中将移除 ${inFileDuplicateToRemove} 条）。`
   }
 }
 
@@ -997,7 +1048,7 @@ const submitImport = async () => {
 
   try {
     const validScores = batchScores.value
-      .filter(item => item.__valid)
+      .filter(item => item.__valid && !item.__duplicate_in_file_to_remove)
       .map(item => ({
         event_id: item.event_id,
         name: item.name,
@@ -1008,12 +1059,29 @@ const submitImport = async () => {
         rank: item.rank
       }))
 
-    await scoreAPI.batchImport({ scores: validScores })
+    const normalizeKeyPart = (value) => (value || '').toString().trim().toLowerCase()
+    const dedupedScoresMap = new Map()
+    validScores.forEach(item => {
+      const uniqueKey = [
+        normalizeKeyPart(item.name),
+        normalizeKeyPart(item.club),
+        normalizeKeyPart(item.bow_type),
+        normalizeKeyPart(item.distance),
+        normalizeKeyPart(item.format)
+      ].join('|')
+      dedupedScoresMap.set(uniqueKey, item)
+    })
+    const dedupedValidScores = Array.from(dedupedScoresMap.values())
+
+    await scoreAPI.batchImport({ scores: dedupedValidScores })
     const duplicateCount = duplicateScoreCount.value
+    const inFileDuplicateCount = inFileDuplicateScoreCount.value
+    const inFileDuplicateToRemove = inFileDuplicateToRemoveCount.value
+    const existingDuplicateCount = existingDuplicateScoreCount.value
     if (duplicateCount > 0) {
-      showSubmitMessage('success', `成功导入 ${batchScores.value.length} 条成绩，其中覆盖更新 ${duplicateCount} 条重复成绩`)
+      showSubmitMessage('success', `成功导入 ${dedupedValidScores.length} 条成绩（原始合法 ${validScoreCount.value} 条）；其中与已有成绩重复 ${existingDuplicateCount} 条（覆盖更新），文件内重复 ${inFileDuplicateCount} 条（已移除 ${inFileDuplicateToRemove} 条）`)
     } else {
-      showSubmitMessage('success', `成功导入 ${batchScores.value.length} 条成绩`)
+      showSubmitMessage('success', `成功导入 ${dedupedValidScores.length} 条成绩`)
     }
     
     batchScores.value = []
