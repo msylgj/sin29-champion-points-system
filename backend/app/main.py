@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.routers import scores, events, event_configuration, dictionary, auth
 from app.database import Base, engine
-from sqlalchemy import text
 
 settings = get_settings()
 
@@ -34,25 +33,6 @@ app.include_router(dictionary.router, tags=["字典管理"])
 async def startup_event():
     """应用启动时初始化数据库"""
     try:
-        # 首先删除旧的 scores 表（如果存在且结构不正确）
-        with engine.connect() as conn:
-            # 检查 scores 表是否存在
-            result = conn.execute(text("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name='scores' AND column_name='event_id'
-            """))
-            has_event_id = result.fetchone() is not None
-            
-            if not has_event_id:
-                # 旧表没有 event_id 列，删除它
-                try:
-                    conn.execute(text("DROP TABLE IF EXISTS scores CASCADE"))
-                    conn.commit()
-                    print("✓ Dropped old scores table")
-                except Exception as e:
-                    print(f"⚠ Could not drop old table: {e}")
-        
-        # 重建所有表
         Base.metadata.create_all(engine)
         print("✓ Database tables initialized successfully")
     except Exception as e:
