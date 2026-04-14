@@ -517,6 +517,7 @@ const submitImport = async () => {
   parseMsg.clear()
   importLoading.value = true
   submitMsg.clear()
+  let submittedScores = []
 
   try {
     const validScores = batchScores.value
@@ -535,17 +536,17 @@ const submitImport = async () => {
     validScores.forEach(item => {
       dedupedScoresMap.set(buildScoreUniqueKey(item), item)
     })
-    const dedupedValidScores = Array.from(dedupedScoresMap.values())
+    submittedScores = Array.from(dedupedScoresMap.values())
 
-    await scoreAPI.batchImport({ scores: dedupedValidScores })
+    await scoreAPI.batchImport({ scores: submittedScores })
     const duplicateCount = duplicateScoreCount.value
     const inFileDuplicateCount = inFileDuplicateScoreCount.value
     const inFileDuplicateToRemove = inFileDuplicateToRemoveCount.value
     const existingDuplicateCount = existingDuplicateScoreCount.value
     if (duplicateCount > 0) {
-      submitMsg.show('success', `成功导入 ${dedupedValidScores.length} 条成绩（原始合法 ${validScoreCount.value} 条）；其中与已有成绩重复 ${existingDuplicateCount} 条（覆盖更新），文件内重复 ${inFileDuplicateCount} 条（已移除 ${inFileDuplicateToRemove} 条）`)
+      submitMsg.show('success', `成功导入 ${submittedScores.length} 条成绩（原始合法 ${validScoreCount.value} 条）；其中与已有成绩重复 ${existingDuplicateCount} 条（覆盖更新），文件内重复 ${inFileDuplicateCount} 条（已移除 ${inFileDuplicateToRemove} 条）`)
     } else {
-      submitMsg.show('success', `成功导入 ${dedupedValidScores.length} 条成绩`)
+      submitMsg.show('success', `成功导入 ${submittedScores.length} 条成绩`)
     }
     
     batchScores.value = []
@@ -563,9 +564,8 @@ const submitImport = async () => {
     
     try {
       if (error.detail) {
-        // Pydantic 验证错误
+        // 后端请求体验证错误兜底，例如长度限制等前端未覆盖的约束
         if (Array.isArray(error.detail)) {
-          // 构建错误映射 - 找出具体哪一行数据出错
           const errorMap = {}
           
           error.detail.forEach(e => {
@@ -593,11 +593,11 @@ const submitImport = async () => {
               translatedMsg = `距离必须是：${validDistances}`
             }
             
-            // 获取是第几条成绩
             if (loc && loc.length >= 2 && loc[0] === 'body' && loc[1] === 'scores') {
               const scoreIndex = parseInt(loc[2])
-              const lineNo = scoreIndex + 1 // 数组从0开始，显示时+1
-              const scoreName = batchScores.value[scoreIndex]?.name || '未知'
+              if (Number.isNaN(scoreIndex)) return
+              const lineNo = scoreIndex + 1
+              const scoreName = submittedScores[scoreIndex]?.name || '未知'
               
               if (!errorMap[lineNo]) {
                 errorMap[lineNo] = []
