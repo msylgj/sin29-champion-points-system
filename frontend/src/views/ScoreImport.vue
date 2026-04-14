@@ -187,100 +187,15 @@
       </div>
 
       <!-- 成绩管理 -->
-      <div class="section" v-if="selectedEvent">
-        <h2 class="section-title">成绩管理</h2>
-        <p class="section-help">仅支持查看和编辑当前赛事已有成绩，不支持新增。</p>
-
-        <div v-if="managedScoresLoading" class="empty-tip">成绩加载中...</div>
-        <div v-else-if="managedScores.length === 0" class="empty-tip">当前赛事暂无成绩</div>
-        <div v-else>
-          <div class="bow-tabs">
-            <button
-              v-for="tab in managedBowTabs"
-              :key="tab.code"
-              type="button"
-              class="bow-tab"
-              :class="{ active: tab.code === activeManageBowType }"
-              @click="activeManageBowType = tab.code"
-            >
-              {{ tab.name }}
-            </button>
-          </div>
-
-          <div class="manage-tools">
-            <div class="manage-tool-left">
-              <input
-                v-model="manageNameKeyword"
-                class="manage-search-input"
-                type="text"
-                placeholder="按姓名搜索"
-              />
-            </div>
-            <div class="manage-tool-right">
-              <label class="checkbox-inline">
-                <input type="checkbox" v-model="showModifiedOnly" />
-                仅显示已修改行
-              </label>
-              <button
-                type="button"
-                class="btn-batch-save"
-                :disabled="batchSavingCurrentTab || modifiedCurrentTabCount === 0"
-                @click="saveCurrentTabModifiedScores"
-              >
-                {{ batchSavingCurrentTab ? '批量保存中...' : `保存当前弓种修改 (${modifiedCurrentTabCount})` }}
-              </button>
-            </div>
-          </div>
-
-          <div class="table-wrapper manage-table-wrap">
-            <table class="manage-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>姓名</th>
-                  <th>俱乐部</th>
-                  <th>弓种</th>
-                  <th>距离</th>
-                  <th>赛制</th>
-                  <th>排名</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="score in filteredManagedScores" :key="score.id" :class="{ 'row-modified': isManagedScoreModified(score) }">
-                  <td>{{ score.id }}</td>
-                  <td><input v-model="score.name" class="cell-input" type="text" /></td>
-                  <td><input v-model="score.club" class="cell-input" type="text" /></td>
-                  <td>
-                    <select v-model="score.bow_type" class="cell-input">
-                      <option v-for="item in bowTypes" :key="item.code" :value="item.code">{{ item.name }}</option>
-                    </select>
-                  </td>
-                  <td>
-                    <select v-model="score.distance" class="cell-input">
-                      <option v-for="item in distances" :key="item.code" :value="item.code">{{ item.name }}</option>
-                    </select>
-                  </td>
-                  <td>
-                    <select v-model="score.format" class="cell-input">
-                      <option v-for="item in competitionFormats" :key="item.code" :value="item.code">{{ item.name }}</option>
-                    </select>
-                  </td>
-                  <td><input v-model.number="score.rank" class="cell-input" type="number" min="1" /></td>
-                  <td class="action-cell">
-                    <button type="button" class="btn-row-save" :disabled="savingScoreIds.has(score.id)" @click="saveManagedScore(score)">
-                      {{ savingScoreIds.has(score.id) ? '保存中...' : '保存' }}
-                    </button>
-                    <button type="button" class="btn-row-reset" :disabled="savingScoreIds.has(score.id)" @click="resetManagedScore(score.id)">
-                      重置
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      <ScoreManagePanel
+        v-if="selectedEvent"
+        :scores="managedScores"
+        :loading="managedScoresLoading"
+        :bow-types="bowTypes"
+        :distances="distances"
+        :competition-formats="competitionFormats"
+        @message="onManageMessage"
+      />
     </div>
 
     <div v-if="submitMsg.successMsg.value" class="submit-floating-message submit-floating-success">
@@ -305,6 +220,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { eventAPI, scoreAPI, dictionaryAPI } from '@/api'
 import { useMessage } from '@/composables/useMessage'
+import ScoreManagePanel from './ScoreManagePanel.vue'
 
 const router = useRouter()
 const events = ref([])
@@ -321,12 +237,6 @@ const showEventConfig = ref(false)
 
 const managedScores = ref([])
 const managedScoresLoading = ref(false)
-const activeManageBowType = ref('')
-const managedOriginalMap = ref({})
-const savingScoreIds = ref(new Set())
-const showModifiedOnly = ref(false)
-const batchSavingCurrentTab = ref(false)
-const manageNameKeyword = ref('')
 
 // 字典数据
 const bowTypes = ref([])
@@ -355,72 +265,6 @@ const duplicateScoreCount = computed(() => batchScores.value.filter(item => item
 const inFileDuplicateScoreCount = computed(() => batchScores.value.filter(item => item.__valid && item.__duplicate_in_file).length)
 const inFileDuplicateToRemoveCount = computed(() => batchScores.value.filter(item => item.__valid && item.__duplicate_in_file_to_remove).length)
 const existingDuplicateScoreCount = computed(() => batchScores.value.filter(item => item.__valid && item.__duplicate_with_existing).length)
-const managedBowTabs = computed(() => {
-  const bowSet = new Set((managedScores.value || []).map(item => item.bow_type))
-  const tabs = bowTypes.value.filter(item => bowSet.has(item.code))
-  return tabs
-})
-const currentTabManagedScores = computed(() => {
-  if (!activeManageBowType.value) return []
-  return managedScores.value.filter(item => item.bow_type === activeManageBowType.value)
-})
-const modifiedCurrentTabCount = computed(() => {
-  return currentTabManagedScores.value.filter(item => isManagedScoreModified(item)).length
-})
-const filteredManagedScores = computed(() => {
-  if (!activeManageBowType.value) return []
-  const keyword = (manageNameKeyword.value || '').trim().toLowerCase()
-  const currentTabScores = managedScores.value.filter(item => {
-    if (item.bow_type !== activeManageBowType.value) return false
-    if (showModifiedOnly.value && !isManagedScoreModified(item)) return false
-    if (keyword && !(item.name || '').toLowerCase().includes(keyword)) return false
-    return true
-  })
-
-  // 默认排序：距离(大到小)、赛制、排名
-  return [...currentTabScores].sort((a, b) => {
-    const compareText = (left, right) => (left || '').localeCompare((right || ''), 'zh-CN')
-    const compareNumber = (left, right) => Number(left || 0) - Number(right || 0)
-    const parseDistance = (value) => {
-      const match = String(value || '').match(/\d+/)
-      return match ? Number(match[0]) : 0
-    }
-
-    const byDistanceDesc = parseDistance(b.distance) - parseDistance(a.distance)
-    if (byDistanceDesc !== 0) return byDistanceDesc
-
-    const byFormat = compareText(a.format, b.format)
-    if (byFormat !== 0) return byFormat
-
-    const byRank = compareNumber(a.rank, b.rank)
-    return byRank
-  })
-})
-
-const normalizeManagedScore = (score = {}) => ({
-  name: (score.name || '').trim(),
-  club: (score.club || '').trim(),
-  bow_type: score.bow_type || '',
-  distance: score.distance || '',
-  format: score.format || '',
-  rank: Number(score.rank || 0)
-})
-
-const isManagedScoreModified = (score) => {
-  const original = managedOriginalMap.value[score.id]
-  if (!original) return false
-
-  const currentNormalized = normalizeManagedScore(score)
-  const originalNormalized = normalizeManagedScore(original)
-  return [
-    'name',
-    'club',
-    'bow_type',
-    'distance',
-    'format',
-    'rank'
-  ].some(key => currentNormalized[key] !== originalNormalized[key])
-}
 
 // 获取弓种标签
 const getBowTypeLabel = (type) => {
@@ -515,19 +359,9 @@ const loadEvents = async () => {
   }
 }
 
-const snapshotManagedScores = () => {
-  const snapshot = {}
-  managedScores.value.forEach(item => {
-    snapshot[item.id] = { ...item }
-  })
-  managedOriginalMap.value = snapshot
-}
-
 const loadManagedScores = async () => {
   if (!selectedEventId.value) {
     managedScores.value = []
-    managedOriginalMap.value = {}
-    activeManageBowType.value = ''
     return
   }
 
@@ -566,129 +400,17 @@ const loadManagedScores = async () => {
       })
     })
     managedScores.value = Array.from(uniqById.values())
-    snapshotManagedScores()
-
-    const tabs = managedBowTabs.value
-    if (tabs.length > 0) {
-      const hasCurrent = tabs.some(item => item.code === activeManageBowType.value)
-      activeManageBowType.value = hasCurrent ? activeManageBowType.value : tabs[0].code
-    } else {
-      activeManageBowType.value = ''
-    }
   } catch (error) {
     console.error('加载成绩管理数据失败:', error)
-    pageMsg.errorMsg.value = '加载成绩失败'
+    pageMsg.show('error', '加载成绩失败')
     managedScores.value = []
-    managedOriginalMap.value = {}
-    activeManageBowType.value = ''
   } finally {
     managedScoresLoading.value = false
   }
 }
 
-const validateManagedScore = (score) => {
-  if (!score.name || !score.name.trim()) return '姓名不能为空'
-  if (!score.bow_type) return '请选择弓种'
-  if (!score.distance) return '请选择距离'
-  if (!score.format) return '请选择赛制'
-  if (!Number.isInteger(Number(score.rank)) || Number(score.rank) < 1) return '排名必须是正整数'
-  return ''
-}
-
-const saveManagedScore = async (score) => {
-  const validationMsg = validateManagedScore(score)
-  if (validationMsg) {
-    pageMsg.errorMsg.value = `成绩 ID ${score.id}：${validationMsg}`
-    return false
-  }
-
-  const set = new Set(savingScoreIds.value)
-  set.add(score.id)
-  savingScoreIds.value = set
-  pageMsg.errorMsg.value = ''
-
-  try {
-    const payload = {
-      name: score.name.trim(),
-      club: score.club?.trim() ?? '',
-      bow_type: score.bow_type,
-      distance: score.distance,
-      format: score.format,
-      rank: Number(score.rank)
-    }
-    const updated = await scoreAPI.update(score.id, payload)
-    const idx = managedScores.value.findIndex(item => item.id === score.id)
-    if (idx >= 0) {
-      managedScores.value[idx] = {
-        id: updated.id,
-        event_id: updated.event_id,
-        name: updated.name || '',
-        club: updated.club || '',
-        bow_type: updated.bow_type || '',
-        distance: updated.distance || '',
-        format: updated.format || '',
-        rank: Number(updated.rank || 0)
-      }
-    }
-    snapshotManagedScores()
-    pageMsg.successMsg.value = `成绩 ID ${score.id} 保存成功`
-    return true
-  } catch (error) {
-    pageMsg.errorMsg.value = error.detail || error.message || '保存失败，请重试'
-    console.error('保存成绩失败:', error)
-    return false
-  } finally {
-    const nextSet = new Set(savingScoreIds.value)
-    nextSet.delete(score.id)
-    savingScoreIds.value = nextSet
-  }
-}
-
-const saveCurrentTabModifiedScores = async () => {
-  const changedScores = currentTabManagedScores.value.filter(item => isManagedScoreModified(item))
-  if (changedScores.length === 0) {
-    pageMsg.errorMsg.value = '当前弓种没有待保存的修改'
-    return
-  }
-
-  batchSavingCurrentTab.value = true
-  pageMsg.errorMsg.value = ''
-  pageMsg.successMsg.value = ''
-
-  let successCount = 0
-  const failedItems = []
-
-  for (const score of changedScores) {
-    const validationMsg = validateManagedScore(score)
-    if (validationMsg) {
-      failedItems.push(`ID ${score.id}：${validationMsg}`)
-      continue
-    }
-
-    const ok = await saveManagedScore(score)
-    if (ok) {
-      successCount += 1
-    } else {
-      failedItems.push(`ID ${score.id}：保存失败`)
-    }
-  }
-
-  if (failedItems.length > 0) {
-    pageMsg.errorMsg.value = `批量保存完成，成功 ${successCount} 条，失败 ${failedItems.length} 条\n${failedItems.join('\n')}`
-  } else {
-    pageMsg.successMsg.value = `批量保存成功，共 ${successCount} 条`
-  }
-
-  batchSavingCurrentTab.value = false
-}
-
-const resetManagedScore = (scoreId) => {
-  const original = managedOriginalMap.value[scoreId]
-  if (!original) return
-  const idx = managedScores.value.findIndex(item => item.id === scoreId)
-  if (idx >= 0) {
-    managedScores.value[idx] = { ...original }
-  }
+const onManageMessage = (type, text) => {
+  pageMsg.show(type, text)
 }
 
 // 赛事选择
@@ -697,8 +419,6 @@ const onEventSelected = async () => {
     selectedEvent.value = null
     showEventConfig.value = false
     managedScores.value = []
-    managedOriginalMap.value = {}
-    activeManageBowType.value = ''
     return
   }
 
