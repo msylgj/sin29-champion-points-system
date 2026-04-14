@@ -58,10 +58,16 @@ docker-compose down
 后端:
 
 ```bash
+cd /home/msylgj/sin29-champion-points-system
+cp .env.example .env
+# 把 .env 里的 SECRET_KEY 改成你的 sha256 密文
+
 cd backend
 pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --port 8000
 ```
+
+后端会优先读取项目根目录 `.env` 中的 `DATABASE_URL`；如果未提供，则自动用 `DB_USER`、`DB_PASSWORD`、`DB_HOST`、`DB_PORT`、`DB_NAME` 组合出 PostgreSQL 连接串。
 
 前端:
 
@@ -91,6 +97,8 @@ echo -n '你的明文密码' | sha256sum | awk '{print $1}'
 ```
 
 将输出写入 `.env` 的 `SECRET_KEY`。
+
+`DEBUG` 支持 `true/false`、`1/0`、`debug/release` 等常见写法；建议在生产环境使用 `False`。
 
 ## API Docs（按当前实现）
 
@@ -146,4 +154,3 @@ echo -n '你的明文密码' | sha256sum | awk '{print $1}'
 - 快速启动与验收: [QUICK_START.md](QUICK_START.md)
 - 数据库结构: [DATABASE_DESIGN.md](DATABASE_DESIGN.md)
 - 积分计算实现: [backend/app/services/scoring_calculator.py](backend/app/services/scoring_calculator.py)
-
