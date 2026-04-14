@@ -194,7 +194,6 @@
         :bow-types="bowTypes"
         :distances="distances"
         :competition-formats="competitionFormats"
-        @message="onManageMessage"
       />
     </div>
 
@@ -409,9 +408,6 @@ const loadManagedScores = async () => {
   }
 }
 
-const onManageMessage = (type, text) => {
-  pageMsg.show(type, text)
-}
 
 // 赛事选择
 const onEventSelected = async () => {

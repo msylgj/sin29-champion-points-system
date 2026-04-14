@@ -105,12 +105,20 @@
         </table>
       </div>
     </div>
+
+    <div v-if="manageMsg.successMsg.value" class="success-message">
+      {{ manageMsg.successMsg.value }}
+    </div>
+    <div v-if="manageMsg.errorMsg.value" class="error-message">
+      {{ manageMsg.errorMsg.value }}
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { scoreAPI } from '@/api'
+import { useMessage } from '@/composables/useMessage'
 
 const props = defineProps({
   scores: { type: Array, required: true },
@@ -120,7 +128,7 @@ const props = defineProps({
   competitionFormats: { type: Array, required: true }
 })
 
-const emit = defineEmits(['message'])
+const manageMsg = useMessage()
 
 const activeBowType = ref('')
 const originalMap = ref({})
@@ -220,7 +228,7 @@ const validate = (score) => {
 const saveScore = async (score) => {
   const msg = validate(score)
   if (msg) {
-    emit('message', 'error', `成绩 ID ${score.id}：${msg}`)
+    manageMsg.show('error', `成绩 ID ${score.id}：${msg}`)
     return false
   }
 
@@ -252,10 +260,10 @@ const saveScore = async (score) => {
       })
     }
     snapshot()
-    emit('message', 'success', `成绩 ID ${score.id} 保存成功`)
+    manageMsg.show('success', `成绩 ID ${score.id} 保存成功`)
     return true
   } catch (error) {
-    emit('message', 'error', error.detail || error.message || '保存失败，请重试')
+    manageMsg.show('error', error.detail || error.message || '保存失败，请重试')
     return false
   } finally {
     const next = new Set(savingIds.value)
@@ -283,9 +291,9 @@ const confirmDeleteScore = async (scoreId) => {
     next.delete(scoreId)
     deletedIds.value = next
     delete originalMap.value[scoreId]
-    emit('message', 'success', `成绩 ID ${scoreId} 已删除`)
+    manageMsg.show('success', `成绩 ID ${scoreId} 已删除`)
   } catch (error) {
-    emit('message', 'error', error.detail || error.message || '删除失败，请重试')
+    manageMsg.show('error', error.detail || error.message || '删除失败，请重试')
   } finally {
     const next = new Set(savingIds.value)
     next.delete(scoreId)
@@ -297,7 +305,7 @@ const saveAllModified = async () => {
   const deleted = currentTabScores.value.filter(item => deletedIds.value.has(item.id))
   const changed = currentTabScores.value.filter(item => !deletedIds.value.has(item.id) && isModified(item))
   if (changed.length === 0 && deleted.length === 0) {
-    emit('message', 'error', '当前弓种没有待保存的修改')
+    manageMsg.show('error', '当前弓种没有待保存的修改')
     return
   }
 
@@ -337,9 +345,9 @@ const saveAllModified = async () => {
   if (deleteCount > 0) parts.push(`删除 ${deleteCount} 条`)
 
   if (failed.length > 0) {
-    emit('message', 'error', `批量操作完成：${parts.join('，')}，失败 ${failed.length} 条\n${failed.join('\n')}`)
+    manageMsg.show('error', `批量操作完成：${parts.join('，')}，失败 ${failed.length} 条\n${failed.join('\n')}`)
   } else {
-    emit('message', 'success', `批量操作成功：${parts.join('，')}`)
+    manageMsg.show('success', `批量操作成功：${parts.join('，')}`)
   }
   batchSaving.value = false
 }

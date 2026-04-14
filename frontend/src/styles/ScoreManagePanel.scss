@@ -209,3 +209,50 @@
     text-decoration: none;
   }
 }
+
+.success-message {
+  position: fixed;
+  bottom: 90px;
+  left: 15px;
+  right: 15px;
+  padding: 12px 15px;
+  background: #2ed573;
+  color: white;
+  border-radius: 6px;
+  font-size: 14px;
+  animation: slideUp 0.3s ease;
+  max-height: 150px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.error-message {
+  position: fixed;
+  bottom: 90px;
+  left: 15px;
+  right: 15px;
+  padding: 12px 15px;
+  background: #ff4757;
+  color: white;
+  border-radius: 6px;
+  font-size: 14px;
+  animation: slideUp 0.3s ease;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
