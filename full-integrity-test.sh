@@ -161,6 +161,13 @@ step "前端 lint 检查"
 )
 ok "前端 lint 通过"
 
+step "前端测试"
+(
+  cd "$FRONTEND_DIR"
+  npm run test:run
+)
+ok "前端测试通过"
+
 step "前端构建测试"
 (
   cd "$FRONTEND_DIR"
