@@ -128,7 +128,7 @@ const props = defineProps({
   competitionFormats: { type: Array, required: true }
 })
 
-const manageMsg = useMessage()
+const manageMsg = useMessage(5000)
 
 const activeBowType = ref('')
 const originalMap = ref({})
@@ -226,6 +226,7 @@ const validate = (score) => {
 }
 
 const saveScore = async (score) => {
+  manageMsg.clear()
   const msg = validate(score)
   if (msg) {
     manageMsg.show('error', `成绩 ID ${score.id}：${msg}`)
@@ -279,6 +280,7 @@ const markDelete = (scoreId) => {
 }
 
 const confirmDeleteScore = async (scoreId) => {
+  manageMsg.clear()
   const set = new Set(savingIds.value)
   set.add(scoreId)
   savingIds.value = set
@@ -302,6 +304,7 @@ const confirmDeleteScore = async (scoreId) => {
 }
 
 const saveAllModified = async () => {
+  manageMsg.clear()
   const deleted = currentTabScores.value.filter(item => deletedIds.value.has(item.id))
   const changed = currentTabScores.value.filter(item => !deletedIds.value.has(item.id) && isModified(item))
   if (changed.length === 0 && deleted.length === 0) {
