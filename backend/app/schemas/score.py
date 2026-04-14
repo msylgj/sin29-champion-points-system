@@ -5,6 +5,28 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime
 from typing import Optional
 
+VALID_BOW_TYPES = ['recurve', 'compound', 'traditional', 'longbow', 'barebow']
+VALID_DISTANCES = ['10m', '18m', '30m', '50m', '70m']
+VALID_FORMATS = ['ranking', 'elimination', 'mixed_doubles', 'team']
+
+
+def _validate_bow_type(value: str) -> str:
+    if value not in VALID_BOW_TYPES:
+        raise ValueError(f'弓种必须是 {VALID_BOW_TYPES}')
+    return value
+
+
+def _validate_distance(value: str) -> str:
+    if value not in VALID_DISTANCES:
+        raise ValueError(f'距离必须是 {VALID_DISTANCES}')
+    return value
+
+
+def _validate_format(value: str) -> str:
+    if value not in VALID_FORMATS:
+        raise ValueError(f'比赛类型必须是 {VALID_FORMATS}')
+    return value
+
 
 class ScoreBase(BaseModel):
     """成绩基础数据"""
@@ -18,24 +40,15 @@ class ScoreBase(BaseModel):
 
     @field_validator('bow_type')
     def validate_bow_type(cls, v):
-        valid = ['recurve', 'compound', 'traditional', 'longbow', 'barebow']
-        if v not in valid:
-            raise ValueError(f'弓种必须是 {valid}')
-        return v
+        return _validate_bow_type(v)
 
     @field_validator('distance')
     def validate_distance(cls, v):
-        valid = ['10m', '18m', '30m', '50m', '70m']
-        if v not in valid:
-            raise ValueError(f'距离必须是 {valid}')
-        return v
+        return _validate_distance(v)
 
     @field_validator('format')
     def validate_format(cls, v):
-        valid = ['ranking', 'elimination', 'mixed_doubles', 'team']
-        if v not in valid:
-            raise ValueError(f'比赛类型必须是 {valid}')
-        return v
+        return _validate_format(v)
 
 
 class ScoreCreate(ScoreBase):
@@ -51,6 +64,24 @@ class ScoreUpdate(BaseModel):
     distance: Optional[str] = None
     format: Optional[str] = None
     rank: Optional[int] = Field(None, ge=1)
+
+    @field_validator('bow_type')
+    def validate_bow_type(cls, v):
+        if v is None:
+            return v
+        return _validate_bow_type(v)
+
+    @field_validator('distance')
+    def validate_distance(cls, v):
+        if v is None:
+            return v
+        return _validate_distance(v)
+
+    @field_validator('format')
+    def validate_format(cls, v):
+        if v is None:
+            return v
+        return _validate_format(v)
 
 
 class ScoreRead(ScoreBase):

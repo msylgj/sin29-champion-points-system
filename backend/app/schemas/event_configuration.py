@@ -3,7 +3,7 @@
 """
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 
 class EventConfigurationBase(BaseModel):
@@ -27,9 +27,9 @@ class EventConfigurationCreate(BaseModel):
 
 class EventConfigurationUpdate(BaseModel):
     """更新赛事配置请求"""
-    individual_participant_count: int = Field(0, ge=0)
-    mixed_doubles_team_count: int = Field(0, ge=0)
-    team_count: int = Field(0, ge=0)
+    individual_participant_count: Optional[int] = Field(None, ge=0)
+    mixed_doubles_team_count: Optional[int] = Field(None, ge=0)
+    team_count: Optional[int] = Field(None, ge=0)
 
 
 class EventConfigurationRead(EventConfigurationBase):
