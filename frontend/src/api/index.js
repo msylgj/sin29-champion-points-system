@@ -64,6 +64,7 @@ export const scoreAPI = {
 
 // ==================== 赛事 API ====================
 export const eventAPI = {
+  getYears: () => api.get('/events/years'),
   getList: (params = {}) => api.get('/events', { params }),
   getDetail: (id) => api.get(`/events/${id}`),
   createWithConfigs: (data) => api.post('/events/with-configs', data)

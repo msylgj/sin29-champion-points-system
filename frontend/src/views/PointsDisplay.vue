@@ -62,8 +62,8 @@
           <label for="club-filter">俱乐部</label>
           <select v-model="selectedClub" id="club-filter" class="filter-input">
             <option value="">全部俱乐部</option>
-            <option v-for="club in availableClubs" :key="club" :value="club">
-              {{ club || '（无俱乐部）' }}
+            <option v-for="club in availableClubs" :key="club.value" :value="club.value">
+              {{ club.label }}
             </option>
           </select>
         </div>
@@ -225,6 +225,7 @@ const pageMsg = useMessage(5000)
 const yearLoadFailed = ref(false)
 const dictionaryLoadFailed = ref(false)
 const rankingLoadFailed = ref(false)
+const NO_CLUB_FILTER = '__NO_CLUB__'
 
 // 从排名数据中提取可用的俱乐部列表
 const availableClubs = computed(() => {
@@ -236,7 +237,10 @@ const availableClubs = computed(() => {
     if (!a) return 1
     if (!b) return -1
     return a.localeCompare(b, 'zh-CN')
-  })
+  }).map(club => ({
+    value: club === '' ? NO_CLUB_FILTER : club,
+    label: club || '（无俱乐部）'
+  }))
 })
 
 // 根据姓名搜索和俱乐部筛选过滤排名
@@ -249,7 +253,8 @@ const filteredRanking = computed(() => {
   const club = selectedClub.value
   return ranking.value.filter(athlete => {
     if (keyword && !(athlete.name || '').toLowerCase().includes(keyword)) return false
-    if (club !== '' && (athlete.club || '') !== club) return false
+    if (club === NO_CLUB_FILTER && (athlete.club || '') !== '') return false
+    if (club !== '' && club !== NO_CLUB_FILTER && (athlete.club || '') !== club) return false
     return true
   })
 })
@@ -276,18 +281,8 @@ const getFormatLabel = (format) => {
 const initYears = async () => {
   pageMsg.clear()
   try {
-    const response = await eventAPI.getList({ page_size: 100 })
-    const years = new Set()
-    
-    if (response.items && Array.isArray(response.items)) {
-      response.items.forEach(event => {
-        if (event.year) {
-          years.add(event.year)
-        }
-      })
-    }
-    
-    availableYears.value = Array.from(years).sort((a, b) => b - a)
+    const response = await eventAPI.getYears()
+    availableYears.value = Array.isArray(response.items) ? response.items : []
     
     // 选择第一个可用的年份
     if (availableYears.value.length > 0) {
@@ -380,7 +375,9 @@ const exportToExcel = async () => {
 
   // 生成文件名
   const bowTypeLabel = bowTypes.value.find(b => b.code === selectedBowType.value)?.name || selectedBowType.value
-  const clubSuffix = selectedClub.value ? `_${selectedClub.value}` : ''
+  const clubSuffix = selectedClub.value === NO_CLUB_FILTER
+    ? '_无俱乐部'
+    : (selectedClub.value ? `_${selectedClub.value}` : '')
   const filename = `${selectedYear.value}年${bowTypeLabel}积分排名${clubSuffix}.xlsx`
 
   // 导出文件

@@ -93,6 +93,17 @@ def test_scores_list_accepts_valid_admin_token():
     assert response.json()['items'] == []
 
 
+def test_event_years_endpoint_is_public_and_sorted():
+    reset_database()
+    seed_ranking_data()
+    client = TestClient(app)
+
+    response = client.get('/api/events/years')
+
+    assert response.status_code == 200
+    assert response.json()['items'] == [2024, 2023]
+
+
 def test_annual_ranking_filters_year_and_aggregates_points():
     reset_database()
     seed_ranking_data()

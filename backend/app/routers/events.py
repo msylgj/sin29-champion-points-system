@@ -14,6 +14,15 @@ from app.security import verify_admin_token
 router = APIRouter(prefix="/api/events", tags=["赛事管理"])
 
 
+@router.get("/years", summary="获取可用赛事年度")
+def list_event_years(db: Session = Depends(get_db)):
+    """公开返回已有赛事年度列表，供积分展示页筛选使用"""
+    rows = db.query(Event.year).distinct().order_by(Event.year.desc()).all()
+    return {
+        "items": [item[0] for item in rows if item[0] is not None]
+    }
+
+
 @router.post("/with-configs", summary="创建赛事及其配置")
 def create_event_with_configs(event_data: CreateEventWithConfigs, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
     """创建赛事并同时添加配置"""
