@@ -878,4 +878,4 @@ onMounted(() => {
 </script>
 
 
-<style scoped lang="scss" src="./ScoreImport.scss" />
+<style scoped lang="scss" src="@/styles/ScoreImport.scss" />

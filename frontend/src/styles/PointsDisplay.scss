@@ -1,0 +1,547 @@
+.points-display-page {
+  padding-bottom: 100px;
+  background-color: #f5f5f5;
+}
+
+.page-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 30px 20px 20px;
+  margin-bottom: 20px;
+
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+  .header-title-wrap {
+    flex: 1;
+    text-align: center;
+  }
+
+  h1 {
+    margin: 0 0 5px;
+    font-size: 28px;
+    font-weight: 600;
+  }
+
+  .subtitle {
+    margin: 0;
+    opacity: 0.9;
+    font-size: 14px;
+  }
+
+  .btn-manage {
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+    white-space: nowrap;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.3);
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    &:active {
+      transform: scale(0.95);
+    }
+  }
+
+  .header-spacer {
+    width: 88px;
+    height: 1px;
+    flex-shrink: 0;
+  }
+}
+
+.display-container {
+  padding: 0 15px;
+}
+
+.filters-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+
+  .filter-group {
+    background: white;
+    padding: 12px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 6px;
+    }
+
+    .filter-input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+
+      &:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+    }
+  }
+}
+
+.ranking-section {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 40px 20px;
+
+  .spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid #f0f0f0;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    margin: 0 auto 10px;
+    animation: spin 1s linear infinite;
+  }
+
+  p {
+    color: #999;
+    font-size: 14px;
+  }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+  font-size: 14px;
+}
+
+.ranking-content {
+  .stats-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+
+    .stat-item {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 15px;
+      border-radius: 6px;
+      text-align: center;
+
+      .stat-label {
+        display: block;
+        font-size: 12px;
+        opacity: 0.9;
+        margin-bottom: 5px;
+      }
+
+      .stat-value {
+        display: block;
+        font-size: 18px;
+        font-weight: 600;
+      }
+    }
+  }
+
+  .ranking-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    table-layout: fixed;
+
+    thead {
+      background: #f9f9f9;
+      border-bottom: 2px solid #e0e0e0;
+
+      th {
+        padding: 12px;
+        text-align: left;
+        font-weight: 600;
+        font-size: 13px;
+        color: #666;
+
+        &.col-rank {
+          width: 60px;
+          text-align: center;
+        }
+
+        &.col-name {
+          width: 20%;
+        }
+
+        &.col-club {
+          width: 30%;
+        }
+
+        &.col-points {
+          width: 90px;
+          text-align: right;
+        }
+
+        &.col-count {
+          width: 90px;
+          text-align: center;
+        }
+      }
+    }
+
+    tbody tr {
+      border-bottom: 1px solid #f0f0f0;
+
+      &.highlight {
+        background: #f4f8ff;
+        
+        .col-rank {
+          font-weight: 600;
+          color: #1f4ea3;
+        }
+
+        .rank-badge {
+          background: linear-gradient(135deg, #edf4ff 0%, #cfe1ff 100%);
+          color: #1a3d80;
+          border: 1px solid #9dbaf0;
+          font-weight: 600;
+          box-shadow: 0 2px 6px rgba(39, 94, 187, 0.2);
+        }
+      }
+
+      &:hover {
+        background: #fafafa;
+      }
+
+      td {
+        padding: 12px;
+        font-size: 13px;
+        color: #333;
+
+        &.col-rank {
+          text-align: center;
+          width: 60px;
+
+          .rank-badge {
+            display: inline-block;
+            min-width: 30px;
+            padding: 4px 8px;
+            background: linear-gradient(135deg, #f4f8ff 0%, #dbe8ff 100%);
+            color: #275ebb;
+            border: 1px solid #b8cff5;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: 600;
+          }
+        }
+
+        &.col-name {
+          font-weight: 500;
+          color: #333;
+        }
+
+        &.col-club {
+          color: #999;
+          font-size: 12px;
+        }
+
+        &.col-points {
+          font-weight: 600;
+          color: #667eea;
+          text-align: right;
+        }
+
+        &.col-count {
+          text-align: center;
+          color: #999;
+        }
+      }
+    }
+  }
+}
+
+.detailed-rankings {
+  margin-top: 30px;
+  border-top: 2px solid #e0e0e0;
+  padding-top: 20px;
+
+  .section-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    color: #333;
+  }
+
+  .athlete-card {
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 12px;
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e0e0e0;
+
+      .rank-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        .rank-number {
+          background: #f5f6f8;
+          color: #6f7785;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #d8dde6;
+          font-weight: 700;
+          font-size: 14px;
+          flex-shrink: 0;
+
+          &.rank-first {
+            background: linear-gradient(135deg, #fff9e5 0%, #ffe4a3 100%);
+            color: #7a4a00;
+            border-color: #efc469;
+            box-shadow: 0 3px 10px rgba(173, 119, 22, 0.24);
+          }
+
+          &.rank-second {
+            background: linear-gradient(135deg, #f8fbff 0%, #dfe9f5 100%);
+            color: #41566f;
+            border-color: #b7c6d8;
+            box-shadow: 0 3px 10px rgba(102, 120, 143, 0.22);
+          }
+
+          &.rank-third {
+            background: linear-gradient(135deg, #fff3eb 0%, #f2c8ac 100%);
+            color: #6d3b25;
+            border-color: #d99d7a;
+            box-shadow: 0 3px 10px rgba(152, 90, 58, 0.22);
+          }
+        }
+
+        .name-info {
+          .name {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+          }
+
+          .club {
+            font-size: 12px;
+            color: #999;
+            margin-top: 2px;
+          }
+        }
+      }
+
+      .points-badge {
+        background: linear-gradient(135deg, #ffd89b 0%, #ffa502 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 13px;
+      }
+    }
+
+    .card-body {
+      .scores-list {
+        .score-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 8px 0;
+          font-size: 12px;
+          color: #666;
+          border-bottom: 1px dashed #f0f0f0;
+
+          &:last-child {
+            border-bottom: none;
+          }
+
+          .event-season {
+            flex: 1;
+            font-weight: 500;
+            color: #333;
+          }
+
+          .score-detail {
+            flex: 1;
+            text-align: center;
+          }
+
+          .rank {
+            width: 60px;
+            text-align: right;
+          }
+
+          .points {
+            width: 50px;
+            text-align: right;
+            font-weight: 600;
+            color: #667eea;
+          }
+        }
+      }
+    }
+  }
+}
+
+.action-bar {
+  display: flex;
+  gap: 10px;
+  padding: 20px 0;
+  justify-content: center;
+
+  .btn-export {
+    padding: 10px 20px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:hover {
+      background: #764ba2;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+  }
+}
+
+.auth-dialog-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 999;
+}
+
+.auth-dialog {
+  width: min(420px, 100%);
+  background: #fff;
+  border-radius: 10px;
+  padding: 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+
+  h3 {
+    margin: 0 0 8px;
+    font-size: 18px;
+    color: #333;
+  }
+
+  .auth-tip {
+    margin: 0 0 12px;
+    font-size: 13px;
+    color: #666;
+  }
+
+  .auth-input {
+    width: 100%;
+    border: 1px solid #d7deef;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .auth-error {
+    margin-top: 8px;
+    color: #d14343;
+    font-size: 12px;
+  }
+
+  .auth-actions {
+    margin-top: 14px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .btn-auth-cancel,
+  .btn-auth-submit {
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .btn-auth-cancel {
+    background: #eff1f7;
+    color: #444;
+  }
+
+  .btn-auth-submit {
+    background: #4d79ff;
+    color: #fff;
+  }
+
+  .btn-auth-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 480px) {
+  .filters-section {
+    grid-template-columns: 1fr;
+  }
+
+  .ranking-content .ranking-table {
+    font-size: 12px;
+
+    th, td {
+      padding: 8px;
+    }
+  }
+
+  .detailed-rankings .athlete-card {
+    padding: 10px;
+
+    .card-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+    }
+  }
+}
