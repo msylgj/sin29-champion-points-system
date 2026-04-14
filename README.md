@@ -105,33 +105,23 @@ echo -n '你的明文密码' | sha256sum | awk '{print $1}'
 ### 公开接口
 
 - `GET /`
-- `GET /api/health`
+- `POST /api/auth/login`
+- `GET /api/events/years`
 - `GET /api/scores/annual-ranking/{year}/{bow_type}`
-- `GET /api/scores/event/{event_id}/ranking?bow_type=&distance=&format=`
 - `GET /api/dictionaries`
-- `GET /api/dictionaries/bow-types`
-- `GET /api/dictionaries/distances`
-- `GET /api/dictionaries/competition-formats`
-- `GET /api/dictionaries/competition-groups`
 
 ### 需认证接口（管理）
 
 - 赛事
   - `GET /api/events`
   - `GET /api/events/{event_id}`
-  - `POST /api/events`
   - `POST /api/events/with-configs`
-  - `PUT /api/events/{event_id}`
-  - `DELETE /api/events/{event_id}`
 - 赛事配置
   - `POST /api/event-configurations`
-  - `GET /api/event-configurations/{config_id}`
-  - `GET /api/event-configurations/event/{event_id}`
   - `PUT /api/event-configurations/{config_id}`
   - `DELETE /api/event-configurations/{config_id}`
 - 成绩
   - `GET /api/scores`
-  - `GET /api/scores/{score_id}`
   - `PUT /api/scores/{score_id}`
   - `DELETE /api/scores/{score_id}`
   - `POST /api/scores/batch/import`

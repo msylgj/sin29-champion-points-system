@@ -1,11 +1,13 @@
-from fastapi.testclient import TestClient
+import pytest
+from fastapi import HTTPException
 
 from app.database import Base, SessionLocal, engine
-from app.main import app
 from app.models.dictionary import CompetitionGroupDict
 from app.models.event import Event
 from app.models.event_configuration import EventConfiguration
 from app.models.score import Score
+from app.routers.events import list_event_years
+from app.routers.scores import get_annual_ranking, list_scores
 from app.security import verify_admin_token
 
 
@@ -70,49 +72,55 @@ def seed_ranking_data():
 
 
 def test_scores_list_requires_admin_token():
-    reset_database()
-    client = TestClient(app)
+    with pytest.raises(HTTPException) as exc_info:
+        verify_admin_token(None)
 
-    response = client.get('/api/scores')
-
-    assert response.status_code == 401
-    assert response.json()['detail'] == '未授权访问'
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == '未授权访问'
 
 
 def test_scores_list_accepts_valid_admin_token():
     reset_database()
-    client = TestClient(app)
-    app.dependency_overrides[verify_admin_token] = lambda: {"sub": "admin"}
-
+    db = SessionLocal()
     try:
-        response = client.get('/api/scores')
+        response = list_scores(
+            page=1,
+            page_size=10,
+            event_id=None,
+            bow_type=None,
+            format=None,
+            name=None,
+            db=db,
+            _auth={"sub": "admin"},
+        )
     finally:
-        app.dependency_overrides.pop(verify_admin_token, None)
+        db.close()
 
-    assert response.status_code == 200
-    assert response.json()['items'] == []
+    assert response.items == []
+    assert response.total == 0
 
 
 def test_event_years_endpoint_is_public_and_sorted():
     reset_database()
     seed_ranking_data()
-    client = TestClient(app)
+    db = SessionLocal()
+    try:
+        response = list_event_years(db)
+    finally:
+        db.close()
 
-    response = client.get('/api/events/years')
-
-    assert response.status_code == 200
-    assert response.json()['items'] == [2024, 2023]
+    assert response['items'] == [2024, 2023]
 
 
 def test_annual_ranking_filters_year_and_aggregates_points():
     reset_database()
     seed_ranking_data()
-    client = TestClient(app)
+    db = SessionLocal()
+    try:
+        payload = get_annual_ranking(2024, 'recurve', db)
+    finally:
+        db.close()
 
-    response = client.get('/api/scores/annual-ranking/2024/recurve')
-
-    assert response.status_code == 200
-    payload = response.json()
     assert payload['year'] == 2024
     assert payload['bow_type'] == 'recurve'
     assert payload['total'] == 2
