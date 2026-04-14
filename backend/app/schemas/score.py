@@ -1,7 +1,7 @@
 """
 成绩 Pydantic Schema - 简化版本
 """
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime
 from typing import Optional
 
@@ -59,8 +59,7 @@ class ScoreRead(ScoreBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ScoreList(BaseModel):

@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
@@ -6,12 +8,26 @@ from app.database import Base, engine
 
 settings = get_settings()
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """应用生命周期：启动时初始化数据库"""
+    try:
+        Base.metadata.create_all(engine)
+        print("✓ Database tables initialized successfully")
+    except Exception as e:
+        print(f"⚠ Error initializing database: {e}")
+
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
     description="射箭赛事积分统计系统 API",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -27,16 +43,6 @@ app.include_router(scores.router, tags=["成绩管理"])
 app.include_router(events.router, tags=["赛事管理"])
 app.include_router(event_configuration.router, tags=["赛事配置管理"])
 app.include_router(dictionary.router, tags=["字典管理"])
-
-
-@app.on_event("startup")
-async def startup_event():
-    """应用启动时初始化数据库"""
-    try:
-        Base.metadata.create_all(engine)
-        print("✓ Database tables initialized successfully")
-    except Exception as e:
-        print(f"⚠ Error initializing database: {e}")
 
 
 @app.get("/")

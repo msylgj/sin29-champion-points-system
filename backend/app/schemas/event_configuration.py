@@ -1,7 +1,7 @@
 """
 赛事配置 Pydantic Schema
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from typing import Literal
 
@@ -38,8 +38,7 @@ class EventConfigurationRead(EventConfigurationBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CreateEventWithConfigs(BaseModel):

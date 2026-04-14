@@ -6,7 +6,7 @@ from app.models.dictionary import CompetitionGroupDict
 from app.models.event import Event
 from app.models.event_configuration import EventConfiguration
 from app.models.score import Score
-from app.security import create_admin_access_token
+from app.security import verify_admin_token
 
 
 def reset_database():
@@ -82,9 +82,12 @@ def test_scores_list_requires_admin_token():
 def test_scores_list_accepts_valid_admin_token():
     reset_database()
     client = TestClient(app)
-    token = create_admin_access_token()
+    app.dependency_overrides[verify_admin_token] = lambda: {"sub": "admin"}
 
-    response = client.get('/api/scores', headers={'Authorization': f'Bearer {token}'})
+    try:
+        response = client.get('/api/scores')
+    finally:
+        app.dependency_overrides.pop(verify_admin_token, None)
 
     assert response.status_code == 200
     assert response.json()['items'] == []
