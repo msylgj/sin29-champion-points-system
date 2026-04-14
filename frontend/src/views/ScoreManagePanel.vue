@@ -124,17 +124,6 @@ const snapshot = () => {
   originalMap.value = map
 }
 
-watch(() => props.scores, () => {
-  snapshot()
-  const tabs = bowTabs.value
-  if (tabs.length > 0) {
-    const hasCurrent = tabs.some(item => item.code === activeBowType.value)
-    activeBowType.value = hasCurrent ? activeBowType.value : tabs[0].code
-  } else {
-    activeBowType.value = ''
-  }
-}, { immediate: true })
-
 const normalize = (score = {}) => ({
   name: (score.name || '').trim(),
   club: (score.club || '').trim(),
@@ -156,6 +145,17 @@ const bowTabs = computed(() => {
   const bowSet = new Set((props.scores || []).map(item => item.bow_type))
   return props.bowTypes.filter(item => bowSet.has(item.code))
 })
+
+watch(() => props.scores, () => {
+  snapshot()
+  const tabs = bowTabs.value
+  if (tabs.length > 0) {
+    const hasCurrent = tabs.some(item => item.code === activeBowType.value)
+    activeBowType.value = hasCurrent ? activeBowType.value : tabs[0].code
+  } else {
+    activeBowType.value = ''
+  }
+}, { immediate: true })
 
 const currentTabScores = computed(() => {
   if (!activeBowType.value) return []
