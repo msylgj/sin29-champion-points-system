@@ -148,9 +148,11 @@ class ScoreService:
         
         返回该弓种在该年度的所有选手及其总积分排名
         """
-        # 获取该年度该弓种的所有成绩
-        scores = db.query(Score).filter(
-            Score.bow_type == bow_type
+        score_rows = db.query(Score, Event).join(
+            Event, Event.id == Score.event_id
+        ).filter(
+            Score.bow_type == bow_type,
+            Event.year == year,
         ).all()
 
         # 预加载组别配置
@@ -159,28 +161,21 @@ class ScoreService:
             (row.bow_type, row.distance): row.group_code
             for row in group_rows
         }
-        
-        # 按赛事过滤年度
-        filtered_scores = []
-        for score in scores:
-            event = db.query(Event).filter(Event.id == score.event_id).first()
-            if event and event.year == year:
-                filtered_scores.append(score)
+
+        event_ids = {score.event_id for score, _event in score_rows}
+        config_rows = db.query(EventConfiguration).filter(
+            EventConfiguration.event_id.in_(event_ids)
+        ).all() if event_ids else []
+        config_map = {
+            (config.event_id, config.bow_type, config.distance): config
+            for config in config_rows
+        }
         
         # 按选手+俱乐部聚合积分
         athlete_points = {}  # key: (name, club), value: dict
-        
-        for score in filtered_scores:
-            event = db.query(Event).filter(Event.id == score.event_id).first()
-            
-            # 获取赛事配置以获取参赛人数
-            config = db.query(EventConfiguration).filter(
-                and_(
-                    EventConfiguration.event_id == score.event_id,
-                    EventConfiguration.bow_type == score.bow_type,
-                    EventConfiguration.distance == score.distance
-                )
-            ).first()
+
+        for score, event in score_rows:
+            config = config_map.get((score.event_id, score.bow_type, score.distance))
             
             # 如果没有配置，使用默认人数（8）而不是跳过
             participant_count = ScoreService._get_participant_count_for_format(config, score.format) if config else 8
