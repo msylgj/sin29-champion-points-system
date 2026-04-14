@@ -154,6 +154,13 @@ if [[ ! -d "$FRONTEND_DIR/node_modules" ]]; then
 fi
 ok "前端依赖已就绪"
 
+step "前端 lint 检查"
+(
+  cd "$FRONTEND_DIR"
+  npm run lint
+)
+ok "前端 lint 通过"
+
 step "前端构建测试"
 (
   cd "$FRONTEND_DIR"

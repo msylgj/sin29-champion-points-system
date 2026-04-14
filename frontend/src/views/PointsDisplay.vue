@@ -96,7 +96,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(athlete, index) in filteredRanking" :key="`${athlete.name}-${athlete.club}`" :class="{ 'highlight': athlete.highlight }">
+              <tr v-for="athlete in filteredRanking" :key="`${athlete.name}-${athlete.club}`" :class="{ 'highlight': athlete.highlight }">
                 <td class="col-rank">
                   <span class="rank-badge" :class="{ 'top-badge': athlete.highlight }">
                     {{ athlete.ranking }}
@@ -113,7 +113,7 @@
           <!-- 详细信息 -->
           <div class="detailed-rankings">
             <h3 class="section-title">{{ hasActiveFilter ? '详细信息' : '前8名详细信息' }}</h3>
-            <div v-for="(athlete, index) in hasActiveFilter ? filteredRanking : filteredRanking.slice(0, 8)" :key="`${athlete.name}-${athlete.club}`" class="athlete-card">
+            <div v-for="athlete in hasActiveFilter ? filteredRanking : filteredRanking.slice(0, 8)" :key="`${athlete.name}-${athlete.club}`" class="athlete-card">
               <div class="card-header">
                 <div class="rank-info">
                   <span class="rank-number" :class="getTopRankClass(athlete.ranking)">{{ athlete.ranking }}</span>

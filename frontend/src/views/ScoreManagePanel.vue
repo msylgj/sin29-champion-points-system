@@ -327,7 +327,7 @@ const saveAllModified = async () => {
       deletedIds.value = next
       delete originalMap.value[score.id]
       deleteCount += 1
-    } catch (error) {
+    } catch {
       failed.push(`ID ${score.id}：删除失败`)
     }
   }

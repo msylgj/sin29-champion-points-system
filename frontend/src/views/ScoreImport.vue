@@ -351,7 +351,7 @@ const loadEvents = async () => {
     events.value = response.items || []
     await selectLatestEvent()
     // 如果列表为空，显示友好提示
-  } catch (error) {
+  } catch {
     events.value = []
     selectedEventId.value = ''
     selectedEvent.value = null
