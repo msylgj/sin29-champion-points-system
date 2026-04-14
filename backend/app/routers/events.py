@@ -26,6 +26,7 @@ def list_event_years(db: Session = Depends(get_db)):
 @router.post("/with-configs", summary="创建赛事及其配置")
 def create_event_with_configs(event_data: CreateEventWithConfigs, db: Session = Depends(get_db), _auth: dict = Depends(verify_admin_token)):
     """创建赛事并同时添加配置"""
+    configs_with_event_id = []
     try:
         # 创建赛事
         existing = db.query(Event).filter(
@@ -42,17 +43,19 @@ def create_event_with_configs(event_data: CreateEventWithConfigs, db: Session = 
         db.flush()  # 获取event的ID但不提交
         
         # 添加配置 - 为每个配置添加 event_id
-        configs_with_event_id = []
         for config in event_data.configurations:
-            config_dict = config.dict()
-            config_dict['event_id'] = db_event.id
-            # 创建完整的配置模型用于数据库操作
-            full_config = EventConfigurationBase(**config_dict)
-            configs_with_event_id.append(full_config)
+            configs_with_event_id.append(EventConfigurationBase(
+                event_id=db_event.id,
+                bow_type=config.bow_type,
+                distance=config.distance,
+                individual_participant_count=config.individual_participant_count,
+                mixed_doubles_team_count=config.mixed_doubles_team_count,
+                team_count=config.team_count,
+            ))
         
         # 使用 service 批量创建
         for config in configs_with_event_id:
-            EventConfigurationService.create_configuration(db, config)
+            EventConfigurationService.create_configuration(db, config, commit=False)
         
         db.commit()
         db.refresh(db_event)
@@ -65,7 +68,11 @@ def create_event_with_configs(event_data: CreateEventWithConfigs, db: Session = 
             "updated_at": db_event.updated_at,
             "message": f"赛事及其 {len(configs_with_event_id)} 个配置已创建"
         }
+    except HTTPException:
+        db.rollback()
+        raise
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         db.rollback()
@@ -158,5 +165,4 @@ def list_events(
         "page": page,
         "page_size": page_size
     }
-
 

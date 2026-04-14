@@ -13,7 +13,12 @@ class EventConfigurationService:
     """赛事配置业务服务"""
 
     @staticmethod
-    def create_configuration(db: Session, config: EventConfigurationBase) -> EventConfiguration:
+    def create_configuration(
+        db: Session,
+        config: EventConfigurationBase,
+        *,
+        commit: bool = True
+    ) -> EventConfiguration:
         """创建赛事配置"""
         # 验证赛事是否存在
         event = db.query(Event).filter(Event.id == config.event_id).first()
@@ -40,7 +45,9 @@ class EventConfigurationService:
             team_count=config.team_count
         )
         db.add(db_config)
-        db.commit()
+        db.flush()
+        if commit:
+            db.commit()
         db.refresh(db_config)
         return db_config
 
@@ -75,4 +82,3 @@ class EventConfigurationService:
         db.delete(db_config)
         db.commit()
         return True
-
