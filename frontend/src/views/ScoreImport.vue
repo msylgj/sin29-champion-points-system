@@ -764,6 +764,101 @@ const onFileSelected = async (event) => {
   reader.readAsText(file)
 }
 
+// --- Excel 解析辅助函数 ---
+
+const FIELD_MAPPINGS = {
+  name: ['姓名', 'name', '名字', '选手', '参赛者'],
+  club: ['俱乐部', 'club', '箭馆', '队伍', '俱乐部名称'],
+  bow_type: ['弓种', 'bow_type', 'bow', '弓类', '弓的类型'],
+  distance: ['距离', 'distance', '比赛距离', '距离(m)', '距离m'],
+  format: ['赛制', 'format', '比赛', '赛制格式', '竞赛形式'],
+  rank: ['排名', 'rank', '名次', '成绩排名', 'rank号']
+}
+
+const REQUIRED_FIELDS = ['name', 'club', 'bow_type', 'distance', 'format', 'rank']
+
+const FIELD_LABELS = {
+  name: '姓名', club: '俱乐部', bow_type: '弓种',
+  distance: '距离', format: '赛制', rank: '排名'
+}
+
+const mapColumns = (headerRow) => {
+  const columnMapping = {}
+  for (const [fieldName, aliases] of Object.entries(FIELD_MAPPINGS)) {
+    for (let colIndex = 0; colIndex < headerRow.length; colIndex++) {
+      const headerValue = (headerRow[colIndex] || '').toString().trim().toLowerCase()
+      if (aliases.some(alias => headerValue === alias.toLowerCase())) {
+        columnMapping[fieldName] = colIndex
+        break
+      }
+    }
+  }
+  return columnMapping
+}
+
+const createValueToCodeMap = (dictArray) => {
+  const map = {}
+  if (Array.isArray(dictArray)) {
+    dictArray.forEach(item => {
+      if (item.name && item.code) {
+        map[item.name.toLowerCase().trim()] = item.code
+      }
+    })
+  }
+  return map
+}
+
+const convertToCode = (value, valueMap) => {
+  const trimmedValue = (value || '').toString().trim()
+  if (!trimmedValue) return trimmedValue
+  if (valueMap[trimmedValue.toLowerCase()]) {
+    return valueMap[trimmedValue.toLowerCase()]
+  }
+  for (const [, code] of Object.entries(valueMap)) {
+    if (code.toLowerCase() === trimmedValue.toLowerCase()) {
+      return code
+    }
+  }
+  return trimmedValue
+}
+
+const buildScoreUniqueKey = (item) => [
+  normalizeKeyPart(item.name),
+  normalizeKeyPart(item.club),
+  normalizeKeyPart(item.bow_type),
+  normalizeKeyPart(item.distance),
+  normalizeKeyPart(item.format)
+].join('|')
+
+const buildClubAutoFillMap = (existingScores) => {
+  const clubByNameAndBow = new Map()
+  ;(existingScores || []).forEach(item => {
+    const mappedClub = (item.club || '').toString().trim()
+    const mappedName = (item.name || '').toString().trim()
+    const mappedBow = (item.bow_type || '').toString().trim()
+    if (!mappedClub || !mappedName || !mappedBow) return
+    const key = [normalizeKeyPart(mappedName), normalizeKeyPart(mappedBow)].join('|')
+    if (!clubByNameAndBow.has(key)) {
+      clubByNameAndBow.set(key, mappedClub)
+    }
+  })
+  return clubByNameAndBow
+}
+
+const markInFileDuplicates = (scores, keyToIndexes) => {
+  keyToIndexes.forEach(indexes => {
+    if (indexes.length < 2) return
+    indexes.forEach((idx, order) => {
+      if (!scores[idx]) return
+      scores[idx].__duplicate_in_file = true
+      if (order > 0) {
+        scores[idx].__duplicate_in_file_to_remove = true
+        scores[idx].__duplicate = true
+      }
+    })
+  })
+}
+
 // 解析 Excel/CSV 数据
 const parseExcelData = (jsonData) => {
   parseMsg.clear()
@@ -773,118 +868,32 @@ const parseExcelData = (jsonData) => {
     return
   }
 
-  // 字段映射 - 支持多种列名变体
-  const fieldMappings = {
-    name: ['姓名', 'name', '名字', '选手', '参赛者'],
-    club: ['俱乐部', 'club', '箭馆', '队伍', '俱乐部名称'],
-    bow_type: ['弓种', 'bow_type', 'bow', '弓类', '弓的类型'],
-    distance: ['距离', 'distance', '比赛距离', '距离(m)', '距离m'],
-    format: ['赛制', 'format', '比赛', '赛制格式', '竞赛形式'],
-    rank: ['排名', 'rank', '名次', '成绩排名', 'rank号']
-  }
-
-  // 获取第一行作为列标题
   const headerRow = jsonData[0]
   if (!headerRow) {
     parseMsg.errorMsg.value = '无法读取列标题'
     return
   }
 
-  // 创建字段映射
-  const columnMapping = {}
-  const requiredFields = ['name', 'club', 'bow_type', 'distance', 'format', 'rank']
-
-  // 尝试匹配每个字段
-  for (const [fieldName, aliases] of Object.entries(fieldMappings)) {
-    for (let colIndex = 0; colIndex < headerRow.length; colIndex++) {
-      const headerValue = (headerRow[colIndex] || '').toString().trim().toLowerCase()
-      if (aliases.some(alias => headerValue === alias.toLowerCase())) {
-        columnMapping[fieldName] = colIndex
-        break
-      }
-    }
-  }
-
-  // 验证必需字段
-  const missingFields = requiredFields.filter(f => columnMapping[f] === undefined)
+  const columnMapping = mapColumns(headerRow)
+  const missingFields = REQUIRED_FIELDS.filter(f => columnMapping[f] === undefined)
   if (missingFields.length > 0) {
-    const fieldLabels = {
-      'name': '姓名',
-      'club': '俱乐部',
-      'bow_type': '弓种',
-      'distance': '距离',
-      'format': '赛制',
-      'rank': '排名'
-    }
-    const missingLabels = missingFields.map(f => fieldLabels[f]).join('、')
+    const missingLabels = missingFields.map(f => FIELD_LABELS[f]).join('、')
     parseMsg.errorMsg.value = `Excel 文件缺少必需字段：${missingLabels}。列标题应包括：姓名、俱乐部、弓种、距离、赛制、排名`
     return
-  }
-
-  // 创建字典值到代码的映射
-  const createValueToCodeMap = (dictArray) => {
-    const map = {}
-    if (Array.isArray(dictArray)) {
-      dictArray.forEach(item => {
-        if (item.name && item.code) {
-          map[item.name.toLowerCase().trim()] = item.code
-        }
-      })
-    }
-    return map
   }
 
   const bowTypeMap = createValueToCodeMap(bowTypes.value)
   const distanceMap = createValueToCodeMap(distances.value)
   const formatMap = createValueToCodeMap(competitionFormats.value)
 
-  // 转换字典值为代码
-  const convertToCode = (value, valueMap) => {
-    const trimmedValue = (value || '').toString().trim()
-    if (!trimmedValue) return trimmedValue
-
-    // 首先尝试直接匹配（用户输入的可能就是代码）
-    if (valueMap[trimmedValue.toLowerCase()]) {
-      return valueMap[trimmedValue.toLowerCase()]
-    }
-
-    // 然后尝试模糊匹配（如果输入是代码形式）
-    for (const [name, code] of Object.entries(valueMap)) {
-      if (code.toLowerCase() === trimmedValue.toLowerCase()) {
-        return code
-      }
-    }
-
-    // 如果都没匹配上，返回原值
-    return trimmedValue
-  }
-
   const bowCodeSet = new Set((bowTypes.value || []).map(item => item.code))
   const distanceCodeSet = new Set((distances.value || []).map(item => item.code))
   const formatCodeSet = new Set((competitionFormats.value || []).map(item => item.code))
   const existingScoreKeySet = new Set(
-    (managedScores.value || []).map(item => [
-      normalizeKeyPart(item.name),
-      normalizeKeyPart(item.club),
-      normalizeKeyPart(item.bow_type),
-      normalizeKeyPart(item.distance),
-      normalizeKeyPart(item.format)
-    ].join('|'))
+    (managedScores.value || []).map(item => buildScoreUniqueKey(item))
   )
 
-  const clubByNameAndBow = new Map()
-  ;(managedScores.value || []).forEach(item => {
-    const mappedClub = (item.club || '').toString().trim()
-    const mappedName = (item.name || '').toString().trim()
-    const mappedBow = (item.bow_type || '').toString().trim()
-    if (!mappedClub || !mappedName || !mappedBow) return
-
-    const key = [normalizeKeyPart(mappedName), normalizeKeyPart(mappedBow)].join('|')
-    if (!clubByNameAndBow.has(key)) {
-      clubByNameAndBow.set(key, mappedClub)
-    }
-  })
-
+  const clubByNameAndBow = buildClubAutoFillMap(managedScores.value)
   const parsedScoreKeyToIndexes = new Map()
 
   // 解析数据行
@@ -924,15 +933,9 @@ const parseExcelData = (jsonData) => {
     if (!format || !formatCodeSet.has(format)) rowErrors.push(`赛制无效：${format || '-'}`)
     if (!Number.isInteger(rank) || rank < 1) rowErrors.push('排名必须是正整数')
 
-    const scoreUniqueKey = [
-      normalizeKeyPart(name),
-      normalizeKeyPart(club),
-      normalizeKeyPart(bow_type),
-      normalizeKeyPart(distance),
-      normalizeKeyPart(format)
-    ].join('|')
+    const scoreUniqueKey = buildScoreUniqueKey({ name, club, bow_type, distance, format })
     const isDuplicate = rowErrors.length === 0 && existingScoreKeySet.has(scoreUniqueKey)
-    const parsedScoreItem = {
+    newScores.push({
       event_id: parseInt(selectedEventId.value),
       name,
       club: club || '',
@@ -946,8 +949,7 @@ const parseExcelData = (jsonData) => {
       __duplicate_in_file: false,
       __duplicate_in_file_to_remove: false,
       __duplicate_with_existing: isDuplicate
-    }
-    newScores.push(parsedScoreItem)
+    })
 
     if (rowErrors.length === 0) {
       const currentIndex = newScores.length - 1
@@ -958,17 +960,7 @@ const parseExcelData = (jsonData) => {
   }
 
   // 标记文件内重复：同一键出现多次时，仅保留第一条为非“移除”，其余标为“重复（将移除）”
-  parsedScoreKeyToIndexes.forEach(indexes => {
-    if (indexes.length < 2) return
-    indexes.forEach((idx, order) => {
-      if (!newScores[idx]) return
-      newScores[idx].__duplicate_in_file = true
-      if (order > 0) {
-        newScores[idx].__duplicate_in_file_to_remove = true
-        newScores[idx].__duplicate = true
-      }
-    })
-  })
+  markInFileDuplicates(newScores, parsedScoreKeyToIndexes)
 
   const inFileDuplicateCount = newScores.filter(item => item.__valid && item.__duplicate_in_file).length
 
@@ -993,37 +985,19 @@ const recalcDuplicateFlags = () => {
   const keyToIndexes = new Map()
   batchScores.value.forEach((item, idx) => {
     if (!item.__valid) return
-    const key = [
-      normalizeKeyPart(item.name),
-      normalizeKeyPart(item.club),
-      normalizeKeyPart(item.bow_type),
-      normalizeKeyPart(item.distance),
-      normalizeKeyPart(item.format)
-    ].join('|')
+    const key = buildScoreUniqueKey(item)
     const arr = keyToIndexes.get(key) || []
     arr.push(idx)
     keyToIndexes.set(key, arr)
   })
 
   const existingScoreKeySet = new Set(
-    (managedScores.value || []).map(item => [
-      normalizeKeyPart(item.name),
-      normalizeKeyPart(item.club),
-      normalizeKeyPart(item.bow_type),
-      normalizeKeyPart(item.distance),
-      normalizeKeyPart(item.format)
-    ].join('|'))
+    (managedScores.value || []).map(item => buildScoreUniqueKey(item))
   )
 
   batchScores.value.forEach((item, idx) => {
     if (!item.__valid) return
-    const key = [
-      normalizeKeyPart(item.name),
-      normalizeKeyPart(item.club),
-      normalizeKeyPart(item.bow_type),
-      normalizeKeyPart(item.distance),
-      normalizeKeyPart(item.format)
-    ].join('|')
+    const key = buildScoreUniqueKey(item)
     const indexes = keyToIndexes.get(key) || []
     const isInFileDup = indexes.length > 1
     const isFirstOccurrence = indexes[0] === idx
@@ -1071,14 +1045,7 @@ const submitImport = async () => {
 
     const dedupedScoresMap = new Map()
     validScores.forEach(item => {
-      const uniqueKey = [
-        normalizeKeyPart(item.name),
-        normalizeKeyPart(item.club),
-        normalizeKeyPart(item.bow_type),
-        normalizeKeyPart(item.distance),
-        normalizeKeyPart(item.format)
-      ].join('|')
-      dedupedScoresMap.set(uniqueKey, item)
+      dedupedScoresMap.set(buildScoreUniqueKey(item), item)
     })
     const dedupedValidScores = Array.from(dedupedScoresMap.values())
 
