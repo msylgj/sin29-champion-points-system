@@ -202,7 +202,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { scoreAPI, dictionaryAPI, eventAPI, authAPI } from '@/api'
+import { scoreAPI, eventAPI, authAPI } from '@/api'
+import { useDictionaries } from '@/composables/useDictionaries'
 import { useMessage } from '@/composables/useMessage'
 import { useRouter, useRoute } from 'vue-router'
 
@@ -213,7 +214,7 @@ const ranking = ref([])
 const selectedYear = ref('')
 const selectedBowType = ref('')
 const availableYears = ref([])
-const bowTypes = ref([])
+const { bowTypes, loadDictionaries: fetchDictionaries } = useDictionaries()
 const showAuthDialog = ref(false)
 const adminPassword = ref('')
 const authLoading = ref(false)
@@ -307,10 +308,7 @@ const initYears = async () => {
 // 加载字典数据
 const loadDictionaries = async () => {
   try {
-    const response = await dictionaryAPI.getAll()
-    if (response.success && response.data) {
-      bowTypes.value = response.data.bowTypes || []
-    }
+    await fetchDictionaries()
     dictionaryLoadFailed.value = false
   } catch (error) {
     console.error('加载字典数据失败:', error)

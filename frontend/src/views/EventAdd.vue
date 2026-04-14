@@ -136,9 +136,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { eventAPI, dictionaryAPI, eventConfigAPI } from '@/api'
+import { eventAPI, eventConfigAPI } from '@/api'
+import { useDictionaries } from '@/composables/useDictionaries'
+import { useEventConfigGrid } from '@/composables/useEventConfigGrid'
 import { useMessage } from '@/composables/useMessage'
 
 const router = useRouter()
@@ -150,47 +152,27 @@ const dictionaryLoadFailed = ref(false)
 const existingConfigLoadFailed = ref(false)
 
 // 字典数据
-const bowTypes = ref([])
-const distances = ref([])
-const competitionGroups = ref([])
+const {
+  bowTypes,
+  distances,
+  competitionGroups,
+  loadDictionaries: fetchDictionaries
+} = useDictionaries()
 
 const formData = ref({
   year: currentYear,
   season: ''
 })
 
-const sortedDistances = computed(() => {
-  return [...distances.value].sort((a, b) => parseInt(b.code, 10) - parseInt(a.code, 10))
-})
-
 // 配置表数据结构：bow_type => format => distance => count
 const configTable = ref({})
-const countRows = [
-  { key: 'individual_participant_count', label: '个人（排位/淘汰）' },
-  { key: 'mixed_doubles_team_count', label: '混双（队伍）' },
-  { key: 'team_count', label: '团体（队伍）' }
-]
-
-const getGroupCode = (bowType, distance) => {
-  const found = competitionGroups.value.find(
-    item => item.bow_type === bowType && item.distance === distance
-  )
-  return found ? `${found.group_code}组` : '-'
-}
-
-// 检查是否应该显示该距离列
-const shouldShowDistance = (distance) => {
-  return competitionGroups.value.some(
-    item => item.distance === distance
-  )
-}
-
-// 检查是否应该禁用该输入框
-const isInputDisabled = (bowType, distance) => {
-  return !competitionGroups.value.some(
-    item => item.bow_type === bowType && item.distance === distance
-  )
-}
+const {
+  countRows,
+  sortedDistances,
+  getGroupCode,
+  shouldShowDistance,
+  isInputDisabled
+} = useEventConfigGrid(distances, competitionGroups)
 
 // 初始化配置表
 const initConfigTable = () => {
@@ -259,13 +241,8 @@ const loadExistingEventConfigurations = async () => {
 // 加载字典数据
 const loadDictionaries = async () => {
   try {
-    const response = await dictionaryAPI.getAll()
-    if (response.success && response.data) {
-      bowTypes.value = response.data.bowTypes || []
-      distances.value = response.data.distances || []
-      competitionGroups.value = response.data.competitionGroups || []
-      initConfigTable()
-    }
+    await fetchDictionaries()
+    initConfigTable()
     dictionaryLoadFailed.value = false
   } catch (error) {
     console.error('加载字典数据失败:', error)

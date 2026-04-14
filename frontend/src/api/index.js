@@ -12,11 +12,9 @@ const api = axios.create({
 
 api.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('token')
     const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY)
-    const authToken = adminToken || token
-    if (authToken) {
-      config.headers.Authorization = `Bearer ${authToken}`
+    if (adminToken) {
+      config.headers.Authorization = `Bearer ${adminToken}`
     }
     return config
   },
@@ -33,7 +31,6 @@ api.interceptors.response.use(
     if (error.response) {
       switch (error.response.status) {
         case 401:
-          localStorage.removeItem('token')
           localStorage.removeItem(ADMIN_TOKEN_KEY)
           break
         case 403:
@@ -84,4 +81,3 @@ export const authAPI = {
 export const dictionaryAPI = {
   getAll: () => api.get('/dictionaries')
 }
-

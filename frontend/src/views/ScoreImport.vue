@@ -217,7 +217,9 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { eventAPI, scoreAPI, dictionaryAPI } from '@/api'
+import { eventAPI, scoreAPI } from '@/api'
+import { useDictionaries } from '@/composables/useDictionaries'
+import { useEventConfigGrid } from '@/composables/useEventConfigGrid'
 import { useMessage } from '@/composables/useMessage'
 import ScoreManagePanel from './ScoreManagePanel.vue'
 
@@ -238,22 +240,19 @@ const managedScores = ref([])
 const managedScoresLoading = ref(false)
 
 // 字典数据
-const bowTypes = ref([])
-const distances = ref([])
-const competitionFormats = ref([])
-const competitionGroups = ref([])
+const {
+  bowTypes,
+  distances,
+  competitionFormats,
+  competitionGroups,
+  loadDictionaries: fetchDictionaries
+} = useDictionaries()
 
 const normalizeKeyPart = (value) => (value || '').toString().trim().toLowerCase()
-
-const countRows = [
-  { key: 'individual_participant_count', label: '个人（排位/淘汰）' },
-  { key: 'mixed_doubles_team_count', label: '混双（队伍）' },
-  { key: 'team_count', label: '团体（队伍）' }
-]
-
-const sortedDistances = computed(() => {
-  return [...distances.value].sort((a, b) => parseInt(b.code, 10) - parseInt(a.code, 10))
-})
+const { countRows, sortedDistances, getGroupCode, shouldShowDistance } = useEventConfigGrid(
+  distances,
+  competitionGroups
+)
 
 const bowTypeEnumText = computed(() => bowTypes.value.map(item => `${item.name}(${item.code})`).join('、'))
 const distanceEnumText = computed(() => distances.value.map(item => `${item.name}(${item.code})`).join('、'))
@@ -275,17 +274,6 @@ const getBowTypeLabel = (type) => {
 const getFormatLabel = (format) => {
   const found = competitionFormats.value.find(item => item.code === format)
   return found ? found.name : format
-}
-
-const getGroupCode = (bowType, distance) => {
-  const found = competitionGroups.value.find(
-    item => item.bow_type === bowType && item.distance === distance
-  )
-  return found ? `${found.group_code}组` : '-'
-}
-
-const shouldShowDistance = (distance) => {
-  return competitionGroups.value.some(item => item.distance === distance)
 }
 
 const getConfigCount = (bowType, distance, key) => {
@@ -332,13 +320,7 @@ const selectLatestEvent = async () => {
 // 加载字典数据
 const loadDictionaries = async () => {
   try {
-    const response = await dictionaryAPI.getAll()
-    if (response.success && response.data) {
-      bowTypes.value = response.data.bowTypes || []
-      distances.value = response.data.distances || []
-      competitionFormats.value = response.data.competitionFormats || []
-      competitionGroups.value = response.data.competitionGroups || []
-    }
+    await fetchDictionaries()
   } catch (error) {
     console.error('加载字典数据失败:', error)
   }
