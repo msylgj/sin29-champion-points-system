@@ -14,6 +14,23 @@
     </div>
 
     <form @submit.prevent="submitForm" class="form-container">
+      <div v-if="dictionaryLoadFailed || existingConfigLoadFailed" class="page-feedback-list">
+        <div v-if="dictionaryLoadFailed" class="failure-notice">
+          <div>
+            <strong>表单字典加载失败</strong>
+            <p>赛事配置依赖弓种、距离和组别字典，请重试加载表单数据。</p>
+          </div>
+          <button type="button" class="btn-retry-inline" @click="loadDictionaries">重试加载</button>
+        </div>
+        <div v-if="existingConfigLoadFailed" class="failure-notice">
+          <div>
+            <strong>历史配置加载失败</strong>
+            <p>当前未能获取同年度同赛季的已有配置，你可以重新尝试加载。</p>
+          </div>
+          <button type="button" class="btn-retry-inline" @click="loadExistingEventConfigurations">重试加载历史配置</button>
+        </div>
+      </div>
+
       <!-- 基本信息 -->
       <div class="section">
         <h2 class="section-title">基本信息</h2>
@@ -107,13 +124,13 @@
     </form>
 
     <!-- 成功提示 -->
-    <div v-if="successMessage" class="submit-floating-message submit-floating-success">
-      {{ successMessage }}
+    <div v-if="formMsg.successMsg.value" class="submit-floating-message submit-floating-success">
+      {{ formMsg.successMsg.value }}
     </div>
 
     <!-- 错误提示 -->
-    <div v-if="errorMessage" class="error-message">
-      {{ errorMessage }}
+    <div v-if="formMsg.errorMsg.value" class="error-message">
+      {{ formMsg.errorMsg.value }}
     </div>
   </div>
 </template>
@@ -122,13 +139,15 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { eventAPI, dictionaryAPI, eventConfigAPI } from '@/api'
+import { useMessage } from '@/composables/useMessage'
 
 const router = useRouter()
 const currentYear = new Date().getFullYear()
 const loading = ref(false)
-const successMessage = ref('')
-const errorMessage = ref('')
 const existingEventId = ref(null)
+const formMsg = useMessage(5000)
+const dictionaryLoadFailed = ref(false)
+const existingConfigLoadFailed = ref(false)
 
 // 字典数据
 const bowTypes = ref([])
@@ -206,6 +225,7 @@ const applyConfigurationsToTable = (configurations = []) => {
 const loadExistingEventConfigurations = async () => {
   if (!formData.value.season || !bowTypes.value.length || !distances.value.length) {
     existingEventId.value = null
+    existingConfigLoadFailed.value = false
     initConfigTable()
     return
   }
@@ -226,9 +246,12 @@ const loadExistingEventConfigurations = async () => {
       existingEventId.value = null
       initConfigTable()
     }
+    existingConfigLoadFailed.value = false
   } catch (error) {
     existingEventId.value = null
     console.error('加载已存在赛事配置失败:', error)
+    existingConfigLoadFailed.value = true
+    formMsg.show('error', '加载历史赛事配置失败，请重试')
     initConfigTable()
   }
 }
@@ -243,9 +266,11 @@ const loadDictionaries = async () => {
       competitionGroups.value = response.data.competitionGroups || []
       initConfigTable()
     }
+    dictionaryLoadFailed.value = false
   } catch (error) {
     console.error('加载字典数据失败:', error)
-    errorMessage.value = '加载表单数据失败，请刷新重试'
+    dictionaryLoadFailed.value = true
+    formMsg.show('error', '加载表单数据失败，请重试')
   }
 }
 
@@ -333,20 +358,19 @@ const syncExistingEventConfigurations = async (eventId, configurations) => {
 
 const submitForm = async () => {
   if (!formData.value.season) {
-    errorMessage.value = '请选择赛季'
+    formMsg.show('error', '请选择赛季')
     return
   }
 
   const configurations = buildConfigurations()
   
   if (configurations.length === 0) {
-    errorMessage.value = '请填写至少一个赛事配置（参赛人数 > 0）'
+    formMsg.show('error', '请填写至少一个赛事配置（参赛人数 > 0）')
     return
   }
 
   loading.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
+  formMsg.clear()
 
   try {
     const payload = {
@@ -357,17 +381,17 @@ const submitForm = async () => {
 
     if (existingEventId.value) {
       await syncExistingEventConfigurations(existingEventId.value, configurations)
-      successMessage.value = '赛事配置更新成功'
+      formMsg.show('success', '赛事配置更新成功')
     } else {
       await eventAPI.createWithConfigs(payload)
-      successMessage.value = '赛事添加成功'
+      formMsg.show('success', '赛事添加成功')
     }
 
     setTimeout(() => {
       router.push('/score-import')
     }, 1500)
   } catch (error) {
-    errorMessage.value = error.message || (existingEventId.value ? '更新失败，请重试' : '添加失败，请重试')
+    formMsg.show('error', error.message || (existingEventId.value ? '更新失败，请重试' : '添加失败，请重试'))
     console.error('Error saving event config:', error)
   } finally {
     loading.value = false

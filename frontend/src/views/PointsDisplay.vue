@@ -14,6 +14,23 @@
     </div>
 
     <div class="display-container">
+      <div v-if="yearLoadFailed || dictionaryLoadFailed" class="page-feedback-list">
+        <div v-if="yearLoadFailed" class="failure-notice">
+          <div>
+            <strong>年度列表加载失败</strong>
+            <p>当前已回退到最近 5 年的兜底选项，你也可以重新拉取赛事年度。</p>
+          </div>
+          <button type="button" class="btn-retry-inline" @click="initYears">重试加载年度</button>
+        </div>
+        <div v-if="dictionaryLoadFailed" class="failure-notice">
+          <div>
+            <strong>弓种字典加载失败</strong>
+            <p>当前无法正确展示弓种选项，请检查网络后重试。</p>
+          </div>
+          <button type="button" class="btn-retry-inline" @click="loadDictionaries">重试加载弓种</button>
+        </div>
+      </div>
+
       <!-- 过滤器 -->
       <div class="filters-section">
         <div class="filter-group">
@@ -61,6 +78,11 @@
 
         <div v-else-if="!selectedYear || !selectedBowType" class="empty-state">
           <p>请选择年度和弓种查看排名</p>
+        </div>
+
+        <div v-else-if="rankingLoadFailed" class="empty-state failure-state">
+          <p>排名加载失败，请稍后重试</p>
+          <button type="button" class="btn-retry-panel" @click="loadRanking">重试加载排名</button>
         </div>
 
         <div v-else-if="filteredRanking.length === 0" class="empty-state">
@@ -167,6 +189,13 @@
           </div>
         </div>
       </div>
+
+      <div v-if="pageMsg.successMsg.value" class="success-message">
+        {{ pageMsg.successMsg.value }}
+      </div>
+      <div v-if="pageMsg.errorMsg.value" class="error-message">
+        {{ pageMsg.errorMsg.value }}
+      </div>
     </div>
   </div>
 </template>
@@ -174,6 +203,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { scoreAPI, dictionaryAPI, eventAPI, authAPI } from '@/api'
+import { useMessage } from '@/composables/useMessage'
 import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
@@ -191,6 +221,10 @@ const authError = ref('')
 const pendingManageRoute = ref('/score-import')
 const nameKeyword = ref('')
 const selectedClub = ref('')
+const pageMsg = useMessage(5000)
+const yearLoadFailed = ref(false)
+const dictionaryLoadFailed = ref(false)
+const rankingLoadFailed = ref(false)
 
 // 从排名数据中提取可用的俱乐部列表
 const availableClubs = computed(() => {
@@ -240,6 +274,7 @@ const getFormatLabel = (format) => {
 
 // 初始化可选的年度 - 从数据库获取实际的事件年份
 const initYears = async () => {
+  pageMsg.clear()
   try {
     const response = await eventAPI.getList({ page_size: 100 })
     const years = new Set()
@@ -258,6 +293,7 @@ const initYears = async () => {
     if (availableYears.value.length > 0) {
       selectedYear.value = availableYears.value[0]
     }
+    yearLoadFailed.value = false
   } catch (error) {
     console.error('加载年度数据失败:', error)
     // 降级方案：使用静态年份
@@ -268,6 +304,8 @@ const initYears = async () => {
     }
     availableYears.value = years
     selectedYear.value = currentYear
+    yearLoadFailed.value = true
+    pageMsg.show('error', '年度列表加载失败，已切换为最近 5 年兜底选项')
   }
 }
 
@@ -278,8 +316,11 @@ const loadDictionaries = async () => {
     if (response.success && response.data) {
       bowTypes.value = response.data.bowTypes || []
     }
+    dictionaryLoadFailed.value = false
   } catch (error) {
     console.error('加载字典数据失败:', error)
+    dictionaryLoadFailed.value = true
+    pageMsg.show('error', '弓种字典加载失败，请重试')
   }
 }
 
@@ -291,12 +332,15 @@ const loadRanking = async () => {
   }
 
   loading.value = true
+  rankingLoadFailed.value = false
   try {
     const response = await scoreAPI.getAnnualRanking(selectedYear.value, selectedBowType.value)
     ranking.value = response.athletes || []
   } catch (error) {
     console.error('Error loading ranking:', error)
     ranking.value = []
+    rankingLoadFailed.value = true
+    pageMsg.show('error', '排名加载失败，请稍后重试')
   } finally {
     loading.value = false
   }
