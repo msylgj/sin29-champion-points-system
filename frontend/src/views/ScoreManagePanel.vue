@@ -27,6 +27,18 @@
             type="text"
             placeholder="按姓名搜索"
           />
+          <select v-model="selectedDistance" class="manage-filter-select">
+            <option value="">全部距离</option>
+            <option v-for="item in distances" :key="item.code" :value="item.code">
+              {{ item.name }}
+            </option>
+          </select>
+          <select v-model="selectedFormat" class="manage-filter-select">
+            <option value="">全部赛制</option>
+            <option v-for="item in competitionFormats" :key="item.code" :value="item.code">
+              {{ item.name }}
+            </option>
+          </select>
         </div>
         <div class="manage-tool-right">
           <label class="checkbox-inline">
@@ -137,6 +149,8 @@ const deletedIds = ref(new Set())
 const showModifiedOnly = ref(false)
 const batchSaving = ref(false)
 const nameKeyword = ref('')
+const selectedDistance = ref('')
+const selectedFormat = ref('')
 
 const snapshot = () => {
   const map = {}
@@ -200,6 +214,8 @@ const filteredScores = computed(() => {
     if (item.bow_type !== activeBowType.value) return false
     if (showModifiedOnly.value && !isRowChanged(item)) return false
     if (keyword && !(item.name || '').toLowerCase().includes(keyword)) return false
+    if (selectedDistance.value && item.distance !== selectedDistance.value) return false
+    if (selectedFormat.value && item.format !== selectedFormat.value) return false
     return true
   })
 
