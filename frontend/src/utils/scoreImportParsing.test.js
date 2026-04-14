@@ -46,9 +46,11 @@ describe('score import parsing helpers', () => {
     expect(convertToCode('传统', bowTypeMap)).toBe('traditional')
     expect(convertToCode('美猎', bowTypeMap)).toBe('longbow')
     expect(convertToCode('18', distanceMap)).toBe('18m')
+    expect(convertToCode('18m', distanceMap)).toBe('18m')
     expect(convertToCode('18 米', distanceMap)).toBe('18m')
     expect(convertToCode('排位', formatMap)).toBe('ranking')
-    expect(convertToCode('mixed_doubles', formatMap)).toBe('mixed_doubles')
+    expect(convertToCode('barebow', bowTypeMap)).toBe('barebow')
+    expect(convertToCode('ranking', formatMap)).toBe('ranking')
   })
 
   it('provides the shared column and key helpers for score parsing', () => {
@@ -193,6 +195,27 @@ describe('score import parsing helpers', () => {
       __duplicate: true,
     })
     expect(result.scores[3].__errors).toContain('弓种为空且未找到对应排位赛成绩')
+  })
+
+  it('rejects bow type and format code values during import parsing', () => {
+    const result = parseScoreImportData({
+      jsonData: [
+        ['姓名', '俱乐部', '弓种', '距离', '赛制', '排名'],
+        ['张三', '甲俱乐部', 'barebow', '18m', 'ranking', '1'],
+      ],
+      bowTypes,
+      distances,
+      competitionFormats: formats,
+      managedScores: [],
+      selectedEventId: '12',
+    })
+
+    expect(result.errorMessage).toBeNull()
+    expect(result.scores).toHaveLength(1)
+    expect(result.scores[0].__valid).toBe(false)
+    expect(result.scores[0].__errors).toContain('弓种无效：barebow')
+    expect(result.scores[0].__errors).toContain('赛制无效：ranking')
+    expect(result.scores[0].distance).toBe('18m')
   })
 
   it('recalculates duplicate flags after removing preview rows', () => {

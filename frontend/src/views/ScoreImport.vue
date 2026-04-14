@@ -101,7 +101,7 @@
               支持格式：Excel (.xlsx, .xls) 或 CSV<br/>
               <strong>列标题需包括（推荐英文或中文）：</strong><br/>
               <span style="color: #667eea;">姓名</span>、<span style="color: #667eea;">俱乐部</span>、<span style="color: #667eea;">弓种</span>、<span style="color: #667eea;">距离</span>、<span style="color: #667eea;">赛制</span>、<span style="color: #667eea;">排名</span><br/>
-              <em style="font-size: 12px; color: #999;">弓种、距离、赛制的值支持使用字典名称（如"光弓"、"10米"、"排位赛"）或代码（如"barebow"、"10m"、"ranking"），也支持模糊值（如"传统"、"18"、"排位"）</em><br/>
+              <em style="font-size: 12px; color: #999;">弓种、距离、赛制的值支持使用字典名称；导入时会按字典名称做模糊匹配，例如"传统"匹配"传统弓"、"排位"匹配"排位赛"，距离支持"10"、"10m"、"18"、"18m"等写法</em><br/>
               <em style="font-size: 12px; color: #999;">18 米成绩若弓种留空，会自动按同一姓名的 18 米排位赛成绩匹配弓种；未匹配到时会标记为异常</em><br/>
               <strong>弓种枚举：</strong>{{ bowTypeEnumText }}<br/>
               <strong>距离枚举：</strong>{{ distanceEnumText }}<br/>
@@ -137,7 +137,7 @@
                   <td>{{ score.name }}</td>
                   <td>{{ score.club || '-' }}</td>
                   <td>{{ getBowTypeLabel(score.bow_type) }}</td>
-                  <td>{{ score.distance }}</td>
+                  <td>{{ getDistanceLabel(score.distance) }}</td>
                   <td>{{ getFormatLabel(score.format) }}</td>
                   <td>{{ score.rank }}</td>
                   <td>
@@ -259,9 +259,9 @@ const { countRows, sortedDistances, getGroupCode, shouldShowDistance } = useEven
   competitionGroups
 )
 
-const bowTypeEnumText = computed(() => bowTypes.value.map(item => `${item.name}(${item.code})`).join('、'))
-const distanceEnumText = computed(() => distances.value.map(item => `${item.name}(${item.code})`).join('、'))
-const formatEnumText = computed(() => competitionFormats.value.map(item => `${item.name}(${item.code})`).join('、'))
+const bowTypeEnumText = computed(() => bowTypes.value.map(item => `${item.name}`).join('、'))
+const distanceEnumText = computed(() => distances.value.map(item => `${item.name}`).join('、'))
+const formatEnumText = computed(() => competitionFormats.value.map(item => `${item.name}`).join('、'))
 const validScoreCount = computed(() => batchScores.value.filter(item => item.__valid).length)
 const invalidScoreCount = computed(() => batchScores.value.filter(item => !item.__valid).length)
 const duplicateScoreCount = computed(() => batchScores.value.filter(item => item.__valid && item.__duplicate).length)
@@ -279,6 +279,12 @@ const getBowTypeLabel = (type) => {
 const getFormatLabel = (format) => {
   const found = competitionFormats.value.find(item => item.code === format)
   return found ? found.name : format
+}
+
+// 获取距离标签
+const getDistanceLabel = (distance) => {
+  const found = distances.value.find(item => item.code === distance)
+  return found ? found.name : distance
 }
 
 const getConfigCount = (bowType, distance, key) => {

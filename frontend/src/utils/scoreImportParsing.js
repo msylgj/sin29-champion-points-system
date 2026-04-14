@@ -25,23 +25,36 @@ export const FIELD_LABELS = {
 
 export const SCORE_IMPORT_ALIASES = {
   bow_type: {
-    传统: 'traditional',
-    美猎: 'longbow',
-    反曲: 'recurve',
-    复合: 'compound',
+    mode: 'like_dictionary_name',
+    buildVariants: (name) => {
+      const variants = [name]
+      if (name.endsWith('弓')) {
+        variants.push(name.slice(0, -1))
+      }
+      return variants
+    }
   },
   distance: {
-    10: '10m',
-    18: '18m',
-    30: '30m',
-    50: '50m',
-    70: '70m',
+    mode: 'like_dictionary_name',
+    buildVariants: (name) => {
+      const variants = [name]
+      const digits = (name.match(/\d+/) || [])[0]
+      if (digits) {
+        variants.push(digits)
+        variants.push(`${digits}m`)
+      }
+      return variants
+    }
   },
   format: {
-    排位: 'ranking',
-    淘汰: 'elimination',
-    混双: 'mixed_doubles',
-    团体: 'team',
+    mode: 'like_dictionary_name',
+    buildVariants: (name) => {
+      const variants = [name]
+      if (name.endsWith('赛')) {
+        variants.push(name.slice(0, -1))
+      }
+      return variants
+    }
   },
 }
 
@@ -124,6 +137,9 @@ const buildPreparedRows = (jsonData, columnMapping, bowTypeMap, distanceMap, for
     preparedRows.push({
       name,
       club,
+      raw_bow_type: bowType,
+      raw_distance: distance,
+      raw_format: format,
       bow_type: convertToCode(bowType, bowTypeMap),
       distance: convertToCode(distance, distanceMap),
       format: convertToCode(format, formatMap),
@@ -148,30 +164,73 @@ const buildParseSummaryMessage = (scores) => {
   return `成功解析 ${scores.length} 条成绩，全部合法；与已有成绩重复 ${duplicateCount} 条（重复导入将覆盖），文件内重复 ${inFileDuplicateCount} 条（其中将移除 ${inFileDuplicateToRemove} 条）。`
 }
 
-export const createValueToCodeMap = (dictArray, aliases = {}) => {
-  const map = {}
+const buildAliasVariants = (name, aliasConfig) => {
+  if (!aliasConfig || typeof aliasConfig !== 'object') {
+    return [name]
+  }
+
+  if (aliasConfig.mode === 'like_dictionary_name' && typeof aliasConfig.buildVariants === 'function') {
+    return aliasConfig.buildVariants(name)
+  }
+
+  return [name]
+}
+
+export const createValueToCodeMap = (dictArray, aliasConfig = null) => {
+  const exactMap = {}
+  const likeEntries = []
 
   if (Array.isArray(dictArray)) {
     dictArray.forEach(item => {
       if (item?.name && item?.code) {
-        map[normalizeLookupValue(item.name)] = item.code
-        map[normalizeLookupValue(item.code)] = item.code
+        const normalizedName = normalizeLookupValue(item.name)
+        exactMap[normalizedName] = item.code
+
+        const variants = buildAliasVariants(item.name, aliasConfig)
+          .map(variant => normalizeLookupValue(variant))
+          .filter(Boolean)
+
+        const uniqueVariants = Array.from(new Set(variants))
+        uniqueVariants.forEach(variant => {
+          if (variant !== normalizedName) {
+            likeEntries.push({
+              alias: variant,
+              name: normalizedName,
+              code: item.code
+            })
+          }
+        })
       }
     })
   }
 
-  Object.entries(aliases || {}).forEach(([alias, code]) => {
-    if (!alias || !code) return
-    map[normalizeLookupValue(alias)] = code
-  })
+  return {
+    exactMap,
+    likeEntries
+  }
+}
 
-  return map
+const hasMappedValue = (value, valueMap) => {
+  const trimmedValue = (value || '').toString().trim()
+  if (!trimmedValue) return false
+  const normalizedValue = normalizeLookupValue(trimmedValue)
+  if (Object.prototype.hasOwnProperty.call(valueMap.exactMap, normalizedValue)) {
+    return true
+  }
+  return valueMap.likeEntries.some(entry => entry.alias === normalizedValue)
 }
 
 export const convertToCode = (value, valueMap) => {
   const trimmedValue = (value || '').toString().trim()
   if (!trimmedValue) return trimmedValue
-  return valueMap[normalizeLookupValue(trimmedValue)] || trimmedValue
+  const normalizedValue = normalizeLookupValue(trimmedValue)
+
+  if (Object.prototype.hasOwnProperty.call(valueMap.exactMap, normalizedValue)) {
+    return valueMap.exactMap[normalizedValue]
+  }
+
+  const likeEntry = valueMap.likeEntries.find(entry => entry.alias === normalizedValue)
+  return likeEntry ? likeEntry.code : trimmedValue
 }
 
 export const build18mRankingBowTypeMap = (scores, validBowTypeCodes = []) => {
@@ -293,11 +352,15 @@ export const parseScoreImportData = ({
       if (!(distance === '18m' && preparedRow.bow_type === '' && rowErrors.length > 0)) {
         rowErrors.push('弓种无效：-')
       }
-    } else if (!bowCodeSet.has(bow_type)) {
+    } else if (preparedRow.raw_bow_type && (!hasMappedValue(preparedRow.raw_bow_type, bowTypeMap) || !bowCodeSet.has(bow_type))) {
       rowErrors.push(`弓种无效：${bow_type}`)
     }
-    if (!distance || !distanceCodeSet.has(distance)) rowErrors.push(`距离无效：${distance || '-'}`)
-    if (!format || !formatCodeSet.has(format)) rowErrors.push(`赛制无效：${format || '-'}`)
+    if (!distance || !distanceCodeSet.has(distance) || !hasMappedValue(preparedRow.raw_distance, distanceMap)) {
+      rowErrors.push(`距离无效：${distance || '-'}`)
+    }
+    if (!format || !formatCodeSet.has(format) || !hasMappedValue(preparedRow.raw_format, formatMap)) {
+      rowErrors.push(`赛制无效：${format || '-'}`)
+    }
     if (!Number.isInteger(rank) || rank < 1) rowErrors.push('排名必须是正整数')
 
     const scoreUniqueKey = buildScoreUniqueKey({ name, club, bow_type, distance, format })
