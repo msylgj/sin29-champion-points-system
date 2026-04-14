@@ -284,3 +284,5 @@ const resetScore = (scoreId) => {
   }
 }
 </script>
+
+<style scoped lang="scss" src="@/styles/ScoreManagePanel.scss" />
