@@ -171,15 +171,40 @@
   .btn-row-reset {
     background: #eef1fb;
     color: #4c5684;
+    margin-right: 6px;
+  }
+
+  .btn-row-delete {
+    background: #fff0f0;
+    color: #d14343;
+    border: 1px solid #f5c6c6;
+  }
+
+  .btn-row-delete-confirm {
+    background: #d14343;
+    color: #fff;
+    margin-right: 6px;
   }
 
   .btn-row-save:disabled,
-  .btn-row-reset:disabled {
+  .btn-row-reset:disabled,
+  .btn-row-delete:disabled,
+  .btn-row-delete-confirm:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
 
   tr.row-modified td {
     background: #fff9e8;
+  }
+
+  tr.row-deleted td {
+    background: #fff0f0;
+    text-decoration: line-through;
+    color: #999;
+  }
+
+  tr.row-deleted .action-cell {
+    text-decoration: none;
   }
 }

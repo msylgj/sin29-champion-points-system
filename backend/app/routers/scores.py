@@ -57,6 +57,19 @@ def update_score(
     return score
 
 
+@router.delete("/{score_id}", summary="删除成绩")
+def delete_score(
+    score_id: int,
+    db: Session = Depends(get_db),
+    _auth: dict = Depends(verify_admin_token)
+):
+    """删除单条成绩"""
+    ok = ScoreService.delete_score(db, score_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="成绩不存在")
+    return {"detail": "删除成功"}
+
+
 @router.post("/batch/import", response_model=list[ScoreRead], summary="批量导入成绩")
 def batch_import_scores(
     batch_import: ScoreBatchImport,

@@ -79,6 +79,16 @@ class ScoreService:
         return db_score
 
     @staticmethod
+    def delete_score(db: Session, score_id: int) -> bool:
+        """删除成绩"""
+        db_score = db.query(Score).filter(Score.id == score_id).first()
+        if not db_score:
+            return False
+        db.delete(db_score)
+        db.commit()
+        return True
+
+    @staticmethod
     def batch_create_scores(db: Session, scores: List[ScoreCreate]) -> List[Score]:
         """批量创建成绩；若同赛事下键重复则覆盖更新 rank"""
         result = []

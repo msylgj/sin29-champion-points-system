@@ -56,6 +56,7 @@ api.interceptors.response.use(
 export const scoreAPI = {
   getList: (params = {}) => api.get('/scores', { params }),
   update: (id, data) => api.put(`/scores/${id}`, data),
+  delete: (id) => api.delete(`/scores/${id}`),
   batchImport: (data) => api.post('/scores/batch/import', data),
   getAnnualRanking: (year, bowType) =>
     api.get(`/scores/annual-ranking/${year}/${bowType}`)

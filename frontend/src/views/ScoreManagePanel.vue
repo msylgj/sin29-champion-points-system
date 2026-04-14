@@ -59,33 +59,46 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="score in filteredScores" :key="score.id" :class="{ 'row-modified': isModified(score) }">
+            <tr v-for="score in filteredScores" :key="score.id" :class="{ 'row-modified': isRowChanged(score), 'row-deleted': deletedIds.has(score.id) }">
               <td>{{ score.id }}</td>
-              <td><input v-model="score.name" class="cell-input" type="text" /></td>
-              <td><input v-model="score.club" class="cell-input" type="text" /></td>
+              <td><input v-model="score.name" class="cell-input" type="text" :disabled="deletedIds.has(score.id)" /></td>
+              <td><input v-model="score.club" class="cell-input" type="text" :disabled="deletedIds.has(score.id)" /></td>
               <td>
-                <select v-model="score.bow_type" class="cell-input">
+                <select v-model="score.bow_type" class="cell-input" :disabled="deletedIds.has(score.id)">
                   <option v-for="item in bowTypes" :key="item.code" :value="item.code">{{ item.name }}</option>
                 </select>
               </td>
               <td>
-                <select v-model="score.distance" class="cell-input">
+                <select v-model="score.distance" class="cell-input" :disabled="deletedIds.has(score.id)">
                   <option v-for="item in distances" :key="item.code" :value="item.code">{{ item.name }}</option>
                 </select>
               </td>
               <td>
-                <select v-model="score.format" class="cell-input">
+                <select v-model="score.format" class="cell-input" :disabled="deletedIds.has(score.id)">
                   <option v-for="item in competitionFormats" :key="item.code" :value="item.code">{{ item.name }}</option>
                 </select>
               </td>
-              <td><input v-model.number="score.rank" class="cell-input" type="number" min="1" /></td>
+              <td><input v-model.number="score.rank" class="cell-input" type="number" min="1" :disabled="deletedIds.has(score.id)" /></td>
               <td class="action-cell">
-                <button type="button" class="btn-row-save" :disabled="savingIds.has(score.id)" @click="saveScore(score)">
-                  {{ savingIds.has(score.id) ? '保存中...' : '保存' }}
-                </button>
-                <button type="button" class="btn-row-reset" :disabled="savingIds.has(score.id)" @click="resetScore(score.id)">
-                  重置
-                </button>
+                <template v-if="deletedIds.has(score.id)">
+                  <button type="button" class="btn-row-delete-confirm" :disabled="savingIds.has(score.id)" @click="confirmDeleteScore(score.id)">
+                    {{ savingIds.has(score.id) ? '删除中...' : '确认删除' }}
+                  </button>
+                  <button type="button" class="btn-row-reset" :disabled="savingIds.has(score.id)" @click="resetScore(score.id)">
+                    撤销
+                  </button>
+                </template>
+                <template v-else>
+                  <button type="button" class="btn-row-save" :disabled="savingIds.has(score.id)" @click="saveScore(score)">
+                    {{ savingIds.has(score.id) ? '保存中...' : '保存' }}
+                  </button>
+                  <button type="button" class="btn-row-reset" :disabled="savingIds.has(score.id)" @click="resetScore(score.id)">
+                    重置
+                  </button>
+                  <button type="button" class="btn-row-delete" :disabled="savingIds.has(score.id)" @click="markDelete(score.id)">
+                    删除
+                  </button>
+                </template>
               </td>
             </tr>
           </tbody>
@@ -112,6 +125,7 @@ const emit = defineEmits(['message'])
 const activeBowType = ref('')
 const originalMap = ref({})
 const savingIds = ref(new Set())
+const deletedIds = ref(new Set())
 const showModifiedOnly = ref(false)
 const batchSaving = ref(false)
 const nameKeyword = ref('')
@@ -141,6 +155,10 @@ const isModified = (score) => {
   return ['name', 'club', 'bow_type', 'distance', 'format', 'rank'].some(k => a[k] !== b[k])
 }
 
+const isRowChanged = (score) => {
+  return deletedIds.value.has(score.id) || isModified(score)
+}
+
 const bowTabs = computed(() => {
   const bowSet = new Set((props.scores || []).map(item => item.bow_type))
   return props.bowTypes.filter(item => bowSet.has(item.code))
@@ -148,6 +166,7 @@ const bowTabs = computed(() => {
 
 watch(() => props.scores, () => {
   snapshot()
+  deletedIds.value = new Set()
   const tabs = bowTabs.value
   if (tabs.length > 0) {
     const hasCurrent = tabs.some(item => item.code === activeBowType.value)
@@ -163,7 +182,7 @@ const currentTabScores = computed(() => {
 })
 
 const modifiedCount = computed(() => {
-  return currentTabScores.value.filter(item => isModified(item)).length
+  return currentTabScores.value.filter(item => isRowChanged(item)).length
 })
 
 const filteredScores = computed(() => {
@@ -171,7 +190,7 @@ const filteredScores = computed(() => {
   const keyword = (nameKeyword.value || '').trim().toLowerCase()
   const list = props.scores.filter(item => {
     if (item.bow_type !== activeBowType.value) return false
-    if (showModifiedOnly.value && !isModified(item)) return false
+    if (showModifiedOnly.value && !isRowChanged(item)) return false
     if (keyword && !(item.name || '').toLowerCase().includes(keyword)) return false
     return true
   })
@@ -245,16 +264,62 @@ const saveScore = async (score) => {
   }
 }
 
+const markDelete = (scoreId) => {
+  const next = new Set(deletedIds.value)
+  next.add(scoreId)
+  deletedIds.value = next
+}
+
+const confirmDeleteScore = async (scoreId) => {
+  const set = new Set(savingIds.value)
+  set.add(scoreId)
+  savingIds.value = set
+
+  try {
+    await scoreAPI.delete(scoreId)
+    const idx = props.scores.findIndex(item => item.id === scoreId)
+    if (idx >= 0) props.scores.splice(idx, 1)
+    const next = new Set(deletedIds.value)
+    next.delete(scoreId)
+    deletedIds.value = next
+    delete originalMap.value[scoreId]
+    emit('message', 'success', `成绩 ID ${scoreId} 已删除`)
+  } catch (error) {
+    emit('message', 'error', error.detail || error.message || '删除失败，请重试')
+  } finally {
+    const next = new Set(savingIds.value)
+    next.delete(scoreId)
+    savingIds.value = next
+  }
+}
+
 const saveAllModified = async () => {
-  const changed = currentTabScores.value.filter(item => isModified(item))
-  if (changed.length === 0) {
+  const deleted = currentTabScores.value.filter(item => deletedIds.value.has(item.id))
+  const changed = currentTabScores.value.filter(item => !deletedIds.value.has(item.id) && isModified(item))
+  if (changed.length === 0 && deleted.length === 0) {
     emit('message', 'error', '当前弓种没有待保存的修改')
     return
   }
 
   batchSaving.value = true
   let successCount = 0
+  let deleteCount = 0
   const failed = []
+
+  for (const score of deleted) {
+    try {
+      await scoreAPI.delete(score.id)
+      const idx = props.scores.findIndex(item => item.id === score.id)
+      if (idx >= 0) props.scores.splice(idx, 1)
+      const next = new Set(deletedIds.value)
+      next.delete(score.id)
+      deletedIds.value = next
+      delete originalMap.value[score.id]
+      deleteCount += 1
+    } catch (error) {
+      failed.push(`ID ${score.id}：删除失败`)
+    }
+  }
 
   for (const score of changed) {
     const msg = validate(score)
@@ -267,15 +332,26 @@ const saveAllModified = async () => {
     else failed.push(`ID ${score.id}：保存失败`)
   }
 
+  const parts = []
+  if (successCount > 0) parts.push(`保存 ${successCount} 条`)
+  if (deleteCount > 0) parts.push(`删除 ${deleteCount} 条`)
+
   if (failed.length > 0) {
-    emit('message', 'error', `批量保存完成，成功 ${successCount} 条，失败 ${failed.length} 条\n${failed.join('\n')}`)
+    emit('message', 'error', `批量操作完成：${parts.join('，')}，失败 ${failed.length} 条\n${failed.join('\n')}`)
   } else {
-    emit('message', 'success', `批量保存成功，共 ${successCount} 条`)
+    emit('message', 'success', `批量操作成功：${parts.join('，')}`)
   }
   batchSaving.value = false
 }
 
 const resetScore = (scoreId) => {
+  // Restore deletion mark
+  if (deletedIds.value.has(scoreId)) {
+    const next = new Set(deletedIds.value)
+    next.delete(scoreId)
+    deletedIds.value = next
+  }
+  // Restore original field values
   const original = originalMap.value[scoreId]
   if (!original) return
   const idx = props.scores.findIndex(item => item.id === scoreId)
