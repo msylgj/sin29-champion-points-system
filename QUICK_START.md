@@ -53,18 +53,14 @@ psql archery_db < database/init.sql
 ```bash
 cd /home/msylgj/sin29-champion-points-system
 cp .env.example .env
-# 修改 .env 中的 SECRET_KEY；如本机数据库地址不是 localhost，也同步调整 DB_HOST / DB_PORT
+# 修改 .env 中的 SECRET_KEY
 
 cd backend
 pip install -r requirements.txt
+export DATABASE_URL='postgresql://archery_user:archery_pass@localhost:5432/archery_db'
+export SECRET_KEY='你的sha256密文'
 python -m uvicorn app.main:app --reload --port 8000
 ```
-
-说明：
-
-- 后端默认读取项目根目录 `.env`。
-- 若 `.env` 未显式提供 `DATABASE_URL`，系统会自动使用 `DB_USER`、`DB_PASSWORD`、`DB_HOST`、`DB_PORT`、`DB_NAME` 生成连接串。
-- 也可以手动导出 `DATABASE_URL` 覆盖 `.env` 中的数据库配置。
 
 前端：
 

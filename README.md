@@ -64,10 +64,10 @@ cp .env.example .env
 
 cd backend
 pip install -r requirements.txt
+export DATABASE_URL='postgresql://archery_user:archery_pass@localhost:5432/archery_db'
+export SECRET_KEY='你的sha256密文'
 python -m uvicorn app.main:app --reload --port 8000
 ```
-
-后端会优先读取项目根目录 `.env` 中的 `DATABASE_URL`；如果未提供，则自动用 `DB_USER`、`DB_PASSWORD`、`DB_HOST`、`DB_PORT`、`DB_NAME` 组合出 PostgreSQL 连接串。
 
 前端:
 
