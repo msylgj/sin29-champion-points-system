@@ -141,6 +141,9 @@ CREATE TABLE IF NOT EXISTS event_registrations (
     UNIQUE(year, season, name, distance, competition_bow_type)
 );
 
+CREATE INDEX IF NOT EXISTS idx_event_registrations_year_points_lookup
+ON event_registrations(year, points_bow_type, season, name, distance, competition_bow_type);
+
 -- ============================================================================
 -- 赛事配置表 (event_configurations)
 -- ============================================================================
@@ -173,3 +176,6 @@ CREATE TABLE IF NOT EXISTS scores (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     UNIQUE(event_id, name, distance, bow_type, format)
 );
+
+CREATE INDEX IF NOT EXISTS idx_scores_event_created_id
+ON scores(event_id, created_at DESC, id DESC);

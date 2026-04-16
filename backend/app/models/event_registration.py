@@ -1,7 +1,7 @@
 """
 赛事报名模型
 """
-from sqlalchemy import Column, Integer, String, DateTime, CheckConstraint, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, CheckConstraint, Index, UniqueConstraint
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -38,6 +38,15 @@ class EventRegistration(Base):
         CheckConstraint(
             "competition_gender_group IN ('men', 'women', 'mixed')",
             name='ck_event_registration_gender_group',
+        ),
+        Index(
+            'idx_event_registrations_year_points_lookup',
+            'year',
+            'points_bow_type',
+            'season',
+            'name',
+            'distance',
+            'competition_bow_type',
         ),
         UniqueConstraint(
             'year',

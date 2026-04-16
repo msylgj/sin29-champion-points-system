@@ -222,6 +222,70 @@ def test_annual_ranking_uses_registration_points_bow_type_and_sightless_scores()
     assert payload['athletes'][0]['total_points'] == 7.5
 
 
+def test_annual_ranking_excludes_scores_without_matching_registration_context():
+    reset_database()
+    db = SessionLocal()
+    try:
+        event = Event(year=2024, season='春季赛')
+        db.add(event)
+        db.flush()
+
+        db.add_all([
+            CompetitionGroupDict(group_code='A', bow_type='recurve', distance='30m'),
+            CompetitionGroupDict(group_code='A', bow_type='compound', distance='30m'),
+            EventConfiguration(
+                event_id=event.id,
+                gender_group='men',
+                bow_type='recurve',
+                distance='30m',
+                individual_participant_count=20,
+                mixed_doubles_team_count=0,
+                team_count=0,
+            ),
+        ])
+        db.add(
+            EventRegistration(
+                year=2024,
+                season='春季赛',
+                name='张三',
+                club='A俱乐部',
+                distance='30m',
+                competition_bow_type='recurve',
+                points_bow_type='recurve',
+                competition_gender_group='men',
+            )
+        )
+        db.add_all([
+            Score(
+                event_id=event.id,
+                name='张三',
+                bow_type='recurve',
+                distance='30m',
+                format='ranking',
+                rank=1,
+            ),
+            Score(
+                event_id=event.id,
+                name='张三',
+                bow_type='compound',
+                distance='30m',
+                format='ranking',
+                rank=1,
+            ),
+        ])
+        db.commit()
+
+        payload = get_annual_ranking(2024, 'recurve', db)
+    finally:
+        db.close()
+
+    assert payload['total'] == 1
+    assert payload['athletes'][0]['name'] == '张三'
+    assert payload['athletes'][0]['total_points'] == 20.0
+    assert len(payload['athletes'][0]['scores']) == 1
+    assert payload['athletes'][0]['scores'][0]['distance'] == '30m'
+
+
 def test_annual_ranking_team_scores_prefer_women_then_mixed_for_star_name():
     reset_database()
     db = SessionLocal()

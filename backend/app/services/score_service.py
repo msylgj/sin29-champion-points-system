@@ -41,24 +41,11 @@ class ScoreService:
         )
 
     @staticmethod
-    def _select_registration_candidate(candidates: List[EventRegistration]) -> Optional[EventRegistration]:
-        if not candidates:
-            return None
-
-        return sorted(candidates, key=ScoreService._registration_sort_key)[0]
-
-    @staticmethod
     def _get_individual_participant_count(
         score: Score,
-        event: Event,
-        registration_map: Dict[tuple, List[EventRegistration]],
+        registration: EventRegistration,
         event_config_map: Dict[tuple, EventConfiguration],
     ) -> Optional[int]:
-        candidates = registration_map.get((event.season, score.name, score.distance, score.bow_type), [])
-        registration = ScoreService._select_registration_candidate(candidates)
-        if not registration:
-            return None
-
         config = event_config_map.get(
             (score.event_id, registration.competition_gender_group, score.bow_type, score.distance)
         )
@@ -228,17 +215,24 @@ class ScoreService:
             return []
 
         athlete_registration_map: Dict[str, List[EventRegistration]] = defaultdict(list)
-        registration_match_map: Dict[tuple, List[EventRegistration]] = defaultdict(list)
         for row in registration_rows:
             athlete_registration_map[row.name].append(row)
-            registration_match_map[(row.season, row.name, row.distance, row.competition_bow_type)].append(row)
-
-        athlete_name_set = set(athlete_registration_map.keys())
-        score_rows = db.query(Score, Event).join(
+        # 直接按报名上下文关联成绩，避免按姓名全量扫年度成绩。
+        score_rows = db.query(Score, Event, EventRegistration).join(
             Event, Event.id == Score.event_id
+        ).join(
+            EventRegistration,
+            and_(
+                EventRegistration.year == Event.year,
+                EventRegistration.season == Event.season,
+                EventRegistration.name == Score.name,
+                EventRegistration.distance == Score.distance,
+                EventRegistration.competition_bow_type == Score.bow_type,
+            ),
         ).filter(
             Event.year == year,
-            Score.name.in_(athlete_name_set),
+            EventRegistration.year == year,
+            EventRegistration.points_bow_type == bow_type,
         ).all()
 
         # 预加载组别配置
@@ -248,7 +242,7 @@ class ScoreService:
             for row in group_rows
         }
 
-        event_ids = {score.event_id for score, _event in score_rows}
+        event_ids = {score.event_id for score, _event, _registration in score_rows}
         config_rows = db.query(EventConfiguration).filter(
             EventConfiguration.event_id.in_(event_ids)
         ).all() if event_ids else []
@@ -257,7 +251,7 @@ class ScoreService:
         # 按报名表中的姓名聚合积分，俱乐部使用该年度最早一次报名信息
         athlete_points = {}
         for name, rows in athlete_registration_map.items():
-            earliest_registration = sorted(rows, key=ScoreService._registration_sort_key)[0]
+            earliest_registration = min(rows, key=ScoreService._registration_sort_key)
             athlete_points[name] = {
                 'name': name,
                 'club': earliest_registration.club,
@@ -265,14 +259,13 @@ class ScoreService:
                 'scores': []
             }
 
-        for score, event in score_rows:
+        for score, event, registration in score_rows:
             participant_count = None
 
             if score.format in ('ranking', 'elimination'):
                 participant_count = ScoreService._get_individual_participant_count(
                     score,
-                    event,
-                    registration_match_map,
+                    registration,
                     event_config_map,
                 )
                 if not participant_count:

@@ -1,7 +1,7 @@
 """
 成绩模型 - 简化版本
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -32,5 +32,6 @@ class Score(Base):
     
     # 索引
     __table_args__ = (
+        Index('idx_scores_event_created_id', 'event_id', created_at.desc(), id.desc()),
         UniqueConstraint('event_id', 'name', 'distance', 'bow_type', 'format', name='uq_score_event_name_distance_bow_format'),
     )
