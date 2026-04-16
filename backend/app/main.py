@@ -2,8 +2,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import app.models  # noqa: F401
 from app.config import get_settings
-from app.routers import scores, events, event_configuration, dictionary, auth
+from app.routers import scores, events, event_configuration, event_registration, dictionary, auth
 from app.database import Base, engine
 
 settings = get_settings()
@@ -42,6 +43,7 @@ app.include_router(auth.router, tags=["认证"])
 app.include_router(scores.router, tags=["成绩管理"])
 app.include_router(events.router, tags=["赛事管理"])
 app.include_router(event_configuration.router, tags=["赛事配置管理"])
+app.include_router(event_registration.router, tags=["赛事报名管理"])
 app.include_router(dictionary.router, tags=["字典管理"])
 
 

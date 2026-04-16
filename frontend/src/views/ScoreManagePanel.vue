@@ -62,7 +62,6 @@
             <tr>
               <th>ID</th>
               <th>姓名</th>
-              <th>俱乐部</th>
               <th>弓种</th>
               <th>距离</th>
               <th>赛制</th>
@@ -74,7 +73,6 @@
             <tr v-for="score in filteredScores" :key="score.id" :class="{ 'row-modified': isRowChanged(score), 'row-deleted': deletedIds.has(score.id) }">
               <td>{{ score.id }}</td>
               <td><input v-model="score.name" class="cell-input" type="text" :disabled="deletedIds.has(score.id)" /></td>
-              <td><input v-model="score.club" class="cell-input" type="text" :disabled="deletedIds.has(score.id)" /></td>
               <td>
                 <select v-model="score.bow_type" class="cell-input" :disabled="deletedIds.has(score.id)">
                   <option v-for="item in bowTypes" :key="item.code" :value="item.code">{{ item.name }}</option>
@@ -162,7 +160,6 @@ const snapshot = () => {
 
 const normalize = (score = {}) => ({
   name: (score.name || '').trim(),
-  club: (score.club || '').trim(),
   bow_type: score.bow_type || '',
   distance: score.distance || '',
   format: score.format || '',
@@ -174,7 +171,7 @@ const isModified = (score) => {
   if (!original) return false
   const a = normalize(score)
   const b = normalize(original)
-  return ['name', 'club', 'bow_type', 'distance', 'format', 'rank'].some(k => a[k] !== b[k])
+  return ['name', 'bow_type', 'distance', 'format', 'rank'].some(k => a[k] !== b[k])
 }
 
 const isRowChanged = (score) => {
@@ -256,7 +253,6 @@ const saveScore = async (score) => {
   try {
     const payload = {
       name: score.name.trim(),
-      club: score.club?.trim() ?? '',
       bow_type: score.bow_type,
       distance: score.distance,
       format: score.format,
@@ -269,7 +265,6 @@ const saveScore = async (score) => {
         id: updated.id,
         event_id: updated.event_id,
         name: updated.name || '',
-        club: updated.club || '',
         bow_type: updated.bow_type || '',
         distance: updated.distance || '',
         format: updated.format || '',

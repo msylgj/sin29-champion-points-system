@@ -1,12 +1,15 @@
 """
 成绩服务 - 简化版本
 """
+from collections import defaultdict
+
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
 from app.models.score import Score
 from app.models.event import Event
 from app.models.event_configuration import EventConfiguration
 from app.models.dictionary import CompetitionGroupDict
+from app.models.event_registration import EventRegistration
 from app.schemas.score import ScoreCreate, ScoreUpdate
 from app.services.scoring_calculator import ScoringCalculator
 from typing import Optional, List, Tuple, Dict
@@ -15,16 +18,76 @@ from typing import Optional, List, Tuple, Dict
 class ScoreService:
     """成绩业务服务"""
 
+    SEASON_ORDER = {
+        '春季赛': 1,
+        '夏季赛': 2,
+        '秋季赛': 3,
+        '冬季赛': 4,
+    }
+
     @staticmethod
-    def _get_participant_count_for_format(config: EventConfiguration, competition_format: str) -> int:
-        """根据赛制从简化配置中读取对应人数/队伍数"""
-        if competition_format in ("ranking", "elimination"):
-            return config.individual_participant_count
-        if competition_format == "mixed_doubles":
-            return config.mixed_doubles_team_count
-        if competition_format == "team":
-            return config.team_count
-        return config.individual_participant_count
+    def _build_event_config_map(config_rows: List[EventConfiguration]) -> Dict[tuple, EventConfiguration]:
+        return {
+            (row.event_id, row.gender_group, row.bow_type, row.distance): row
+            for row in config_rows
+        }
+
+    @staticmethod
+    def _registration_sort_key(registration: EventRegistration):
+        return (
+            ScoreService.SEASON_ORDER.get(registration.season, 99),
+            registration.created_at,
+            registration.id,
+        )
+
+    @staticmethod
+    def _select_registration_candidate(candidates: List[EventRegistration]) -> Optional[EventRegistration]:
+        if not candidates:
+            return None
+
+        return sorted(candidates, key=ScoreService._registration_sort_key)[0]
+
+    @staticmethod
+    def _get_individual_participant_count(
+        score: Score,
+        event: Event,
+        registration_map: Dict[tuple, List[EventRegistration]],
+        event_config_map: Dict[tuple, EventConfiguration],
+    ) -> Optional[int]:
+        candidates = registration_map.get((event.season, score.name, score.distance, score.bow_type), [])
+        registration = ScoreService._select_registration_candidate(candidates)
+        if not registration:
+            return None
+
+        config = event_config_map.get(
+            (score.event_id, registration.competition_gender_group, score.bow_type, score.distance)
+        )
+        if not config:
+            return None
+
+        return int(config.individual_participant_count or 0)
+
+    @staticmethod
+    def _get_team_participant_count(
+        score: Score,
+        event_config_map: Dict[tuple, EventConfiguration],
+    ) -> Optional[int]:
+        preferred_groups = ['women', 'mixed'] if '*' in (score.name or '') else ['men', 'mixed']
+        for group_code in preferred_groups:
+            config = event_config_map.get((score.event_id, group_code, score.bow_type, score.distance))
+            if config and int(config.team_count or 0) > 0:
+                return int(config.team_count)
+        return None
+
+    @staticmethod
+    def _get_mixed_doubles_participant_count(
+        score: Score,
+        event_config_map: Dict[tuple, EventConfiguration],
+    ) -> Optional[int]:
+        config = event_config_map.get((score.event_id, 'mixed', score.bow_type, score.distance))
+        if not config:
+            return None
+        return int(config.mixed_doubles_team_count or 0)
 
     @staticmethod
     def list_scores(
@@ -63,8 +126,6 @@ class ScoreService:
         # 更新允许的字段
         if score_update.name is not None:
             db_score.name = score_update.name
-        if score_update.club is not None:
-            db_score.club = score_update.club
         if score_update.bow_type is not None:
             db_score.bow_type = score_update.bow_type
         if score_update.distance is not None:
@@ -73,6 +134,19 @@ class ScoreService:
             db_score.format = score_update.format
         if score_update.rank is not None:
             db_score.rank = score_update.rank
+
+        duplicate = db.query(Score).filter(
+            and_(
+                Score.id != score_id,
+                Score.event_id == db_score.event_id,
+                Score.name == db_score.name,
+                Score.bow_type == db_score.bow_type,
+                Score.distance == db_score.distance,
+                Score.format == db_score.format,
+            )
+        ).first()
+        if duplicate:
+            raise ValueError('该成绩已存在，请勿重复保存')
 
         db.commit()
         db.refresh(db_score)
@@ -107,7 +181,6 @@ class ScoreService:
                 and_(
                     Score.event_id == score.event_id,
                     Score.name == score.name,
-                    Score.club == score.club,
                     Score.bow_type == score.bow_type,
                     Score.distance == score.distance,
                     Score.format == score.format,
@@ -123,7 +196,6 @@ class ScoreService:
             created = Score(
                 event_id=score.event_id,
                 name=score.name,
-                club=score.club,
                 bow_type=score.bow_type,
                 distance=score.distance,
                 format=score.format,
@@ -148,11 +220,25 @@ class ScoreService:
         
         返回该弓种在该年度的所有选手及其总积分排名
         """
+        registration_rows = db.query(EventRegistration).filter(
+            EventRegistration.year == year,
+            EventRegistration.points_bow_type == bow_type,
+        ).all()
+        if not registration_rows:
+            return []
+
+        athlete_registration_map: Dict[str, List[EventRegistration]] = defaultdict(list)
+        registration_match_map: Dict[tuple, List[EventRegistration]] = defaultdict(list)
+        for row in registration_rows:
+            athlete_registration_map[row.name].append(row)
+            registration_match_map[(row.season, row.name, row.distance, row.competition_bow_type)].append(row)
+
+        athlete_name_set = set(athlete_registration_map.keys())
         score_rows = db.query(Score, Event).join(
             Event, Event.id == Score.event_id
         ).filter(
-            Score.bow_type == bow_type,
             Event.year == year,
+            Score.name.in_(athlete_name_set),
         ).all()
 
         # 预加载组别配置
@@ -166,19 +252,41 @@ class ScoreService:
         config_rows = db.query(EventConfiguration).filter(
             EventConfiguration.event_id.in_(event_ids)
         ).all() if event_ids else []
-        config_map = {
-            (config.event_id, config.bow_type, config.distance): config
-            for config in config_rows
-        }
+        event_config_map = ScoreService._build_event_config_map(config_rows)
         
-        # 按选手+俱乐部聚合积分
-        athlete_points = {}  # key: (name, club), value: dict
+        # 按报名表中的姓名聚合积分，俱乐部使用该年度最早一次报名信息
+        athlete_points = {}
+        for name, rows in athlete_registration_map.items():
+            earliest_registration = sorted(rows, key=ScoreService._registration_sort_key)[0]
+            athlete_points[name] = {
+                'name': name,
+                'club': earliest_registration.club,
+                'total_points': 0.0,
+                'scores': []
+            }
 
         for score, event in score_rows:
-            config = config_map.get((score.event_id, score.bow_type, score.distance))
-            
-            # 如果没有配置，使用默认人数（8）而不是跳过
-            participant_count = ScoreService._get_participant_count_for_format(config, score.format) if config else 8
+            participant_count = None
+
+            if score.format in ('ranking', 'elimination'):
+                participant_count = ScoreService._get_individual_participant_count(
+                    score,
+                    event,
+                    registration_match_map,
+                    event_config_map,
+                )
+                if not participant_count:
+                    participant_count = 8
+            elif score.format == 'team':
+                participant_count = ScoreService._get_team_participant_count(score, event_config_map)
+                if not participant_count:
+                    participant_count = 3
+            elif score.format == 'mixed_doubles':
+                participant_count = ScoreService._get_mixed_doubles_participant_count(score, event_config_map)
+                if not participant_count:
+                    participant_count = 3
+            else:
+                participant_count = 8
             
             # 计算积分
             points = ScoringCalculator.calculate_points(
@@ -190,17 +298,16 @@ class ScoreService:
                 participant_count=participant_count
             )
             
-            key = (score.name, score.club)
-            if key not in athlete_points:
-                athlete_points[key] = {
+            if score.name not in athlete_points:
+                athlete_points[score.name] = {
                     'name': score.name,
-                    'club': score.club,
+                    'club': '',
                     'total_points': 0.0,
                     'scores': []
                 }
-            
-            athlete_points[key]['total_points'] += points
-            athlete_points[key]['scores'].append({
+
+            athlete_points[score.name]['total_points'] += points
+            athlete_points[score.name]['scores'].append({
                 'event_id': score.event_id,
                 'event_season': f"{event.year} {event.season}",
                 'distance': score.distance,
@@ -211,7 +318,7 @@ class ScoreService:
         
         # 排序
         result = list(athlete_points.values())
-        result.sort(key=lambda x: x['total_points'], reverse=True)
+        result.sort(key=lambda x: (-x['total_points'], x['name']))
         
         # 添加排名
         for idx, item in enumerate(result, 1):

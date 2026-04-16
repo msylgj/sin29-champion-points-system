@@ -51,10 +51,17 @@ def update_score(
     _auth: dict = Depends(verify_admin_token)
 ):
     """更新成绩信息"""
-    score = ScoreService.update_score(db, score_id, score_update)
-    if not score:
-        raise HTTPException(status_code=404, detail="成绩不存在")
-    return score
+    try:
+        score = ScoreService.update_score(db, score_id, score_update)
+        if not score:
+            raise HTTPException(status_code=404, detail="成绩不存在")
+        return score
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新失败：{str(e)}")
 
 
 @router.delete("/{score_id}", summary="删除成绩")

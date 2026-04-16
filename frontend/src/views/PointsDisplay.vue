@@ -47,7 +47,7 @@
           <label for="bow-type-select">弓种</label>
           <select v-model="selectedBowType" id="bow-type-select" class="filter-input" @change="loadRanking">
             <option value="">请选择弓种</option>
-            <option v-for="bow in bowTypes" :key="bow.code" :value="bow.code">
+            <option v-for="bow in rankingBowTypes" :key="bow.code" :value="bow.code">
               {{ bow.name }}
             </option>
           </select>
@@ -227,6 +227,7 @@ const yearLoadFailed = ref(false)
 const dictionaryLoadFailed = ref(false)
 const rankingLoadFailed = ref(false)
 const NO_CLUB_FILTER = '__NO_CLUB__'
+const rankingBowTypes = computed(() => bowTypes.value.filter(item => item.code !== 'sightless'))
 
 // 从排名数据中提取可用的俱乐部列表
 const availableClubs = computed(() => {
@@ -442,13 +443,13 @@ onMounted(async () => {
   await loadDictionaries()
   
   // 总是设置弓种（从内部路由状态或默认值）
-  if (bowTypes.value.length > 0) {
+  if (rankingBowTypes.value.length > 0) {
     const bowTypeParam = route.query.bowType
     
-    if (typeof bowTypeParam === 'string' && bowTypeParam && bowTypes.value.some(b => b.code === bowTypeParam)) {
+    if (typeof bowTypeParam === 'string' && bowTypeParam && rankingBowTypes.value.some(b => b.code === bowTypeParam)) {
       selectedBowType.value = bowTypeParam
     } else {
-      selectedBowType.value = bowTypes.value[0].code
+      selectedBowType.value = rankingBowTypes.value[0].code
     }
   }
   

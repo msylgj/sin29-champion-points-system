@@ -46,6 +46,7 @@ def create_event_with_configs(event_data: CreateEventWithConfigs, db: Session = 
         for config in event_data.configurations:
             configs_with_event_id.append(EventConfigurationBase(
                 event_id=db_event.id,
+                gender_group=config.gender_group,
                 bow_type=config.bow_type,
                 distance=config.distance,
                 individual_participant_count=config.individual_participant_count,
@@ -96,6 +97,7 @@ def get_event(event_id: int, db: Session = Depends(get_db), _auth: dict = Depend
             {
                 "id": cfg.id,
                 "event_id": cfg.event_id,
+                "gender_group": cfg.gender_group,
                 "bow_type": cfg.bow_type,
                 "distance": cfg.distance,
                 "individual_participant_count": cfg.individual_participant_count,
@@ -140,6 +142,7 @@ def list_events(
             config_map[cfg.event_id].append({
                 "id": cfg.id,
                 "event_id": cfg.event_id,
+                "gender_group": cfg.gender_group,
                 "bow_type": cfg.bow_type,
                 "distance": cfg.distance,
                 "individual_participant_count": cfg.individual_participant_count,
@@ -165,4 +168,3 @@ def list_events(
         "page": page,
         "page_size": page_size
     }
-

@@ -1,7 +1,7 @@
 """
 赛事配置模型
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, CheckConstraint, UniqueConstraint
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -10,12 +10,13 @@ class EventConfiguration(Base):
     """赛事配置表 - 记录每个赛事中各比赛组合的参赛规模"""
     __tablename__ = "event_configurations"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     
     # 赛事关联
     event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False)
     
-    # 比赛标识（同一弓种同距离共用配置）
+    # 比赛标识（同一性别分组+弓种+距离共用配置）
+    gender_group = Column(String(50), nullable=False)  # 性别分组：men, women, mixed
     bow_type = Column(String(50), nullable=False)  # 弓种：recurve, compound, traditional, longbow, barebow, sightless
     distance = Column(String(10), nullable=False)  # 距离：10m, 18m, 30m, 50m, 70m
 
@@ -30,6 +31,11 @@ class EventConfiguration(Base):
     
     # 索引
     __table_args__ = (
-        Index('idx_event_config_event', 'event_id'),
-        Index('idx_event_config_key', 'event_id', 'bow_type', 'distance', unique=True),
+        CheckConstraint("gender_group IN ('men', 'women', 'mixed')", name='ck_event_config_gender_group'),
+        CheckConstraint(
+            "bow_type IN ('recurve', 'compound', 'traditional', 'longbow', 'barebow', 'sightless')",
+            name='ck_event_config_bow_type',
+        ),
+        CheckConstraint("distance IN ('10m', '18m', '30m', '50m', '70m')", name='ck_event_config_distance'),
+        UniqueConstraint('event_id', 'gender_group', 'bow_type', 'distance', name='uq_event_config_key'),
     )

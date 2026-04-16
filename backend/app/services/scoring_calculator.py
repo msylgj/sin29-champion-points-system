@@ -21,7 +21,8 @@
     - 根据弓种+距离匹配组别
     - B组：积分×0.5
     - C组：积分×0.3
-    - S/A组或未匹配：积分不变
+    - S/A组：积分不变
+    - 未匹配组别：积分×0
 
 5. 团体赛规则:
    - 排名1-8: 20, 15, 10, 8, 5, 4, 3, 2分(每人)
@@ -96,15 +97,15 @@ class ScoringCalculator:
             competition_groups: 从数据库加载的组别映射 {(bow_type, distance): group_code}
 
         Returns:
-            组别系数（B=0.5, C=0.3, 其他=1.0）
+            组别系数（S=1.0, A=1.0, B=0.5, C=0.3, 未匹配=0）
         """
         if not bow_type:
-            return 1.0
+            return 0.0
 
         group_code = competition_groups.get((bow_type, distance))
         if not group_code:
-            return 1.0
-        return ScoringCalculator.GROUP_MULTIPLIERS.get(group_code, 1.0)
+            return 0.0
+        return ScoringCalculator.GROUP_MULTIPLIERS.get(group_code, 0.0)
     
     @staticmethod
     def calculate_base_points(rank: int, competition_format: str) -> float:

@@ -73,6 +73,13 @@ export const eventConfigAPI = {
   delete: (id) => api.delete(`/event-configurations/${id}`)
 }
 
+export const eventRegistrationAPI = {
+  getList: (params = {}) => api.get('/event-registrations', { params }),
+  batchImport: (data) => api.post('/event-registrations/batch/import', data),
+  update: (id, data) => api.put(`/event-registrations/${id}`, data),
+  delete: (id) => api.delete(`/event-registrations/${id}`),
+}
+
 export const authAPI = {
   login: (password) => api.post('/auth/login', { password })
 }

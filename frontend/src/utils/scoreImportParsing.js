@@ -5,18 +5,16 @@ export const normalizeKeyPart = (value) => (value || '').toString().trim().toLow
 
 export const FIELD_MAPPINGS = {
   name: ['姓名', 'name', '名字', '选手', '参赛者'],
-  club: ['俱乐部', 'club', '箭馆', '队伍', '俱乐部名称'],
   bow_type: ['弓种', 'bow_type', 'bow', '弓类', '弓的类型'],
   distance: ['距离', 'distance', '比赛距离', '距离(m)', '距离m'],
   format: ['赛制', 'format', '比赛', '赛制格式', '竞赛形式'],
   rank: ['排名', 'rank', '名次', '成绩排名', 'rank号']
 }
 
-export const REQUIRED_FIELDS = ['name', 'club', 'bow_type', 'distance', 'format', 'rank']
+export const REQUIRED_FIELDS = ['name', 'bow_type', 'distance', 'format', 'rank']
 
 export const FIELD_LABELS = {
   name: '姓名',
-  club: '俱乐部',
   bow_type: '弓种',
   distance: '距离',
   format: '赛制',
@@ -74,30 +72,10 @@ export const mapColumns = (headerRow, fieldMappings = FIELD_MAPPINGS) => {
 
 export const buildScoreUniqueKey = (item) => [
   normalizeKeyPart(item?.name),
-  normalizeKeyPart(item?.club),
   normalizeKeyPart(item?.bow_type),
   normalizeKeyPart(item?.distance),
   normalizeKeyPart(item?.format)
 ].join('|')
-
-export const buildClubAutoFillMap = (existingScores) => {
-  const clubByNameAndBow = new Map()
-
-  ;(existingScores || []).forEach(item => {
-    const mappedClub = (item?.club || '').toString().trim()
-    const mappedName = (item?.name || '').toString().trim()
-    const mappedBow = (item?.bow_type || '').toString().trim()
-
-    if (!mappedClub || !mappedName || !mappedBow) return
-
-    const key = [normalizeKeyPart(mappedName), normalizeKeyPart(mappedBow)].join('|')
-    if (!clubByNameAndBow.has(key)) {
-      clubByNameAndBow.set(key, mappedClub)
-    }
-  })
-
-  return clubByNameAndBow
-}
 
 export const markInFileDuplicates = (scores, keyToIndexes) => {
   keyToIndexes.forEach(indexes => {
@@ -115,7 +93,7 @@ export const markInFileDuplicates = (scores, keyToIndexes) => {
 
 const buildMissingFieldsMessage = (missingFields, fieldLabels = FIELD_LABELS) => {
   const missingLabels = missingFields.map(field => fieldLabels[field]).join('、')
-  return `Excel 文件缺少必需字段：${missingLabels}。列标题应包括：姓名、俱乐部、弓种、距离、赛制、排名`
+  return `Excel 文件缺少必需字段：${missingLabels}。列标题应包括：姓名、弓种、距离、赛制、排名`
 }
 
 const buildPreparedRows = (jsonData, columnMapping, bowTypeMap, distanceMap, formatMap) => {
@@ -128,7 +106,6 @@ const buildPreparedRows = (jsonData, columnMapping, bowTypeMap, distanceMap, for
     }
 
     const name = (row[columnMapping.name] || '').toString().trim()
-    const club = (row[columnMapping.club] || '').toString().trim()
     const bowType = (row[columnMapping.bow_type] || '').toString().trim()
     const distance = (row[columnMapping.distance] || '').toString().trim()
     const format = (row[columnMapping.format] || '').toString().trim()
@@ -136,7 +113,6 @@ const buildPreparedRows = (jsonData, columnMapping, bowTypeMap, distanceMap, for
 
     preparedRows.push({
       name,
-      club,
       raw_bow_type: bowType,
       raw_distance: distance,
       raw_format: format,
@@ -285,6 +261,7 @@ export const parseScoreImportData = ({
   distances = [],
   competitionFormats = [],
   managedScores = [],
+  eventRegistrations = [],
   selectedEventId
 }) => {
   if (!jsonData || jsonData.length === 0) {
@@ -315,19 +292,29 @@ export const parseScoreImportData = ({
     [...managedScores, ...preparedRows],
     bowTypeCodes
   )
-  const clubByNameAndBow = buildClubAutoFillMap(managedScores)
+  const registrationMap = new Map()
+  ;(eventRegistrations || []).forEach(item => {
+    const key = [
+      normalizeKeyPart(item?.name),
+      normalizeKeyPart(item?.distance),
+      normalizeKeyPart(item?.competition_bow_type),
+    ].join('|')
+    if (!registrationMap.has(key)) {
+      registrationMap.set(key, item)
+    }
+  })
   const parsedScoreKeyToIndexes = new Map()
   const eventId = Number.parseInt(selectedEventId, 10)
   const scores = []
 
   preparedRows.forEach(preparedRow => {
     const name = preparedRow.name
-    let club = preparedRow.club
     let bow_type = preparedRow.bow_type
     const distance = preparedRow.distance
     const format = preparedRow.format
     const rank = preparedRow.rank
     const rowErrors = []
+    let club = ''
 
     if (!bow_type && distance === '18m') {
       const inferred = infer18mBowTypeFromRanking(preparedRow, rankingBowTypeMap)
@@ -335,15 +322,6 @@ export const parseScoreImportData = ({
         rowErrors.push(inferred.error)
       } else {
         bow_type = inferred.bowType
-      }
-    }
-
-    if (name && bow_type) {
-      const clubMapKey = [normalizeKeyPart(name), normalizeKeyPart(bow_type)].join('|')
-      if (club) {
-        clubByNameAndBow.set(clubMapKey, club)
-      } else if (clubByNameAndBow.has(clubMapKey)) {
-        club = clubByNameAndBow.get(clubMapKey) || ''
       }
     }
 
@@ -363,13 +341,27 @@ export const parseScoreImportData = ({
     }
     if (!Number.isInteger(rank) || rank < 1) rowErrors.push('排名必须是正整数')
 
-    const scoreUniqueKey = buildScoreUniqueKey({ name, club, bow_type, distance, format })
+    const registrationKey = [
+      normalizeKeyPart(name),
+      normalizeKeyPart(distance),
+      normalizeKeyPart(bow_type),
+    ].join('|')
+    const matchedRegistration = bow_type && distance ? registrationMap.get(registrationKey) : null
+    if (rowErrors.length === 0) {
+      if (!matchedRegistration) {
+        rowErrors.push('未找到对应报名记录')
+      } else {
+        club = matchedRegistration.club || ''
+      }
+    }
+
+    const scoreUniqueKey = buildScoreUniqueKey({ name, bow_type, distance, format })
     const isDuplicate = rowErrors.length === 0 && existingScoreKeySet.has(scoreUniqueKey)
 
     scores.push({
       event_id: eventId,
       name,
-      club: club || '',
+      club,
       bow_type,
       distance,
       format,

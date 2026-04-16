@@ -51,30 +51,79 @@
               <span class="toggle-icon">{{ showEventConfig ? '收起 ▲' : '展开 ▼' }}</span>
             </button>
             <div v-if="showEventConfig">
-              <div v-for="bowType in bowTypes" :key="bowType.code" class="bow-config-group">
-                <h3 class="bow-type-title">{{ bowType.name }}</h3>
-                <div class="table-wrapper">
-                  <table class="config-table">
-                    <thead>
-                      <tr>
-                        <th>人数类型</th>
-                        <th v-for="distance in sortedDistances" :key="distance.code" v-show="shouldShowDistance(distance.code)">
-                          {{ distance.name }}
-                          <br>
-                          <small class="group-tag">{{ getGroupCode(bowType.code, distance.code) }}</small>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="row in countRows" :key="row.key">
-                        <td class="format-label">{{ row.label }}</td>
-                        <td v-for="distance in sortedDistances" :key="distance.code" v-show="shouldShowDistance(distance.code)">
-                          {{ getConfigCount(bowType.code, distance.code, row.key) }}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+              <div class="bow-config-grid">
+                <template v-for="bowType in bowTypes" :key="bowType.code">
+                  <div v-if="hasBowTypeDistances(bowType.code)" class="bow-config-group">
+                    <h3 class="bow-type-title">{{ bowType.name }}</h3>
+                    <div class="table-wrapper">
+                      <table class="config-table">
+                      <thead>
+                          <tr>
+                            <th rowspan="2">类型</th>
+                            <th
+                              v-for="distance in getBowTypeDistances(bowType.code)"
+                              :key="distance.code"
+                              :colspan="competitionGenderGroups.length"
+                              class="distance-header"
+                            >
+                              {{ distance.name }}
+                              <br>
+                              <small class="group-tag">{{ getGroupCode(bowType.code, distance.code) }}</small>
+                            </th>
+                          </tr>
+                          <tr>
+                            <template v-for="distance in getBowTypeDistances(bowType.code)" :key="`${distance.code}-gender-group-row`">
+                              <th
+                                v-for="genderGroup in competitionGenderGroups"
+                                :key="`${distance.code}-${genderGroup.code}`"
+                                class="gender-header"
+                              >
+                                {{ genderGroup.name }}
+                              </th>
+                            </template>
+                          </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                          <td class="format-label">{{ countRows[0].label }}</td>
+                          <template v-for="distance in getBowTypeDistances(bowType.code)" :key="`${distance.code}-individual-group-row`">
+                            <td
+                              v-for="genderGroup in competitionGenderGroups"
+                              :key="`${distance.code}-${genderGroup.code}-individual`"
+                            >
+                              {{ getConfigCount(genderGroup.code, bowType.code, distance.code, countRows[0].key) }}
+                            </td>
+                          </template>
+                        </tr>
+                        <tr>
+                          <td class="format-label">{{ countRows[1].label }}</td>
+                          <template v-for="distance in getBowTypeDistances(bowType.code)" :key="`${distance.code}-team-row`">
+                            <td
+                              v-for="genderGroup in competitionGenderGroups"
+                              :key="`${distance.code}-${genderGroup.code}-team`"
+                              class="shared-cell"
+                            >
+                              {{ getConfigCount(genderGroup.code, bowType.code, distance.code, countRows[1].key) }}
+                            </td>
+                          </template>
+                        </tr>
+                        <tr>
+                          <td class="format-label">{{ countRows[2].label }}</td>
+                          <template v-for="distance in getBowTypeDistances(bowType.code)" :key="`${distance.code}-mixed-row`">
+                            <td
+                              v-for="genderGroup in competitionGenderGroups"
+                              :key="`${distance.code}-${genderGroup.code}-mixed`"
+                              :class="genderGroup.code === 'mixed' ? 'shared-cell' : 'unavailable-cell'"
+                            >
+                              {{ genderGroup.code === 'mixed' ? getMixedDoublesCount(bowType.code, distance.code) : '-' }}
+                            </td>
+                          </template>
+                        </tr>
+                      </tbody>
+                    </table>
+                    </div>
+                  </div>
+                </template>
               </div>
             </div>
           </div>
@@ -91,18 +140,19 @@
               type="file"
               ref="fileInput"
               @change="onFileSelected"
-              accept=".csv,.xlsx,.xls"
+              accept=".xlsx,.xls"
               hidden
             />
             <button type="button" @click="$refs.fileInput.click()" class="btn-upload">
-              选择 Excel 或 CSV 文件
+              选择 Excel 文件
             </button>
             <p class="upload-help">
-              支持格式：Excel (.xlsx, .xls) 或 CSV<br/>
-              <strong>列标题需包括（推荐英文或中文）：</strong><br/>
-              <span style="color: #667eea;">姓名</span>、<span style="color: #667eea;">俱乐部</span>、<span style="color: #667eea;">弓种</span>、<span style="color: #667eea;">距离</span>、<span style="color: #667eea;">赛制</span>、<span style="color: #667eea;">排名</span><br/>
+              支持格式：Excel (.xlsx, .xls)<br/>
+              <strong>列标题需包括：</strong><br/>
+              <span style="color: #667eea;">姓名</span>、<span style="color: #667eea;">弓种</span>、<span style="color: #667eea;">距离</span>、<span style="color: #667eea;">赛制</span>、<span style="color: #667eea;">排名</span><br/>
               <em style="font-size: 12px; color: #999;">弓种、距离、赛制的值支持使用字典名称；导入时会按字典名称做模糊匹配，例如"传统"匹配"传统弓"、"排位"匹配"排位赛"，距离支持"10"、"10m"、"18"、"18m"等写法</em><br/>
               <em style="font-size: 12px; color: #999;">18 米成绩若弓种留空，会自动按同一姓名的 18 米排位赛成绩匹配弓种；未匹配到时会标记为异常</em><br/>
+              <em style="font-size: 12px; color: #999;">导入时会按姓名、距离、弓种匹配当前赛事报名表，未匹配到对应报名记录时会标记为异常</em><br/>
               <strong>弓种枚举：</strong>{{ bowTypeEnumText }}<br/>
               <strong>距离枚举：</strong>{{ distanceEnumText }}<br/>
               <strong>赛制枚举：</strong>{{ formatEnumText }}<br/>
@@ -119,7 +169,6 @@
               <thead>
                 <tr>
                   <th>姓名</th>
-                  <th>俱乐部</th>
                   <th>弓种</th>
                   <th>距离</th>
                   <th>赛制</th>
@@ -135,7 +184,6 @@
                   :class="{ 'row-error': !score.__valid, 'row-duplicate': score.__valid && (score.__duplicate_with_existing || score.__duplicate_in_file_to_remove) }"
                 >
                   <td>{{ score.name }}</td>
-                  <td>{{ score.club || '-' }}</td>
                   <td>{{ getBowTypeLabel(score.bow_type) }}</td>
                   <td>{{ getDistanceLabel(score.distance) }}</td>
                   <td>{{ getFormatLabel(score.format) }}</td>
@@ -218,7 +266,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { eventAPI, scoreAPI } from '@/api'
+import { eventAPI, eventRegistrationAPI, scoreAPI } from '@/api'
 import { useDictionaries } from '@/composables/useDictionaries'
 import { useEventConfigGrid } from '@/composables/useEventConfigGrid'
 import { useMessage } from '@/composables/useMessage'
@@ -244,17 +292,19 @@ const showEventConfig = ref(false)
 
 const managedScores = ref([])
 const managedScoresLoading = ref(false)
+const eventRegistrations = ref([])
 
 // 字典数据
 const {
   bowTypes,
   distances,
   competitionFormats,
+  competitionGenderGroups,
   competitionGroups,
   loadDictionaries: fetchDictionaries
 } = useDictionaries()
 
-const { countRows, sortedDistances, getGroupCode, shouldShowDistance } = useEventConfigGrid(
+const { countRows, getBowTypeDistances, hasBowTypeDistances, getGroupCode } = useEventConfigGrid(
   distances,
   competitionGroups
 )
@@ -287,13 +337,23 @@ const getDistanceLabel = (distance) => {
   return found ? found.name : distance
 }
 
-const getConfigCount = (bowType, distance, key) => {
+const getConfigCount = (genderGroup, bowType, distance, key) => {
   const config = selectedEvent.value?.configurations?.find(
-    item => item.bow_type === bowType && item.distance === distance
+    item => (item.gender_group || 'mixed') === genderGroup && item.bow_type === bowType && item.distance === distance
   )
   if (!config) return '-'
   return config[key] ?? 0
 }
+
+const getMixedDoublesCount = (bowType, distance) => {
+  const total = (selectedEvent.value?.configurations || []).reduce((sum, item) => {
+    if (item.bow_type !== bowType || item.distance !== distance) return sum
+    return sum + Number(item?.mixed_doubles_team_count || 0)
+  }, 0)
+
+  return total > 0 ? total : '-'
+}
+
 
 const getSeasonOrder = (season) => {
   const s = String(season || '').trim()
@@ -340,8 +400,20 @@ const loadDictionaries = async () => {
 // 加载赛事列表
 const loadEvents = async () => {
   try {
-    const response = await eventAPI.getList({ page: 1, page_size: 100 })
-    events.value = response.items || []
+    const pageSize = 100
+    let page = 1
+    let total = 0
+    const all = []
+
+    do {
+      const response = await eventAPI.getList({ page, page_size: pageSize })
+      const items = response.items || []
+      total = Number(response.total || 0)
+      all.push(...items)
+      page += 1
+    } while (all.length < total)
+
+    events.value = all
     await selectLatestEvent()
     // 如果列表为空，显示友好提示
   } catch {
@@ -384,7 +456,6 @@ const loadManagedScores = async () => {
         id: item.id,
         event_id: item.event_id,
         name: item.name || '',
-        club: item.club || '',
         bow_type: item.bow_type || '',
         distance: item.distance || '',
         format: item.format || '',
@@ -398,6 +469,27 @@ const loadManagedScores = async () => {
     managedScores.value = []
   } finally {
     managedScoresLoading.value = false
+  }
+}
+
+const loadEventRegistrations = async () => {
+  if (!selectedEvent.value?.year || !selectedEvent.value?.season) {
+    eventRegistrations.value = []
+    return
+  }
+
+  try {
+    const response = await eventRegistrationAPI.getList({
+      page: 1,
+      page_size: 1000,
+      year: selectedEvent.value.year,
+      season: selectedEvent.value.season
+    })
+    eventRegistrations.value = response.items || []
+  } catch (error) {
+    console.error('加载报名数据失败:', error)
+    pageMsg.show('error', '加载报名数据失败')
+    eventRegistrations.value = []
   }
 }
 
@@ -415,6 +507,7 @@ const onEventSelected = async () => {
     const response = await eventAPI.getDetail(selectedEventId.value)
     selectedEvent.value = response
     showEventConfig.value = false
+    await loadEventRegistrations()
     await loadManagedScores()
   } catch (error) {
     pageMsg.errorMsg.value = '加载赛事信息失败'
@@ -431,8 +524,8 @@ const onFileSelected = async (event) => {
   parseMsg.clear()
 
   const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
-  if (!isExcel && !file.name.endsWith('.csv')) {
-    parseMsg.errorMsg.value = '请上传 .xlsx, .xls 或 .csv 格式的文件'
+  if (!isExcel) {
+    parseMsg.errorMsg.value = '请上传 .xlsx 或 .xls 格式的文件'
     return
   }
 
@@ -458,22 +551,9 @@ const onFileSelected = async (event) => {
     reader.readAsArrayBuffer(file)
     return
   }
-
-  // CSV 文件处理
-  reader.onload = (e) => {
-    try {
-      const csv = e.target.result
-      const lines = csv.split('\n')
-      const jsonData = lines.map(line => line.split(',').map(p => p.trim()))
-      parseExcelData(jsonData)
-    } catch (error) {
-      parseMsg.errorMsg.value = 'CSV 文件解析失败：' + error.message
-    }
-  }
-  reader.readAsText(file)
 }
 
-// 解析 Excel/CSV 数据
+// 解析 Excel 数据
 const parseExcelData = (jsonData) => {
   parseMsg.clear()
 
@@ -482,6 +562,7 @@ const parseExcelData = (jsonData) => {
     bowTypes: bowTypes.value,
     distances: distances.value,
     competitionFormats: competitionFormats.value,
+    eventRegistrations: eventRegistrations.value,
     managedScores: managedScores.value,
     selectedEventId: selectedEventId.value
   })
@@ -525,7 +606,6 @@ const submitImport = async () => {
       .map(item => ({
         event_id: item.event_id,
         name: item.name,
-        club: item.club,
         bow_type: item.bow_type,
         distance: item.distance,
         format: item.format,

@@ -38,6 +38,16 @@ class CompetitionFormatDict(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class CompetitionGenderGroupDict(Base):
+    """比赛性别分组字典表"""
+    __tablename__ = "competition_gender_groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(50), nullable=False, unique=True, index=True)  # 代码：men, women, mixed
+    name = Column(String(100), nullable=False)  # 名称
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class CompetitionGroupDict(Base):
     """比赛组别字典表"""
     __tablename__ = "competition_groups"

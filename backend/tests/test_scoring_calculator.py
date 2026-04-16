@@ -270,6 +270,18 @@ class TestScoringCalculator:
         # 基础25分 × 系数0.8 × 0.3(C组) = 6分
         assert points == 6.0
 
+    def test_unmatched_group_returns_zero_points(self):
+        """测试未匹配到组别时积分归零"""
+        points = ScoringCalculator.calculate_points(
+            rank=1,
+            competition_format="ranking",
+            competition_groups=TEST_COMPETITION_GROUPS,
+            bow_type="sightless",
+            distance="30m",
+            participant_count=20
+        )
+        assert points == 0.0
+
 # 使用pytest运行测试
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

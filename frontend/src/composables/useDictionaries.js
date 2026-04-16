@@ -6,6 +6,7 @@ export function useDictionaries() {
   const bowTypes = ref([])
   const distances = ref([])
   const competitionFormats = ref([])
+  const competitionGenderGroups = ref([])
   const competitionGroups = ref([])
 
   const loadDictionaries = async () => {
@@ -15,6 +16,7 @@ export function useDictionaries() {
     bowTypes.value = data.bowTypes || []
     distances.value = data.distances || []
     competitionFormats.value = data.competitionFormats || []
+    competitionGenderGroups.value = data.competitionGenderGroups || []
     competitionGroups.value = data.competitionGroups || []
 
     return data
@@ -24,6 +26,7 @@ export function useDictionaries() {
     bowTypes,
     distances,
     competitionFormats,
+    competitionGenderGroups,
     competitionGroups,
     loadDictionaries
   }
