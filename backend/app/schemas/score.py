@@ -8,6 +8,7 @@ from typing import Optional
 VALID_BOW_TYPES = ['recurve', 'compound', 'traditional', 'longbow', 'barebow', 'sightless']
 VALID_DISTANCES = ['10m', '18m', '30m', '50m', '70m']
 VALID_FORMATS = ['ranking', 'elimination', 'mixed_doubles', 'team']
+VALID_GENDER_GROUPS = ['men', 'women', 'mixed']
 
 
 def _validate_bow_type(value: str) -> str:
@@ -28,6 +29,12 @@ def _validate_format(value: str) -> str:
     return value
 
 
+def _validate_gender_group(value: str) -> str:
+    if value not in VALID_GENDER_GROUPS:
+        raise ValueError(f'分组必须是 {VALID_GENDER_GROUPS}')
+    return value
+
+
 class ScoreBase(BaseModel):
     """成绩基础数据"""
     event_id: int = Field(..., description="赛事ID")
@@ -35,6 +42,7 @@ class ScoreBase(BaseModel):
     bow_type: str = Field(..., description="弓种：recurve, compound, traditional, longbow, barebow, sightless")
     distance: str = Field(..., description="距离：10m, 18m, 30m, 50m, 70m")
     format: str = Field(..., description="比赛类型：ranking, elimination, team")
+    gender_group: Optional[str] = Field(None, description="分组：men, women, mixed")
     rank: int = Field(..., ge=1, description="名次")
 
     @field_validator('bow_type')
@@ -49,6 +57,12 @@ class ScoreBase(BaseModel):
     def validate_format(cls, v):
         return _validate_format(v)
 
+    @field_validator('gender_group')
+    def validate_gender_group(cls, v):
+        if v is None:
+            return v
+        return _validate_gender_group(v)
+
 
 class ScoreCreate(ScoreBase):
     """创建成绩请求"""
@@ -61,6 +75,7 @@ class ScoreUpdate(BaseModel):
     bow_type: Optional[str] = None
     distance: Optional[str] = None
     format: Optional[str] = None
+    gender_group: Optional[str] = None
     rank: Optional[int] = Field(None, ge=1)
 
     @field_validator('bow_type')
@@ -80,6 +95,12 @@ class ScoreUpdate(BaseModel):
         if v is None:
             return v
         return _validate_format(v)
+
+    @field_validator('gender_group')
+    def validate_gender_group(cls, v):
+        if v is None:
+            return v
+        return _validate_gender_group(v)
 
 
 class ScoreRead(ScoreBase):

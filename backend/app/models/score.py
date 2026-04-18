@@ -22,6 +22,7 @@ class Score(Base):
     bow_type = Column(String(50), nullable=False)  # 弓种：recurve, compound, traditional, longbow, barebow, sightless
     distance = Column(String(10), nullable=False)  # 距离：18m, 30m, 50m, 70m
     format = Column(String(50), nullable=False)  # 比赛类型：ranking, elimination, mixed_doubles, team
+    gender_group = Column(String(50), nullable=True)  # 性别分组：men, women, mixed
     
     # 成绩
     rank = Column(Integer, nullable=False)  # 名次

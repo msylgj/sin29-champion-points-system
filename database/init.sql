@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS scores (
     bow_type VARCHAR(50) NOT NULL CHECK (bow_type IN ('barebow', 'longbow', 'traditional', 'sightless', 'recurve', 'compound')),
     distance VARCHAR(10) NOT NULL CHECK (distance IN ('10m', '18m', '30m', '50m', '70m')),
     format VARCHAR(50) NOT NULL CHECK (format IN ('ranking', 'elimination', 'mixed_doubles', 'team')),
+    gender_group VARCHAR(50) DEFAULT NULL CHECK (gender_group IS NULL OR gender_group IN ('men', 'women', 'mixed')),
     rank INTEGER NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,

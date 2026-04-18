@@ -7,7 +7,8 @@ export const FIELD_MAPPINGS = {
   bow_type: ['弓种', 'bow_type', 'bow', '弓类', '弓的类型'],
   distance: ['距离', 'distance', '比赛距离', '距离(m)', '距离m'],
   format: ['赛制', 'format', '比赛', '赛制格式', '竞赛形式'],
-  rank: ['排名', 'rank', '名次', '成绩排名', 'rank号']
+  rank: ['排名', 'rank', '名次', '成绩排名', 'rank号'],
+  gender_group: ['分组', 'gender_group', '性别分组', 'group', '比赛分组']
 }
 
 export const REQUIRED_FIELDS = ['name', 'bow_type', 'distance', 'format', 'rank']
@@ -17,7 +18,8 @@ export const FIELD_LABELS = {
   bow_type: '弓种',
   distance: '距离',
   format: '赛制',
-  rank: '排名'
+  rank: '排名',
+  gender_group: '分组'
 }
 
 export const SCORE_IMPORT_ALIASES = {
@@ -48,6 +50,16 @@ export const SCORE_IMPORT_ALIASES = {
     buildVariants: (name) => {
       const variants = [name]
       if (name.endsWith('赛')) {
+        variants.push(name.slice(0, -1))
+      }
+      return variants
+    }
+  },
+  gender_group: {
+    mode: 'like_dictionary_name',
+    buildVariants: (name) => {
+      const variants = [name]
+      if (name.endsWith('组')) {
         variants.push(name.slice(0, -1))
       }
       return variants
@@ -95,7 +107,7 @@ const buildMissingFieldsMessage = (missingFields, fieldLabels = FIELD_LABELS) =>
   return `Excel 文件缺少必需字段：${missingLabels}。列标题应包括：姓名、弓种、距离、赛制、排名`
 }
 
-const buildPreparedRows = (jsonData, columnMapping, bowTypeMap, distanceMap, formatMap) => {
+const buildPreparedRows = (jsonData, columnMapping, bowTypeMap, distanceMap, formatMap, genderGroupMap) => {
   const preparedRows = []
 
   for (let i = 1; i < jsonData.length; i++) {
@@ -109,15 +121,20 @@ const buildPreparedRows = (jsonData, columnMapping, bowTypeMap, distanceMap, for
     const distance = (row[columnMapping.distance] || '').toString().trim()
     const format = (row[columnMapping.format] || '').toString().trim()
     const rank = Number.parseInt(row[columnMapping.rank], 10)
+    const genderGroup = columnMapping.gender_group !== undefined
+      ? (row[columnMapping.gender_group] || '').toString().trim()
+      : ''
 
     preparedRows.push({
       name,
       raw_bow_type: bowType,
       raw_distance: distance,
       raw_format: format,
+      raw_gender_group: genderGroup,
       bow_type: convertToCode(bowType, bowTypeMap),
       distance: convertToCode(distance, distanceMap),
       format: convertToCode(format, formatMap),
+      gender_group: genderGroup ? convertToCode(genderGroup, genderGroupMap) : '',
       rank
     })
   }
@@ -213,6 +230,7 @@ export const parseScoreImportData = ({
   bowTypes = [],
   distances = [],
   competitionFormats = [],
+  competitionGenderGroups = [],
   managedScores = [],
   eventRegistrations = [],
   selectedEventId
@@ -235,12 +253,14 @@ export const parseScoreImportData = ({
   const bowTypeMap = createValueToCodeMap(bowTypes, SCORE_IMPORT_ALIASES.bow_type)
   const distanceMap = createValueToCodeMap(distances, SCORE_IMPORT_ALIASES.distance)
   const formatMap = createValueToCodeMap(competitionFormats, SCORE_IMPORT_ALIASES.format)
+  const genderGroupMap = createValueToCodeMap(competitionGenderGroups, SCORE_IMPORT_ALIASES.gender_group)
   const bowTypeCodes = bowTypes.map(item => item.code)
   const bowCodeSet = new Set(bowTypeCodes)
   const distanceCodeSet = new Set(distances.map(item => item.code))
   const formatCodeSet = new Set(competitionFormats.map(item => item.code))
+  const genderGroupCodeSet = new Set(competitionGenderGroups.map(item => item.code))
   const existingScoreKeySet = new Set(managedScores.map(item => buildScoreUniqueKey(item)))
-  const preparedRows = buildPreparedRows(jsonData, columnMapping, bowTypeMap, distanceMap, formatMap)
+  const preparedRows = buildPreparedRows(jsonData, columnMapping, bowTypeMap, distanceMap, formatMap, genderGroupMap)
   const registrationMap = new Map()
   ;(eventRegistrations || []).forEach(item => {
     const key = [
@@ -262,6 +282,7 @@ export const parseScoreImportData = ({
     const distance = preparedRow.distance
     const format = preparedRow.format
     const rank = preparedRow.rank
+    const gender_group = preparedRow.gender_group
     const rowErrors = []
     let club = ''
 
@@ -277,6 +298,9 @@ export const parseScoreImportData = ({
     if (!format || !formatCodeSet.has(format) || !hasMappedValue(preparedRow.raw_format, formatMap)) {
       rowErrors.push(`赛制无效：${format || '-'}`)
     }
+    if (gender_group && !genderGroupCodeSet.has(gender_group)) {
+      rowErrors.push(`分组无效：${gender_group}`)
+    }
     if (!Number.isInteger(rank) || rank < 1) rowErrors.push('排名必须是正整数')
 
     const registrationKey = [
@@ -285,11 +309,23 @@ export const parseScoreImportData = ({
       normalizeKeyPart(bow_type),
     ].join('|')
     const matchedRegistration = bow_type && distance ? registrationMap.get(registrationKey) : null
-    if (rowErrors.length === 0) {
+    if (rowErrors.length === 0 && format !== 'team' && format !== 'mixed_doubles') {
       if (!matchedRegistration) {
         rowErrors.push('未找到对应报名记录')
       } else {
         club = matchedRegistration.club || ''
+      }
+    } else if (rowErrors.length === 0 && matchedRegistration) {
+      club = matchedRegistration.club || ''
+    }
+
+    // 自动推断 gender_group：导入值优先；为空时 ranking/elimination 从报名表匹配，team/mixed_doubles 默认 mixed
+    let resolvedGenderGroup = gender_group || ''
+    if (!resolvedGenderGroup && rowErrors.length === 0) {
+      if (format === 'team' || format === 'mixed_doubles') {
+        resolvedGenderGroup = 'mixed'
+      } else if (matchedRegistration) {
+        resolvedGenderGroup = matchedRegistration.competition_gender_group || ''
       }
     }
 
@@ -303,6 +339,7 @@ export const parseScoreImportData = ({
       bow_type,
       distance,
       format,
+      gender_group: resolvedGenderGroup || null,
       rank,
       __valid: rowErrors.length === 0,
       __errors: rowErrors,

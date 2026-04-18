@@ -63,8 +63,8 @@ vi.mock('@/api', () => ({
 
 vi.mock('./ScoreManagePanel.vue', () => ({
   default: {
-    template: '<div data-test="score-manage-panel"></div>',
-    props: ['scores', 'loading', 'bowTypes', 'distances', 'competitionFormats'],
+    template: '<div data-test="score-manage-panel">{{ JSON.stringify(scores) }}</div>',
+    props: ['scores', 'loading', 'bowTypes', 'distances', 'competitionFormats', 'competitionGenderGroups'],
   },
 }))
 
@@ -136,6 +136,31 @@ describe('ScoreImport page', () => {
     expect(view.container.textContent).not.toContain('CSV')
     expect(registrationListGet).toHaveBeenCalled()
     expect(scoreListGet).toHaveBeenCalled()
+
+    view.unmount()
+  })
+
+  it('passes gender_group from loaded scores into the manage panel', async () => {
+    scoreListGet.mockResolvedValue({
+      items: [
+        {
+          id: 11,
+          event_id: 2,
+          name: '张三',
+          bow_type: 'recurve',
+          distance: '30m',
+          format: 'ranking',
+          gender_group: 'men',
+          rank: 1,
+        },
+      ],
+      total: 1,
+    })
+
+    const { default: ScoreImport } = await import('./ScoreImport.vue')
+    const view = await mountComponent(ScoreImport)
+
+    expect(view.container.textContent).toContain('"gender_group":"men"')
 
     view.unmount()
   })

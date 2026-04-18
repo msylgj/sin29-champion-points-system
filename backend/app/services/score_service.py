@@ -4,7 +4,7 @@
 from collections import defaultdict
 
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc
+from sqlalchemy import and_, desc, or_
 from app.models.score import Score
 from app.models.event import Event
 from app.models.event_configuration import EventConfiguration
@@ -43,15 +43,16 @@ class ScoreService:
     @staticmethod
     def _get_individual_participant_count(
         score: Score,
-        registration: EventRegistration,
         event_config_map: Dict[tuple, EventConfiguration],
     ) -> Optional[int]:
+        gender_group = score.gender_group
+        if not gender_group:
+            return None
         config = event_config_map.get(
-            (score.event_id, registration.competition_gender_group, score.bow_type, score.distance)
+            (score.event_id, gender_group, score.bow_type, score.distance)
         )
         if not config:
             return None
-
         return int(config.individual_participant_count or 0)
 
     @staticmethod
@@ -59,19 +60,23 @@ class ScoreService:
         score: Score,
         event_config_map: Dict[tuple, EventConfiguration],
     ) -> Optional[int]:
-        preferred_groups = ['women', 'mixed'] if '*' in (score.name or '') else ['men', 'mixed']
-        for group_code in preferred_groups:
-            config = event_config_map.get((score.event_id, group_code, score.bow_type, score.distance))
-            if config and int(config.team_count or 0) > 0:
-                return int(config.team_count)
-        return None
+        gender_group = score.gender_group
+        if not gender_group:
+            return None
+        config = event_config_map.get((score.event_id, gender_group, score.bow_type, score.distance))
+        if not config:
+            return None
+        return int(config.team_count or 0) or None
 
     @staticmethod
     def _get_mixed_doubles_participant_count(
         score: Score,
         event_config_map: Dict[tuple, EventConfiguration],
     ) -> Optional[int]:
-        config = event_config_map.get((score.event_id, 'mixed', score.bow_type, score.distance))
+        gender_group = score.gender_group
+        if not gender_group:
+            return None
+        config = event_config_map.get((score.event_id, gender_group, score.bow_type, score.distance))
         if not config:
             return None
         return int(config.mixed_doubles_team_count or 0)
@@ -119,6 +124,8 @@ class ScoreService:
             db_score.distance = score_update.distance
         if score_update.format is not None:
             db_score.format = score_update.format
+        if score_update.gender_group is not None:
+            db_score.gender_group = score_update.gender_group
         if score_update.rank is not None:
             db_score.rank = score_update.rank
 
@@ -150,6 +157,22 @@ class ScoreService:
         return True
 
     @staticmethod
+    def _resolve_gender_group(
+        score: ScoreCreate,
+        registration_map: Dict[tuple, EventRegistration],
+    ) -> Optional[str]:
+        """推断成绩的性别分组：导入值优先；为空时按规则自动匹配"""
+        if score.gender_group:
+            return score.gender_group
+        if score.format in ('team', 'mixed_doubles'):
+            return 'mixed'
+        # ranking / elimination: 从报名表中按 姓名+距离+弓种 匹配
+        reg = registration_map.get((score.event_id, score.name, score.distance, score.bow_type))
+        if reg:
+            return reg.competition_gender_group
+        return None
+
+    @staticmethod
     def batch_create_scores(db: Session, scores: List[ScoreCreate]) -> List[Score]:
         """批量创建成绩；若同赛事下键重复则覆盖更新 rank"""
         result = []
@@ -163,7 +186,34 @@ class ScoreService:
             first_missing = sorted(missing_event_ids)[0]
             raise ValueError(f"赛事 ID {first_missing} 不存在")
 
+        # 预加载涉及赛事的报名记录，用于自动推断 gender_group
+        event_rows = db.query(Event).filter(Event.id.in_(event_ids)).all()
+        event_info = {e.id: e for e in event_rows}
+        reg_filters = []
+        for eid in event_ids:
+            ev = event_info.get(eid)
+            if ev:
+                reg_filters.append(
+                    and_(
+                        EventRegistration.year == ev.year,
+                        EventRegistration.season == ev.season,
+                    )
+                )
+        registration_rows = (
+            db.query(EventRegistration).filter(or_(*reg_filters)).all() if reg_filters else []
+        )
+        # key: (event_id, name, distance, bow_type) -> registration
+        registration_map: Dict[tuple, EventRegistration] = {}
+        for reg in registration_rows:
+            for eid, ev in event_info.items():
+                if ev.year == reg.year and ev.season == reg.season:
+                    key = (eid, reg.name, reg.distance, reg.competition_bow_type)
+                    if key not in registration_map:
+                        registration_map[key] = reg
+
         for score in scores:
+            gender_group = ScoreService._resolve_gender_group(score, registration_map)
+
             existing = db.query(Score).filter(
                 and_(
                     Score.event_id == score.event_id,
@@ -176,6 +226,7 @@ class ScoreService:
 
             if existing:
                 existing.rank = score.rank
+                existing.gender_group = gender_group
                 db.flush()
                 result.append(existing)
                 continue
@@ -186,6 +237,7 @@ class ScoreService:
                 bow_type=score.bow_type,
                 distance=score.distance,
                 format=score.format,
+                gender_group=gender_group,
                 rank=score.rank
             )
             db.add(created)
@@ -265,7 +317,6 @@ class ScoreService:
             if score.format in ('ranking', 'elimination'):
                 participant_count = ScoreService._get_individual_participant_count(
                     score,
-                    registration,
                     event_config_map,
                 )
                 if not participant_count:

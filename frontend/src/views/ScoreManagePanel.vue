@@ -65,6 +65,7 @@
               <th>弓种</th>
               <th>距离</th>
               <th>赛制</th>
+              <th>分组</th>
               <th>排名</th>
               <th>操作</th>
             </tr>
@@ -86,6 +87,12 @@
               <td>
                 <select v-model="score.format" class="cell-input" :disabled="deletedIds.has(score.id)">
                   <option v-for="item in competitionFormats" :key="item.code" :value="item.code">{{ item.name }}</option>
+                </select>
+              </td>
+              <td>
+                <select v-model="score.gender_group" class="cell-input" :disabled="deletedIds.has(score.id)">
+                  <option :value="null">-</option>
+                  <option v-for="item in competitionGenderGroups" :key="item.code" :value="item.code">{{ item.name }}</option>
                 </select>
               </td>
               <td><input v-model.number="score.rank" class="cell-input" type="number" min="1" :disabled="deletedIds.has(score.id)" /></td>
@@ -135,7 +142,8 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   bowTypes: { type: Array, required: true },
   distances: { type: Array, required: true },
-  competitionFormats: { type: Array, required: true }
+  competitionFormats: { type: Array, required: true },
+  competitionGenderGroups: { type: Array, required: true }
 })
 
 const manageMsg = useMessage(5000)
@@ -163,6 +171,7 @@ const normalize = (score = {}) => ({
   bow_type: score.bow_type || '',
   distance: score.distance || '',
   format: score.format || '',
+  gender_group: score.gender_group || '',
   rank: Number(score.rank || 0)
 })
 
@@ -171,7 +180,7 @@ const isModified = (score) => {
   if (!original) return false
   const a = normalize(score)
   const b = normalize(original)
-  return ['name', 'bow_type', 'distance', 'format', 'rank'].some(k => a[k] !== b[k])
+  return ['name', 'bow_type', 'distance', 'format', 'gender_group', 'rank'].some(k => a[k] !== b[k])
 }
 
 const isRowChanged = (score) => {
@@ -256,6 +265,7 @@ const saveScore = async (score) => {
       bow_type: score.bow_type,
       distance: score.distance,
       format: score.format,
+      gender_group: score.gender_group || null,
       rank: Number(score.rank)
     }
     const updated = await scoreAPI.update(score.id, payload)
@@ -268,6 +278,7 @@ const saveScore = async (score) => {
         bow_type: updated.bow_type || '',
         distance: updated.distance || '',
         format: updated.format || '',
+        gender_group: updated.gender_group || null,
         rank: Number(updated.rank || 0)
       })
     }

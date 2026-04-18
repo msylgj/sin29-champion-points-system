@@ -149,8 +149,9 @@
             <p class="upload-help">
               支持格式：Excel (.xlsx, .xls)<br/>
               <strong>列标题需包括：</strong><br/>
-              <span style="color: #667eea;">姓名</span>、<span style="color: #667eea;">弓种</span>、<span style="color: #667eea;">距离</span>、<span style="color: #667eea;">赛制</span>、<span style="color: #667eea;">排名</span><br/>
+              <span style="color: #667eea;">姓名</span>、<span style="color: #667eea;">弓种</span>、<span style="color: #667eea;">距离</span>、<span style="color: #667eea;">赛制</span>、<span style="color: #667eea;">排名</span>，可选：<span style="color: #667eea;">分组</span><br/>
               <em style="font-size: 12px; color: #999;">弓种、距离、赛制的值支持使用字典名称；导入时会按字典名称做模糊匹配，例如"传统"匹配"传统弓"、"排位"匹配"排位赛"，距离支持"10"、"10m"、"18"、"18m"等写法</em><br/>
+              <em style="font-size: 12px; color: #999;">分组列可选；不填时排位/淘汰赛自动从报名表匹配，团体/混双默认为混合组</em><br/>
               <em style="font-size: 12px; color: #999;">导入时会按姓名、距离、弓种匹配当前赛事报名表，未匹配到对应报名记录时会标记为异常</em><br/>
               <strong>弓种枚举：</strong>{{ bowTypeEnumText }}<br/>
               <strong>距离枚举：</strong>{{ distanceEnumText }}<br/>
@@ -171,6 +172,7 @@
                   <th>弓种</th>
                   <th>距离</th>
                   <th>赛制</th>
+                  <th>分组</th>
                   <th>排名</th>
                   <th>状态</th>
                   <th>操作</th>
@@ -186,6 +188,7 @@
                   <td>{{ getBowTypeLabel(score.bow_type) }}</td>
                   <td>{{ getDistanceLabel(score.distance) }}</td>
                   <td>{{ getFormatLabel(score.format) }}</td>
+                  <td>{{ getGenderGroupLabel(score.gender_group) }}</td>
                   <td>{{ score.rank }}</td>
                   <td>
                     <span v-if="score.__valid && score.__duplicate_in_file_to_remove" class="status-tag status-duplicate" title="Excel 中存在重复行，导入时该行将被移除">重复（将移除）</span>
@@ -242,6 +245,7 @@
         :bow-types="bowTypes"
         :distances="distances"
         :competition-formats="competitionFormats"
+        :competition-gender-groups="competitionGenderGroups"
       />
     </div>
 
@@ -334,6 +338,13 @@ const getFormatLabel = (format) => {
 const getDistanceLabel = (distance) => {
   const found = distances.value.find(item => item.code === distance)
   return found ? found.name : distance
+}
+
+// 获取分组标签
+const getGenderGroupLabel = (genderGroup) => {
+  if (!genderGroup) return ''
+  const found = competitionGenderGroups.value.find(item => item.code === genderGroup)
+  return found ? found.name : genderGroup
 }
 
 const getConfigCount = (genderGroup, bowType, distance, key) => {
@@ -458,6 +469,7 @@ const loadManagedScores = async () => {
         bow_type: item.bow_type || '',
         distance: item.distance || '',
         format: item.format || '',
+        gender_group: item.gender_group || null,
         rank: Number(item.rank || 0)
       })
     })
@@ -561,6 +573,7 @@ const parseExcelData = (jsonData) => {
     bowTypes: bowTypes.value,
     distances: distances.value,
     competitionFormats: competitionFormats.value,
+    competitionGenderGroups: competitionGenderGroups.value,
     eventRegistrations: eventRegistrations.value,
     managedScores: managedScores.value,
     selectedEventId: selectedEventId.value
@@ -608,6 +621,7 @@ const submitImport = async () => {
         bow_type: item.bow_type,
         distance: item.distance,
         format: item.format,
+        gender_group: item.gender_group || null,
         rank: item.rank
       }))
 
