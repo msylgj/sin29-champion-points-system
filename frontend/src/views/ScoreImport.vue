@@ -151,7 +151,6 @@
               <strong>列标题需包括：</strong><br/>
               <span style="color: #667eea;">姓名</span>、<span style="color: #667eea;">弓种</span>、<span style="color: #667eea;">距离</span>、<span style="color: #667eea;">赛制</span>、<span style="color: #667eea;">排名</span><br/>
               <em style="font-size: 12px; color: #999;">弓种、距离、赛制的值支持使用字典名称；导入时会按字典名称做模糊匹配，例如"传统"匹配"传统弓"、"排位"匹配"排位赛"，距离支持"10"、"10m"、"18"、"18m"等写法</em><br/>
-              <em style="font-size: 12px; color: #999;">18 米成绩若弓种留空，会自动按同一姓名的 18 米排位赛成绩匹配弓种；未匹配到时会标记为异常</em><br/>
               <em style="font-size: 12px; color: #999;">导入时会按姓名、距离、弓种匹配当前赛事报名表，未匹配到对应报名记录时会标记为异常</em><br/>
               <strong>弓种枚举：</strong>{{ bowTypeEnumText }}<br/>
               <strong>距离枚举：</strong>{{ distanceEnumText }}<br/>

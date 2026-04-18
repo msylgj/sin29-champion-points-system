@@ -3,11 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   FIELD_MAPPINGS,
   SCORE_IMPORT_ALIASES,
-  build18mRankingBowTypeMap,
   buildScoreUniqueKey,
   convertToCode,
   createValueToCodeMap,
-  infer18mBowTypeFromRanking,
   mapColumns,
   markInFileDuplicates,
   normalizeKeyPart,
@@ -101,46 +99,6 @@ describe('score import parsing helpers', () => {
     })
   })
 
-  it('infers missing 18m bow type from same-name 18m ranking scores', () => {
-    const rankingBowTypeMap = build18mRankingBowTypeMap(
-      [
-        { name: '张三', distance: '18m', format: 'ranking', bow_type: 'traditional' },
-        { name: '李四', distance: '18m', format: 'team', bow_type: 'compound' },
-        { name: '王五', distance: '18m', format: 'ranking', bow_type: 'recurve' },
-        { name: '王五', distance: '18m', format: 'ranking', bow_type: 'compound' },
-      ],
-      bowTypes.map(item => item.code)
-    )
-
-    expect(
-      infer18mBowTypeFromRanking(
-        { name: '张三', distance: '18m', format: 'elimination', bow_type: '' },
-        rankingBowTypeMap
-      )
-    ).toEqual({ bowType: 'traditional', error: null })
-
-    expect(
-      infer18mBowTypeFromRanking(
-        { name: '李四', distance: '18m', format: 'elimination', bow_type: '' },
-        rankingBowTypeMap
-      )
-    ).toEqual({ bowType: '', error: '弓种为空且未找到对应排位赛成绩' })
-
-    expect(
-      infer18mBowTypeFromRanking(
-        { name: '王五', distance: '18m', format: 'elimination', bow_type: '' },
-        rankingBowTypeMap
-      )
-    ).toEqual({ bowType: '', error: '弓种为空且匹配到多条不同弓种的18米排位赛成绩' })
-
-    expect(
-      infer18mBowTypeFromRanking(
-        { name: '赵六', distance: '30m', format: 'elimination', bow_type: '' },
-        rankingBowTypeMap
-      )
-    ).toEqual({ bowType: '', error: null })
-  })
-
   it('parses imported rows end-to-end and returns a summary message', () => {
     const result = parseScoreImportData({
       jsonData: [
@@ -173,10 +131,10 @@ describe('score import parsing helpers', () => {
       __duplicate_in_file_to_remove: false,
     })
     expect(result.scores[1]).toMatchObject({
-      bow_type: 'traditional',
+      bow_type: '',
       distance: '18m',
       format: 'elimination',
-      __valid: true,
+      __valid: false,
     })
     expect(result.scores[2]).toMatchObject({
       __valid: true,
@@ -184,7 +142,8 @@ describe('score import parsing helpers', () => {
       __duplicate_in_file_to_remove: true,
       __duplicate: true,
     })
-    expect(result.scores[3].__errors).toContain('弓种为空且未找到对应排位赛成绩')
+    expect(result.scores[1].__errors).toContain('弓种无效：-')
+    expect(result.scores[3].__errors).toContain('弓种无效：-')
   })
 
   it('rejects bow type and format code values during import parsing', () => {
@@ -226,6 +185,30 @@ describe('score import parsing helpers', () => {
     expect(result.errorMessage).toBeNull()
     expect(result.scores[0].__valid).toBe(false)
     expect(result.scores[0].__errors).toContain('未找到对应报名记录')
+  })
+
+  it('treats empty bow type as invalid instead of inferring it', () => {
+    const result = parseScoreImportData({
+      jsonData: [
+        ['姓名', '弓种', '距离', '赛制', '排名'],
+        ['张三', '', '18m', '排位', '1'],
+      ],
+      bowTypes,
+      distances,
+      competitionFormats: formats,
+      managedScores: [
+        { name: '张三', bow_type: 'traditional', distance: '18m', format: 'ranking' },
+      ],
+      eventRegistrations: [
+        { name: '张三', club: '甲俱乐部', distance: '18m', competition_bow_type: 'traditional' },
+      ],
+      selectedEventId: '12',
+    })
+
+    expect(result.errorMessage).toBeNull()
+    expect(result.scores[0].__valid).toBe(false)
+    expect(result.scores[0].bow_type).toBe('')
+    expect(result.scores[0].__errors).toContain('弓种无效：-')
   })
 
   it('treats same name distance bow format as duplicate regardless of club source', () => {

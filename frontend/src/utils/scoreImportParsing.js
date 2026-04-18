@@ -1,5 +1,4 @@
 const normalizeLookupValue = (value) => (value || '').toString().trim().toLowerCase().replace(/\s+/g, '')
-const normalizeNameKey = (value) => (value || '').toString().trim().toLowerCase()
 
 export const normalizeKeyPart = (value) => (value || '').toString().trim().toLowerCase()
 
@@ -209,52 +208,6 @@ export const convertToCode = (value, valueMap) => {
   return likeEntry ? likeEntry.code : trimmedValue
 }
 
-export const build18mRankingBowTypeMap = (scores, validBowTypeCodes = []) => {
-  const bowTypeCodeSet = new Set(validBowTypeCodes)
-  const bowTypeMap = new Map()
-
-  ;(scores || []).forEach(item => {
-    const nameKey = normalizeNameKey(item?.name)
-    const distance = (item?.distance || '').toString().trim()
-    const format = (item?.format || '').toString().trim()
-    const bowType = (item?.bow_type || '').toString().trim()
-
-    if (!nameKey || distance !== '18m' || format !== 'ranking' || !bowType) return
-    if (bowTypeCodeSet.size > 0 && !bowTypeCodeSet.has(bowType)) return
-
-    const candidates = bowTypeMap.get(nameKey) || new Set()
-    candidates.add(bowType)
-    bowTypeMap.set(nameKey, candidates)
-  })
-
-  return bowTypeMap
-}
-
-export const infer18mBowTypeFromRanking = (score, rankingBowTypeMap) => {
-  const bowType = (score?.bow_type || '').toString().trim()
-  const distance = (score?.distance || '').toString().trim()
-  const nameKey = normalizeNameKey(score?.name)
-
-  if (bowType || distance !== '18m') {
-    return { bowType, error: null }
-  }
-
-  if (!nameKey) {
-    return { bowType: '', error: '弓种为空且未找到对应排位赛成绩' }
-  }
-
-  const candidates = rankingBowTypeMap.get(nameKey)
-  if (!candidates || candidates.size === 0) {
-    return { bowType: '', error: '弓种为空且未找到对应排位赛成绩' }
-  }
-
-  if (candidates.size > 1) {
-    return { bowType: '', error: '弓种为空且匹配到多条不同弓种的18米排位赛成绩' }
-  }
-
-  return { bowType: Array.from(candidates)[0], error: null }
-}
-
 export const parseScoreImportData = ({
   jsonData,
   bowTypes = [],
@@ -288,10 +241,6 @@ export const parseScoreImportData = ({
   const formatCodeSet = new Set(competitionFormats.map(item => item.code))
   const existingScoreKeySet = new Set(managedScores.map(item => buildScoreUniqueKey(item)))
   const preparedRows = buildPreparedRows(jsonData, columnMapping, bowTypeMap, distanceMap, formatMap)
-  const rankingBowTypeMap = build18mRankingBowTypeMap(
-    [...managedScores, ...preparedRows],
-    bowTypeCodes
-  )
   const registrationMap = new Map()
   ;(eventRegistrations || []).forEach(item => {
     const key = [
@@ -316,20 +265,9 @@ export const parseScoreImportData = ({
     const rowErrors = []
     let club = ''
 
-    if (!bow_type && distance === '18m') {
-      const inferred = infer18mBowTypeFromRanking(preparedRow, rankingBowTypeMap)
-      if (inferred.error) {
-        rowErrors.push(inferred.error)
-      } else {
-        bow_type = inferred.bowType
-      }
-    }
-
     if (!name) rowErrors.push('姓名不能为空')
     if (!bow_type) {
-      if (!(distance === '18m' && preparedRow.bow_type === '' && rowErrors.length > 0)) {
-        rowErrors.push('弓种无效：-')
-      }
+      rowErrors.push('弓种无效：-')
     } else if (preparedRow.raw_bow_type && (!hasMappedValue(preparedRow.raw_bow_type, bowTypeMap) || !bowCodeSet.has(bow_type))) {
       rowErrors.push(`弓种无效：${bow_type}`)
     }
