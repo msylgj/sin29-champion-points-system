@@ -322,11 +322,17 @@ class ScoreService:
                 if not participant_count:
                     participant_count = 8
             elif score.format == 'team':
-                participant_count = ScoreService._get_team_participant_count(score, event_config_map)
+                participant_count = ScoreService._get_team_participant_count(
+                    score,
+                    event_config_map,
+                )
                 if not participant_count:
                     participant_count = 3
             elif score.format == 'mixed_doubles':
-                participant_count = ScoreService._get_mixed_doubles_participant_count(score, event_config_map)
+                participant_count = ScoreService._get_mixed_doubles_participant_count(
+                    score,
+                    event_config_map,
+                )
                 if not participant_count:
                     participant_count = 3
             else:

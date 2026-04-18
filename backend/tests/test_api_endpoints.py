@@ -113,6 +113,7 @@ def seed_ranking_data():
                 bow_type='recurve',
                 distance='30m',
                 format='ranking',
+                gender_group='men',
                 rank=1,
             ),
             Score(
@@ -121,6 +122,7 @@ def seed_ranking_data():
                 bow_type='recurve',
                 distance='30m',
                 format='ranking',
+                gender_group='women',
                 rank=2,
             ),
             Score(
@@ -129,6 +131,7 @@ def seed_ranking_data():
                 bow_type='sightless',
                 distance='18m',
                 format='ranking',
+                gender_group='mixed',
                 rank=1,
             ),
             Score(
@@ -137,6 +140,7 @@ def seed_ranking_data():
                 bow_type='recurve',
                 distance='30m',
                 format='ranking',
+                gender_group='mixed',
                 rank=1,
             ),
         ])
@@ -262,6 +266,7 @@ def test_annual_ranking_excludes_scores_without_matching_registration_context():
                 bow_type='recurve',
                 distance='30m',
                 format='ranking',
+                gender_group='men',
                 rank=1,
             ),
             Score(
@@ -270,6 +275,7 @@ def test_annual_ranking_excludes_scores_without_matching_registration_context():
                 bow_type='compound',
                 distance='30m',
                 format='ranking',
+                gender_group='men',
                 rank=1,
             ),
         ])
@@ -334,6 +340,7 @@ def test_annual_ranking_team_scores_prefer_women_then_mixed_for_star_name():
                 bow_type='recurve',
                 distance='30m',
                 format='team',
+                gender_group='women',
                 rank=1,
             )
         )
