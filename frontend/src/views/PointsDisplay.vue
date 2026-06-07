@@ -149,9 +149,9 @@
 
               <div class="card-body">
                 <div class="scores-list">
-                  <div v-for="score in athlete.scores" :key="`${score.event_id}-${score.distance}-${score.format}`" class="score-item">
+                  <div v-for="score in athlete.scores" :key="`${score.event_id}-${score.bow_type || ''}-${score.distance}-${score.format}`" class="score-item">
                     <span class="event-season">{{ score.event_season }}</span>
-                    <span class="score-detail">{{ score.distance }} · {{ getFormatLabel(score.format) }}</span>
+                    <span class="score-detail">{{ getBowTypeLabel(score.bow_type) }} · {{ score.distance }} · {{ getFormatLabel(score.format) }}</span>
                     <span class="rank">第{{ score.rank }}名</span>
                     <span class="points">{{ score.points.toFixed(1) }}分</span>
                   </div>
@@ -277,6 +277,10 @@ const getFormatLabel = (format) => {
     'team': '团体赛'
   }
   return labels[format] || format
+}
+
+const getBowTypeLabel = (bowType) => {
+  return bowTypes.value.find(item => item.code === bowType)?.name || bowType || '-'
 }
 
 // 初始化可选的年度 - 从数据库获取实际的事件年份

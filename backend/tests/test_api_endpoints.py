@@ -226,7 +226,7 @@ def test_annual_ranking_uses_registration_points_bow_type_and_sightless_scores()
     assert payload['athletes'][0]['total_points'] == 7.5
 
 
-def test_annual_ranking_excludes_scores_without_matching_registration_context():
+def test_annual_ranking_matches_registration_context_without_bow_type_dimension():
     reset_database()
     db = SessionLocal()
     try:
@@ -241,6 +241,15 @@ def test_annual_ranking_excludes_scores_without_matching_registration_context():
                 event_id=event.id,
                 gender_group='men',
                 bow_type='recurve',
+                distance='30m',
+                individual_participant_count=20,
+                mixed_doubles_team_count=0,
+                team_count=0,
+            ),
+            EventConfiguration(
+                event_id=event.id,
+                gender_group='men',
+                bow_type='compound',
                 distance='30m',
                 individual_participant_count=20,
                 mixed_doubles_team_count=0,
@@ -278,6 +287,15 @@ def test_annual_ranking_excludes_scores_without_matching_registration_context():
                 gender_group='men',
                 rank=1,
             ),
+            Score(
+                event_id=event.id,
+                name='张三',
+                bow_type='compound',
+                distance='18m',
+                format='ranking',
+                gender_group='men',
+                rank=1,
+            ),
         ])
         db.commit()
 
@@ -287,9 +305,228 @@ def test_annual_ranking_excludes_scores_without_matching_registration_context():
 
     assert payload['total'] == 1
     assert payload['athletes'][0]['name'] == '张三'
-    assert payload['athletes'][0]['total_points'] == 20.0
+    assert payload['athletes'][0]['total_points'] == 40.0
+    assert len(payload['athletes'][0]['scores']) == 2
+    assert {item['bow_type'] for item in payload['athletes'][0]['scores']} == {'recurve', 'compound'}
+    assert {item['distance'] for item in payload['athletes'][0]['scores']} == {'30m'}
+
+
+def test_annual_ranking_deduplicates_registration_context_without_bow_type_dimension():
+    reset_database()
+    db = SessionLocal()
+    try:
+        event = Event(year=2024, season='春季赛')
+        db.add(event)
+        db.flush()
+
+        db.add_all([
+            CompetitionGroupDict(group_code='B', bow_type='sightless', distance='18m'),
+            EventConfiguration(
+                event_id=event.id,
+                gender_group='mixed',
+                bow_type='sightless',
+                distance='18m',
+                individual_participant_count=8,
+                mixed_doubles_team_count=0,
+                team_count=0,
+            ),
+            EventRegistration(
+                year=2024,
+                season='春季赛',
+                name='王五',
+                club='C俱乐部',
+                distance='18m',
+                competition_bow_type='sightless',
+                points_bow_type='barebow',
+                competition_gender_group='mixed',
+            ),
+            EventRegistration(
+                year=2024,
+                season='春季赛',
+                name='王五',
+                club='C俱乐部',
+                distance='18m',
+                competition_bow_type='barebow',
+                points_bow_type='barebow',
+                competition_gender_group='mixed',
+            ),
+            Score(
+                event_id=event.id,
+                name='王五',
+                bow_type='sightless',
+                distance='18m',
+                format='ranking',
+                gender_group='mixed',
+                rank=1,
+            ),
+        ])
+        db.commit()
+
+        payload = get_annual_ranking(2024, 'barebow', db)
+    finally:
+        db.close()
+
+    assert payload['total'] == 1
+    assert payload['athletes'][0]['name'] == '王五'
+    assert payload['athletes'][0]['total_points'] == 7.5
     assert len(payload['athletes'][0]['scores']) == 1
-    assert payload['athletes'][0]['scores'][0]['distance'] == '30m'
+
+
+def test_annual_ranking_sorts_score_details_by_season_distance_bow_and_format():
+    reset_database()
+    db = SessionLocal()
+    try:
+        events = {}
+        for season in ['春季赛', '夏季赛', '秋季赛', '冬季赛']:
+            event = Event(year=2024, season=season)
+            db.add(event)
+            db.flush()
+            events[season] = event
+
+        db.add_all([
+            CompetitionGroupDict(group_code='A', bow_type='recurve', distance='70m'),
+            CompetitionGroupDict(group_code='A', bow_type='recurve', distance='30m'),
+            CompetitionGroupDict(group_code='B', bow_type='recurve', distance='18m'),
+            CompetitionGroupDict(group_code='A', bow_type='compound', distance='30m'),
+        ])
+
+        db.add_all([
+            EventRegistration(
+                year=2024,
+                season='春季赛',
+                name='张三',
+                club='A俱乐部',
+                distance='18m',
+                competition_bow_type='recurve',
+                points_bow_type='recurve',
+                competition_gender_group='men',
+            ),
+            EventRegistration(
+                year=2024,
+                season='夏季赛',
+                name='张三',
+                club='A俱乐部',
+                distance='30m',
+                competition_bow_type='recurve',
+                points_bow_type='recurve',
+                competition_gender_group='men',
+            ),
+            EventRegistration(
+                year=2024,
+                season='夏季赛',
+                name='张三',
+                club='A俱乐部',
+                distance='18m',
+                competition_bow_type='recurve',
+                points_bow_type='recurve',
+                competition_gender_group='men',
+            ),
+            EventRegistration(
+                year=2024,
+                season='秋季赛',
+                name='张三',
+                club='A俱乐部',
+                distance='30m',
+                competition_bow_type='recurve',
+                points_bow_type='recurve',
+                competition_gender_group='men',
+            ),
+            EventRegistration(
+                year=2024,
+                season='冬季赛',
+                name='张三',
+                club='A俱乐部',
+                distance='70m',
+                competition_bow_type='recurve',
+                points_bow_type='recurve',
+                competition_gender_group='men',
+            ),
+        ])
+
+        db.add_all([
+            Score(
+                event_id=events['冬季赛'].id,
+                name='张三',
+                bow_type='recurve',
+                distance='70m',
+                format='ranking',
+                gender_group='men',
+                rank=1,
+            ),
+            Score(
+                event_id=events['夏季赛'].id,
+                name='张三',
+                bow_type='recurve',
+                distance='18m',
+                format='team',
+                gender_group='men',
+                rank=1,
+            ),
+            Score(
+                event_id=events['夏季赛'].id,
+                name='张三',
+                bow_type='compound',
+                distance='30m',
+                format='ranking',
+                gender_group='men',
+                rank=1,
+            ),
+            Score(
+                event_id=events['秋季赛'].id,
+                name='张三',
+                bow_type='recurve',
+                distance='30m',
+                format='ranking',
+                gender_group='men',
+                rank=1,
+            ),
+            Score(
+                event_id=events['夏季赛'].id,
+                name='张三',
+                bow_type='recurve',
+                distance='30m',
+                format='elimination',
+                gender_group='men',
+                rank=1,
+            ),
+            Score(
+                event_id=events['春季赛'].id,
+                name='张三',
+                bow_type='recurve',
+                distance='18m',
+                format='ranking',
+                gender_group='men',
+                rank=1,
+            ),
+            Score(
+                event_id=events['夏季赛'].id,
+                name='张三',
+                bow_type='recurve',
+                distance='30m',
+                format='ranking',
+                gender_group='men',
+                rank=1,
+            ),
+        ])
+        db.commit()
+
+        payload = get_annual_ranking(2024, 'recurve', db)
+    finally:
+        db.close()
+
+    assert payload['total'] == 1
+    assert [
+        (item['event_season'], item['distance'], item['bow_type'], item['format'])
+        for item in payload['athletes'][0]['scores']
+    ] == [
+        ('2024 春季赛', '18m', 'recurve', 'ranking'),
+        ('2024 夏季赛', '30m', 'recurve', 'ranking'),
+        ('2024 夏季赛', '30m', 'recurve', 'elimination'),
+        ('2024 夏季赛', '30m', 'compound', 'ranking'),
+        ('2024 夏季赛', '18m', 'recurve', 'team'),
+        ('2024 秋季赛', '30m', 'recurve', 'ranking'),
+        ('2024 冬季赛', '70m', 'recurve', 'ranking'),
+    ]
 
 
 def test_annual_ranking_team_scores_prefer_women_then_mixed_for_star_name():

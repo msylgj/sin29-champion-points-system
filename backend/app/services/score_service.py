@@ -24,6 +24,20 @@ class ScoreService:
         '秋季赛': 3,
         '冬季赛': 4,
     }
+    BOW_TYPE_ORDER = {
+        'barebow': 1,
+        'longbow': 2,
+        'traditional': 3,
+        'sightless': 4,
+        'recurve': 5,
+        'compound': 6,
+    }
+    FORMAT_ORDER = {
+        'ranking': 1,
+        'elimination': 2,
+        'mixed_doubles': 3,
+        'team': 4,
+    }
 
     @staticmethod
     def _build_event_config_map(config_rows: List[EventConfiguration]) -> Dict[tuple, EventConfiguration]:
@@ -38,6 +52,24 @@ class ScoreService:
             ScoreService.SEASON_ORDER.get(registration.season, 99),
             registration.created_at,
             registration.id,
+        )
+
+    @staticmethod
+    def _distance_sort_value(distance: str) -> int:
+        digits = ''.join(char for char in str(distance or '') if char.isdigit())
+        if not digits:
+            return 999
+        return -int(digits)
+
+    @staticmethod
+    def _score_detail_sort_key(score_detail: Dict):
+        return (
+            score_detail.get('_season_order', 99),
+            ScoreService._distance_sort_value(score_detail.get('distance')),
+            ScoreService.BOW_TYPE_ORDER.get(score_detail.get('bow_type'), 99),
+            ScoreService.FORMAT_ORDER.get(score_detail.get('format'), 99),
+            int(score_detail.get('rank') or 0),
+            int(score_detail.get('event_id') or 0),
         )
 
     @staticmethod
@@ -269,22 +301,29 @@ class ScoreService:
         athlete_registration_map: Dict[str, List[EventRegistration]] = defaultdict(list)
         for row in registration_rows:
             athlete_registration_map[row.name].append(row)
+        registration_contexts = db.query(
+            EventRegistration.year.label('year'),
+            EventRegistration.season.label('season'),
+            EventRegistration.name.label('name'),
+            EventRegistration.distance.label('distance'),
+        ).filter(
+            EventRegistration.year == year,
+            EventRegistration.points_bow_type == bow_type,
+        ).distinct().subquery()
+
         # 直接按报名上下文关联成绩，避免按姓名全量扫年度成绩。
-        score_rows = db.query(Score, Event, EventRegistration).join(
+        score_rows = db.query(Score, Event).join(
             Event, Event.id == Score.event_id
         ).join(
-            EventRegistration,
+            registration_contexts,
             and_(
-                EventRegistration.year == Event.year,
-                EventRegistration.season == Event.season,
-                EventRegistration.name == Score.name,
-                EventRegistration.distance == Score.distance,
-                EventRegistration.competition_bow_type == Score.bow_type,
+                registration_contexts.c.year == Event.year,
+                registration_contexts.c.season == Event.season,
+                registration_contexts.c.name == Score.name,
+                registration_contexts.c.distance == Score.distance,
             ),
         ).filter(
             Event.year == year,
-            EventRegistration.year == year,
-            EventRegistration.points_bow_type == bow_type,
         ).all()
 
         # 预加载组别配置
@@ -294,7 +333,7 @@ class ScoreService:
             for row in group_rows
         }
 
-        event_ids = {score.event_id for score, _event, _registration in score_rows}
+        event_ids = {score.event_id for score, _event in score_rows}
         config_rows = db.query(EventConfiguration).filter(
             EventConfiguration.event_id.in_(event_ids)
         ).all() if event_ids else []
@@ -311,7 +350,7 @@ class ScoreService:
                 'scores': []
             }
 
-        for score, event, registration in score_rows:
+        for score, event in score_rows:
             participant_count = None
 
             if score.format in ('ranking', 'elimination'):
@@ -360,12 +399,19 @@ class ScoreService:
             athlete_points[score.name]['scores'].append({
                 'event_id': score.event_id,
                 'event_season': f"{event.year} {event.season}",
+                '_season_order': ScoreService.SEASON_ORDER.get(event.season, 99),
+                'bow_type': score.bow_type,
                 'distance': score.distance,
                 'format': score.format,
                 'rank': score.rank,
                 'points': points
             })
         
+        for item in athlete_points.values():
+            item['scores'].sort(key=ScoreService._score_detail_sort_key)
+            for score_detail in item['scores']:
+                score_detail.pop('_season_order', None)
+
         # 排序
         result = list(athlete_points.values())
         result.sort(key=lambda x: (-x['total_points'], x['name']))
