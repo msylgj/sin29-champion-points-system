@@ -226,7 +226,7 @@ def test_annual_ranking_uses_registration_points_bow_type_and_sightless_scores()
     assert payload['athletes'][0]['total_points'] == 7.5
 
 
-def test_annual_ranking_matches_registration_context_without_bow_type_dimension():
+def test_annual_ranking_uses_bow_type_for_default_registration_context():
     reset_database()
     db = SessionLocal()
     try:
@@ -305,13 +305,96 @@ def test_annual_ranking_matches_registration_context_without_bow_type_dimension(
 
     assert payload['total'] == 1
     assert payload['athletes'][0]['name'] == '张三'
-    assert payload['athletes'][0]['total_points'] == 40.0
-    assert len(payload['athletes'][0]['scores']) == 2
-    assert {item['bow_type'] for item in payload['athletes'][0]['scores']} == {'recurve', 'compound'}
+    assert payload['athletes'][0]['total_points'] == 20.0
+    assert len(payload['athletes'][0]['scores']) == 1
+    assert {item['bow_type'] for item in payload['athletes'][0]['scores']} == {'recurve'}
     assert {item['distance'] for item in payload['athletes'][0]['scores']} == {'30m'}
 
 
-def test_annual_ranking_deduplicates_registration_context_without_bow_type_dimension():
+@pytest.mark.parametrize('bow_type', ['barebow', 'longbow', 'traditional'])
+def test_annual_ranking_includes_sightless_scores_for_regular_sightless_point_bows(bow_type):
+    reset_database()
+    db = SessionLocal()
+    try:
+        event = Event(year=2024, season='春季赛')
+        db.add(event)
+        db.flush()
+
+        db.add_all([
+            CompetitionGroupDict(group_code='B', bow_type=bow_type, distance='18m'),
+            CompetitionGroupDict(group_code='B', bow_type='sightless', distance='18m'),
+            EventConfiguration(
+                event_id=event.id,
+                gender_group='mixed',
+                bow_type=bow_type,
+                distance='18m',
+                individual_participant_count=8,
+                mixed_doubles_team_count=0,
+                team_count=0,
+            ),
+            EventConfiguration(
+                event_id=event.id,
+                gender_group='mixed',
+                bow_type='sightless',
+                distance='18m',
+                individual_participant_count=8,
+                mixed_doubles_team_count=0,
+                team_count=0,
+            ),
+            EventRegistration(
+                year=2024,
+                season='春季赛',
+                name='王五',
+                club='C俱乐部',
+                distance='18m',
+                competition_bow_type=bow_type,
+                points_bow_type=bow_type,
+                competition_gender_group='mixed',
+            ),
+        ])
+
+        db.add_all([
+            Score(
+                event_id=event.id,
+                name='王五',
+                bow_type=bow_type,
+                distance='18m',
+                format='ranking',
+                gender_group='mixed',
+                rank=1,
+            ),
+            Score(
+                event_id=event.id,
+                name='王五',
+                bow_type='sightless',
+                distance='18m',
+                format='ranking',
+                gender_group='mixed',
+                rank=2,
+            ),
+            Score(
+                event_id=event.id,
+                name='王五',
+                bow_type='compound',
+                distance='18m',
+                format='ranking',
+                gender_group='mixed',
+                rank=1,
+            ),
+        ])
+        db.commit()
+
+        payload = get_annual_ranking(2024, bow_type, db)
+    finally:
+        db.close()
+
+    assert payload['total'] == 1
+    assert payload['athletes'][0]['name'] == '王五'
+    assert payload['athletes'][0]['total_points'] == 14.1
+    assert [item['bow_type'] for item in payload['athletes'][0]['scores']] == [bow_type, 'sightless']
+
+
+def test_annual_ranking_deduplicates_sightless_scores_matched_by_multiple_contexts():
     reset_database()
     db = SessionLocal()
     try:
@@ -522,7 +605,6 @@ def test_annual_ranking_sorts_score_details_by_season_distance_bow_and_format():
         ('2024 春季赛', '18m', 'recurve', 'ranking'),
         ('2024 夏季赛', '30m', 'recurve', 'ranking'),
         ('2024 夏季赛', '30m', 'recurve', 'elimination'),
-        ('2024 夏季赛', '30m', 'compound', 'ranking'),
         ('2024 夏季赛', '18m', 'recurve', 'team'),
         ('2024 秋季赛', '30m', 'recurve', 'ranking'),
         ('2024 冬季赛', '70m', 'recurve', 'ranking'),

@@ -38,6 +38,7 @@ class ScoreService:
         'mixed_doubles': 3,
         'team': 4,
     }
+    SIGHTLESS_COMPATIBLE_BOW_TYPES = ('barebow', 'longbow', 'traditional')
 
     @staticmethod
     def _build_event_config_map(config_rows: List[EventConfiguration]) -> Dict[tuple, EventConfiguration]:
@@ -306,6 +307,7 @@ class ScoreService:
             EventRegistration.season.label('season'),
             EventRegistration.name.label('name'),
             EventRegistration.distance.label('distance'),
+            EventRegistration.competition_bow_type.label('competition_bow_type'),
         ).filter(
             EventRegistration.year == year,
             EventRegistration.points_bow_type == bow_type,
@@ -321,10 +323,19 @@ class ScoreService:
                 registration_contexts.c.season == Event.season,
                 registration_contexts.c.name == Score.name,
                 registration_contexts.c.distance == Score.distance,
+                or_(
+                    registration_contexts.c.competition_bow_type == Score.bow_type,
+                    and_(
+                        registration_contexts.c.competition_bow_type.in_(
+                            ScoreService.SIGHTLESS_COMPATIBLE_BOW_TYPES
+                        ),
+                        Score.bow_type == 'sightless',
+                    ),
+                ),
             ),
         ).filter(
             Event.year == year,
-        ).all()
+        ).distinct().all()
 
         # 预加载组别配置
         group_rows = db.query(CompetitionGroupDict).all()
