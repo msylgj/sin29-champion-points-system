@@ -34,6 +34,11 @@ describe('score import parsing helpers', () => {
     { name: '混双赛', code: 'mixed_doubles' },
     { name: '团体赛', code: 'team' },
   ]
+  const competitionGenderGroups = [
+    { name: '男子组', code: 'men' },
+    { name: '女子组', code: 'women' },
+    { name: '混合组', code: 'mixed' },
+  ]
 
   it('supports fuzzy aliases for bow type, distance, and format', () => {
     const bowTypeMap = createValueToCodeMap(bowTypes, SCORE_IMPORT_ALIASES.bow_type)
@@ -209,6 +214,30 @@ describe('score import parsing helpers', () => {
     expect(result.scores[0].__valid).toBe(false)
     expect(result.scores[0].bow_type).toBe('')
     expect(result.scores[0].__errors).toContain('弓种无效：-')
+  })
+
+  it('forces mixed_doubles gender group to mixed during import parsing', () => {
+    const result = parseScoreImportData({
+      jsonData: [
+        ['姓名', '弓种', '距离', '赛制', '排名', '分组'],
+        ['张三/李四', '反曲弓', '30米', '混双赛', '1', '女子组'],
+      ],
+      bowTypes,
+      distances,
+      competitionFormats: formats,
+      competitionGenderGroups,
+      managedScores: [],
+      eventRegistrations: [],
+      selectedEventId: '12',
+    })
+
+    expect(result.errorMessage).toBeNull()
+    expect(result.scores).toHaveLength(1)
+    expect(result.scores[0]).toMatchObject({
+      format: 'mixed_doubles',
+      gender_group: 'mixed',
+      __valid: true,
+    })
   })
 
   it('treats same name distance bow format as duplicate regardless of club source', () => {

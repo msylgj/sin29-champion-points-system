@@ -76,9 +76,12 @@
 - 成绩导入仅支持 Excel
 - 成绩导入要求列：
   - `姓名 / 弓种 / 距离 / 赛制 / 排名`
-- 导入时按当前赛事对应赛季的报名表做校验：
+- 可选列：
+  - `分组`
+- 导入页提交前会按当前赛事对应赛季的报名表做预校验：
   - 用 `姓名 + 距离 + 弓种` 匹配个人赛报名记录
-  - 未匹配到报名记录时，该行成绩标记为异常
+  - 排位赛、淘汰赛未匹配到报名记录时，该行成绩标记为异常
+  - 团体赛、混双赛不做这一步报名匹配
 
 ### 4. 年度积分排名
 
@@ -125,10 +128,11 @@
       - 根据报名记录的性别分组匹配赛事配置中的 `individual_participant_count`
       - 若未匹配到有效人数或人数为 `0`，按 `8` 计
     - 团体赛：
-      - 根据成绩的 `event_id + 性别分组 + 弓种 + 距离` 在赛事配置中取 `team_count`
+      - 根据成绩记录上的 `event_id + gender_group + 弓种 + 距离` 在赛事配置中取 `team_count`
       - 成绩导入时若未填写分组，团体赛默认使用 `mixed`
       - 若未匹配到有效值或队伍数为 `0`，按 `3` 队计
     - 混双赛：
+      - `gender_group` 强制归一为 `mixed`
       - 根据成绩的 `event_id + mixed + 弓种 + 距离` 取 `mixed_doubles_team_count`
       - 若未匹配到有效值或队伍数为 `0`，按 `3` 计
   - 最终积分计算顺序：
@@ -199,19 +203,22 @@ sin29-champion-points-system
 │   │   ├── routers/
 │   │   ├── schemas/
 │   │   └── services/
+│   ├── tests/
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
 │   │   ├── api/
+│   │   ├── composables/
 │   │   ├── router/
 │   │   ├── styles/
 │   │   ├── utils/
 │   │   └── views/
 │   └── package.json
 ├── database/
-│   ├── init.sql
-│   └── migrations/
+│   └── init.sql
 ├── docker-compose.yml
+├── docker-compose.prod.yml
+├── full-integrity-test.sh
 ├── README.md
 ├── QUICK_START.md
 └── DATABASE_DESIGN.md

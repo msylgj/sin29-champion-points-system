@@ -241,7 +241,8 @@ CHECK 约束：
 
 索引：
 
-- 仅保留唯一索引 `ux_event_registration_key`
+- 查询索引 `idx_event_registrations_year_points_lookup(year, points_bow_type, season, name, distance, competition_bow_type)`
+- 唯一约束 `ux_event_registration_key`
 
 说明：
 
@@ -280,7 +281,7 @@ CHECK 约束：
 
 索引：
 
-- 唯一索引 `event_configurations_event_id_gender_group_bow_type_distance_ke`
+- `(event_id, gender_group, bow_type, distance)` 唯一约束
 
 说明：
 
@@ -306,6 +307,7 @@ CHECK 约束：
 - `bow_type`
 - `distance`
 - `format`
+- `gender_group`
 - `rank`
 - `created_at`
 - `updated_at`
@@ -327,17 +329,21 @@ CHECK 约束：
 - `bow_type`
 - `distance`
 - `format`
+- `gender_group`
 
 索引：
 
-- 唯一索引 `uq_score_event_name_distance_bow_format`
+- 查询索引 `idx_scores_event_created_id(event_id, created_at desc, id desc)`
+- 唯一约束 `uq_score_event_name_distance_bow_format`
 
 说明：
 
-- 成绩导入时，必须先匹配当前赛事所属赛季的报名记录
+- `gender_group` 用于保存成绩记录对应的分组，供团体赛、混双赛取人数配置时使用
+- 成绩导入页前端会先做报名匹配预校验
 - 匹配规则：
-  - `姓名 + 距离 + 弓种`
-- 未找到对应报名记录时，该条成绩会被判定为异常数据
+  - 排位赛、淘汰赛按 `姓名 + 距离 + 弓种` 匹配报名记录
+- 未找到对应报名记录时，该条个人赛成绩会在导入页中被标记为异常数据
+- 混双赛成绩在前端提交前会将 `gender_group` 强制归一为 `mixed`
 
 ## 5. 表关系
 
@@ -395,7 +401,8 @@ CHECK 约束：
 
 - 先选择赛事
 - 再读取该赛事所属赛年赛季的报名表
-- 成绩导入仅允许导入能匹配报名记录的数据
+- 导入页前端会将未匹配报名记录的个人赛成绩标记为异常
+- 团体赛、混双赛不做报名匹配预校验
 - 成绩写入 `scores`
 
 ### 6.4 年度积分页
@@ -410,20 +417,25 @@ CHECK 约束：
 - 每名选手的成绩明细按 `春季赛 -> 夏季赛 -> 秋季赛 -> 冬季赛` 排列，同赛季内再按 `距离 -> 弓种 -> 赛制` 排列
 - 积分计算所需人数来自：
   - 排位赛 / 淘汰赛：报名记录对应性别分组下的赛事配置
-  - 团体赛：按姓名中是否含 `*`，从 `women/mixed` 或 `men/mixed` 取 `team_count`
-  - 混双赛：取 `mixed_doubles_team_count`
+  - 团体赛：按成绩记录上的 `gender_group` 取对应配置的 `team_count`
+  - 混双赛：先将 `gender_group` 归一为 `mixed`，再取 `mixed_doubles_team_count`
 
 ## 7. 当前索引状态
 
-按项目当前实现，三张高频业务表只保留以下业务索引：
+按项目当前实现，高频业务表使用以下业务索引或唯一约束：
+
+- `events`
+  - `idx_event_year_season(year, season)`
 
 - `event_registrations`
-  - `ux_event_registration_key`
+  - `idx_event_registrations_year_points_lookup(year, points_bow_type, season, name, distance, competition_bow_type)`
+  - `ux_event_registration_key(year, season, name, distance, competition_bow_type)`
 
 - `event_configurations`
-  - `event_configurations_event_id_gender_group_bow_type_distance_ke`
+  - `(event_id, gender_group, bow_type, distance)` 唯一约束
 
 - `scores`
-  - `uq_score_event_name_distance_bow_format`
+  - `idx_scores_event_created_id(event_id, created_at desc, id desc)`
+  - `uq_score_event_name_distance_bow_format(event_id, name, distance, bow_type, format)`
 
-以及各表主键索引 `..._pkey` 
+以及各表主键索引 `..._pkey`

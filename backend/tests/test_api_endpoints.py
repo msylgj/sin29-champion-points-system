@@ -748,3 +748,32 @@ def test_batch_create_scores_overwrites_duplicate_without_club_dimension():
         assert created[0].id == all_scores[0].id
     finally:
         db.close()
+
+
+def test_batch_create_scores_preserves_mixed_doubles_gender_group_from_request():
+    reset_database()
+    db = SessionLocal()
+    try:
+        event = Event(year=2024, season='春季赛')
+        db.add(event)
+        db.commit()
+        db.refresh(event)
+
+        created = ScoreService.batch_create_scores(db, [
+            ScoreCreate(
+                event_id=event.id,
+                name='张三/李四',
+                bow_type='recurve',
+                distance='30m',
+                format='mixed_doubles',
+                gender_group='women',
+                rank=1,
+            )
+        ])
+
+        assert created[0].gender_group == 'women'
+
+        stored = db.query(Score).filter(Score.id == created[0].id).one()
+        assert stored.gender_group == 'women'
+    finally:
+        db.close()

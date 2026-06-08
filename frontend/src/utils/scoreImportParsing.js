@@ -319,10 +319,12 @@ export const parseScoreImportData = ({
       club = matchedRegistration.club || ''
     }
 
-    // 自动推断 gender_group：导入值优先；为空时 ranking/elimination 从报名表匹配，team/mixed_doubles 默认 mixed
+    // 自动推断 gender_group：混双赛始终按 mixed 提交；其他赛制保持导入值优先
     let resolvedGenderGroup = gender_group || ''
-    if (!resolvedGenderGroup && rowErrors.length === 0) {
-      if (format === 'team' || format === 'mixed_doubles') {
+    if (rowErrors.length === 0 && format === 'mixed_doubles') {
+      resolvedGenderGroup = 'mixed'
+    } else if (!resolvedGenderGroup && rowErrors.length === 0) {
+      if (format === 'team') {
         resolvedGenderGroup = 'mixed'
       } else if (matchedRegistration) {
         resolvedGenderGroup = matchedRegistration.competition_gender_group || ''

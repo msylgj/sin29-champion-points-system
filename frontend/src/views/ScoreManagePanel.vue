@@ -85,13 +85,12 @@
                 </select>
               </td>
               <td>
-                <select v-model="score.format" class="cell-input" :disabled="deletedIds.has(score.id)">
+                <select v-model="score.format" class="cell-input" :disabled="deletedIds.has(score.id)" @change="handleFormatChange(score)">
                   <option v-for="item in competitionFormats" :key="item.code" :value="item.code">{{ item.name }}</option>
                 </select>
               </td>
               <td>
-                <select v-model="score.gender_group" class="cell-input" :disabled="deletedIds.has(score.id)">
-                  <option :value="null">-</option>
+                <select v-model="score.gender_group" class="cell-input" :disabled="deletedIds.has(score.id) || isMixedDoublesScore(score)">
                   <option v-for="item in competitionGenderGroups" :key="item.code" :value="item.code">{{ item.name }}</option>
                 </select>
               </td>
@@ -161,9 +160,18 @@ const selectedFormat = ref('')
 const snapshot = () => {
   const map = {}
   props.scores.forEach(item => {
+    normalizeMixedDoublesGenderGroup(item)
     map[item.id] = { ...item }
   })
   originalMap.value = map
+}
+
+const isMixedDoublesScore = (score = {}) => score?.format === 'mixed_doubles'
+
+const normalizeMixedDoublesGenderGroup = (score = {}) => {
+  if (!isMixedDoublesScore(score)) return score
+  score.gender_group = 'mixed'
+  return score
 }
 
 const normalize = (score = {}) => ({
@@ -247,6 +255,15 @@ const validate = (score) => {
   return ''
 }
 
+const handleFormatChange = (score) => {
+  normalizeMixedDoublesGenderGroup(score)
+}
+
+const resolveGenderGroupForSubmit = (score) => {
+  if (score.format === 'mixed_doubles') return 'mixed'
+  return score.gender_group || null
+}
+
 const saveScore = async (score) => {
   manageMsg.clear()
   const msg = validate(score)
@@ -260,12 +277,13 @@ const saveScore = async (score) => {
   savingIds.value = set
 
   try {
+    const normalizedGenderGroup = resolveGenderGroupForSubmit(score)
     const payload = {
       name: score.name.trim(),
       bow_type: score.bow_type,
       distance: score.distance,
       format: score.format,
-      gender_group: score.gender_group || null,
+      gender_group: normalizedGenderGroup,
       rank: Number(score.rank)
     }
     const updated = await scoreAPI.update(score.id, payload)
@@ -278,7 +296,7 @@ const saveScore = async (score) => {
         bow_type: updated.bow_type || '',
         distance: updated.distance || '',
         format: updated.format || '',
-        gender_group: updated.gender_group || null,
+        gender_group: updated.gender_group || normalizedGenderGroup,
         rank: Number(updated.rank || 0)
       })
     }
