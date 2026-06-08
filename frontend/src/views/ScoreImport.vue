@@ -165,45 +165,59 @@
 
           <div v-if="batchScores.length > 0" class="scores-preview">
             <h3>待导入成绩 ({{ batchScores.length }}条，合法 {{ validScoreCount }} / 异常 {{ invalidScoreCount }})</h3>
-            <table class="preview-table">
-              <thead>
-                <tr>
-                  <th>姓名</th>
-                  <th>弓种</th>
-                  <th>距离</th>
-                  <th>赛制</th>
-                  <th>分组</th>
-                  <th>排名</th>
-                  <th>状态</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(score, index) in batchScores"
-                  :key="index"
-                  :class="{ 'row-error': !score.__valid, 'row-duplicate': score.__valid && (score.__duplicate_with_existing || score.__duplicate_in_file_to_remove) }"
-                >
-                  <td>{{ score.name }}</td>
-                  <td>{{ getBowTypeLabel(score.bow_type) }}</td>
-                  <td>{{ getDistanceLabel(score.distance) }}</td>
-                  <td>{{ getFormatLabel(score.format) }}</td>
-                  <td>{{ getGenderGroupLabel(score.gender_group) }}</td>
-                  <td>{{ score.rank }}</td>
-                  <td>
-                    <span v-if="score.__valid && score.__duplicate_in_file_to_remove" class="status-tag status-duplicate" title="Excel 中存在重复行，导入时该行将被移除">重复（将移除）</span>
-                    <span v-else-if="score.__valid && score.__duplicate_with_existing" class="status-tag status-duplicate" title="与已有成绩重复，导入时将覆盖原记录">重复（将覆盖）</span>
-                    <span v-else-if="score.__valid" class="status-tag status-ok">通过</span>
-                    <span v-else class="status-tag status-error" :title="score.__errors.join('；')">异常</span>
-                  </td>
-                  <td>
-                    <button @click="removeBatchScore(index)" class="btn-remove-small">
-                      删除
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div
+              v-for="section in scorePreviewSections"
+              :key="section.key"
+              class="preview-section"
+            >
+              <div class="preview-section-header" :class="`preview-section-${section.key}`">
+                <span>{{ section.title }}</span>
+                <strong>{{ section.items.length }}</strong>
+              </div>
+              <div v-if="section.items.length === 0" class="preview-empty">
+                {{ section.emptyText }}
+              </div>
+              <table v-else class="preview-table">
+                <thead>
+                  <tr>
+                    <th>姓名</th>
+                    <th>弓种</th>
+                    <th>距离</th>
+                    <th>赛制</th>
+                    <th>分组</th>
+                    <th>排名</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="{ item: score, index } in section.items"
+                    :key="`${section.key}-${index}`"
+                    :class="{ 'row-error': !score.__valid, 'row-duplicate': isScorePreviewDuplicate(score) }"
+                  >
+                    <td>{{ score.name }}</td>
+                    <td>{{ getBowTypeLabel(score.bow_type) }}</td>
+                    <td>{{ getDistanceLabel(score.distance) }}</td>
+                    <td>{{ getFormatLabel(score.format) }}</td>
+                    <td>{{ getGenderGroupLabel(score.gender_group) }}</td>
+                    <td>{{ score.rank }}</td>
+                    <td>
+                      <span v-if="score.__valid && score.__duplicate_in_file_to_remove" class="status-tag status-duplicate" title="Excel 中存在重复行，导入时该行将被移除">重复（将移除）</span>
+                      <span v-else-if="score.__valid && score.__duplicate_with_existing" class="status-tag status-duplicate" title="与已有成绩重复，导入时将覆盖原记录">重复（将覆盖）</span>
+                      <span v-else-if="score.__valid && score.__duplicate_in_file" class="status-tag status-duplicate" title="Excel 中存在重复行，导入时保留第一条">重复（保留）</span>
+                      <span v-else-if="score.__valid" class="status-tag status-ok">通过</span>
+                      <span v-else class="status-tag status-error" :title="score.__errors.join('；')">异常</span>
+                    </td>
+                    <td>
+                      <button @click="removeBatchScore(index)" class="btn-remove-small">
+                        删除
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -321,6 +335,32 @@ const duplicateScoreCount = computed(() => batchScores.value.filter(item => item
 const inFileDuplicateScoreCount = computed(() => batchScores.value.filter(item => item.__valid && item.__duplicate_in_file).length)
 const inFileDuplicateToRemoveCount = computed(() => batchScores.value.filter(item => item.__valid && item.__duplicate_in_file_to_remove).length)
 const existingDuplicateScoreCount = computed(() => batchScores.value.filter(item => item.__valid && item.__duplicate_with_existing).length)
+const isScorePreviewDuplicate = (item) => {
+  return Boolean(item?.__valid && (item.__duplicate || item.__duplicate_in_file || item.__duplicate_with_existing))
+}
+const scorePreviewSections = computed(() => {
+  const indexedItems = batchScores.value.map((item, index) => ({ item, index }))
+  return [
+    {
+      key: 'error',
+      title: '异常记录',
+      emptyText: '没有异常记录',
+      items: indexedItems.filter(({ item }) => !item.__valid),
+    },
+    {
+      key: 'duplicate',
+      title: '重复记录',
+      emptyText: '没有重复记录',
+      items: indexedItems.filter(({ item }) => isScorePreviewDuplicate(item)),
+    },
+    {
+      key: 'normal',
+      title: '正常记录',
+      emptyText: '没有正常记录',
+      items: indexedItems.filter(({ item }) => item.__valid && !isScorePreviewDuplicate(item)),
+    },
+  ]
+})
 
 // 获取弓种标签
 const getBowTypeLabel = (type) => {

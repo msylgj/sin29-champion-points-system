@@ -111,45 +111,59 @@
 
         <div v-if="registrationBatch.length > 0" class="scores-preview">
           <h3>待导入报名 ({{ registrationBatch.length }}条，合法 {{ validRegistrationCount }} / 异常 {{ invalidRegistrationCount }})</h3>
-          <table class="preview-table">
-            <thead>
-              <tr>
-                <th>姓名</th>
-                <th>俱乐部</th>
-                <th>距离</th>
-                <th>比赛弓种</th>
-                <th>积分弓种</th>
-                <th>分组</th>
-                <th>状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="(registration, index) in registrationBatch"
-                :key="index"
-                :class="{ 'row-error': !registration.__valid, 'row-duplicate': registration.__valid && (registration.__duplicate_with_existing || registration.__duplicate_in_file_to_remove) }"
-              >
-                <td>{{ registration.name }}</td>
-                <td>{{ registration.club || '-' }}</td>
-                <td>{{ getDistanceLabel(registration.distance) }}</td>
-                <td>{{ getBowTypeLabel(registration.competition_bow_type) }}</td>
-                <td>{{ getBowTypeLabel(registration.points_bow_type) }}</td>
-                <td>{{ getGenderGroupLabel(registration.competition_gender_group) }}</td>
-                <td>
-                  <span v-if="registration.__valid && registration.__duplicate_in_file_to_remove" class="status-tag status-duplicate" title="Excel 中存在重复行，导入时该行将被移除">重复（将移除）</span>
-                  <span v-else-if="registration.__valid && registration.__duplicate_with_existing" class="status-tag status-duplicate" title="与已有报名重复，导入时将覆盖原记录">重复（将覆盖）</span>
-                  <span v-else-if="registration.__valid" class="status-tag status-ok">通过</span>
-                  <span v-else class="status-tag status-error" :title="registration.__errors.join('；')">异常</span>
-                </td>
-                <td>
-                  <button type="button" @click="removeRegistrationBatchItem(index)" class="btn-remove-small">
-                    删除
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div
+            v-for="section in registrationPreviewSections"
+            :key="section.key"
+            class="preview-section"
+          >
+            <div class="preview-section-header" :class="`preview-section-${section.key}`">
+              <span>{{ section.title }}</span>
+              <strong>{{ section.items.length }}</strong>
+            </div>
+            <div v-if="section.items.length === 0" class="preview-empty">
+              {{ section.emptyText }}
+            </div>
+            <table v-else class="preview-table">
+              <thead>
+                <tr>
+                  <th>姓名</th>
+                  <th>俱乐部</th>
+                  <th>距离</th>
+                  <th>比赛弓种</th>
+                  <th>积分弓种</th>
+                  <th>分组</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="{ item: registration, index } in section.items"
+                  :key="`${section.key}-${index}`"
+                  :class="{ 'row-error': !registration.__valid, 'row-duplicate': isRegistrationPreviewDuplicate(registration) }"
+                >
+                  <td>{{ registration.name }}</td>
+                  <td>{{ registration.club || '-' }}</td>
+                  <td>{{ getDistanceLabel(registration.distance) }}</td>
+                  <td>{{ getBowTypeLabel(registration.competition_bow_type) }}</td>
+                  <td>{{ getBowTypeLabel(registration.points_bow_type) }}</td>
+                  <td>{{ getGenderGroupLabel(registration.competition_gender_group) }}</td>
+                  <td>
+                    <span v-if="registration.__valid && registration.__duplicate_in_file_to_remove" class="status-tag status-duplicate" title="Excel 中存在重复行，导入时该行将被移除">重复（将移除）</span>
+                    <span v-else-if="registration.__valid && registration.__duplicate_with_existing" class="status-tag status-duplicate" title="与已有报名重复，导入时将覆盖原记录">重复（将覆盖）</span>
+                    <span v-else-if="registration.__valid && registration.__duplicate_in_file" class="status-tag status-duplicate" title="Excel 中存在重复行，导入时保留第一条">重复（保留）</span>
+                    <span v-else-if="registration.__valid" class="status-tag status-ok">通过</span>
+                    <span v-else class="status-tag status-error" :title="registration.__errors.join('；')">异常</span>
+                  </td>
+                  <td>
+                    <button type="button" @click="removeRegistrationBatchItem(index)" class="btn-remove-small">
+                      删除
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div v-if="registrationParseMsg.successMsg.value || registrationParseMsg.errorMsg.value" class="import-feedback">
@@ -649,6 +663,32 @@ const duplicateRegistrationCount = computed(() => registrationBatch.value.filter
 const inFileDuplicateRegistrationCount = computed(() => registrationBatch.value.filter(item => item.__valid && item.__duplicate_in_file).length)
 const inFileDuplicateRegistrationToRemoveCount = computed(() => registrationBatch.value.filter(item => item.__valid && item.__duplicate_in_file_to_remove).length)
 const existingDuplicateRegistrationCount = computed(() => registrationBatch.value.filter(item => item.__valid && item.__duplicate_with_existing).length)
+const isRegistrationPreviewDuplicate = (item) => {
+  return Boolean(item?.__valid && (item.__duplicate || item.__duplicate_in_file || item.__duplicate_with_existing))
+}
+const registrationPreviewSections = computed(() => {
+  const indexedItems = registrationBatch.value.map((item, index) => ({ item, index }))
+  return [
+    {
+      key: 'error',
+      title: '异常记录',
+      emptyText: '没有异常记录',
+      items: indexedItems.filter(({ item }) => !item.__valid),
+    },
+    {
+      key: 'duplicate',
+      title: '重复记录',
+      emptyText: '没有重复记录',
+      items: indexedItems.filter(({ item }) => isRegistrationPreviewDuplicate(item)),
+    },
+    {
+      key: 'normal',
+      title: '正常记录',
+      emptyText: '没有正常记录',
+      items: indexedItems.filter(({ item }) => item.__valid && !isRegistrationPreviewDuplicate(item)),
+    },
+  ]
+})
 
 const parseRegistrationExcelData = (jsonData) => {
   registrationParseMsg.clear()
