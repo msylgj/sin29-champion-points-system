@@ -164,9 +164,54 @@
 
       <!-- 导出按钮 -->
       <div v-if="filteredRanking.length > 0" class="action-bar">
-        <button @click="exportToExcel" class="btn-export">
+        <button @click="openExportDialog" class="btn-export">
           📥 导出为 Excel
         </button>
+      </div>
+
+      <div v-if="showExportDialog" class="export-dialog-mask" @click.self="closeExportDialog">
+        <div class="export-dialog">
+          <h3>导出积分</h3>
+          <p class="export-tip">可导出当前年度累计积分，或指定当前年度中的单场赛事积分排名。</p>
+
+          <div class="export-scope-list">
+            <label class="export-scope-option">
+              <input v-model="exportScope" type="radio" value="year" />
+              <div>
+                <strong>{{ selectedYear }} 年总积分</strong>
+                <p>导出当前筛选范围内的年度累计积分排名</p>
+              </div>
+            </label>
+
+            <label class="export-scope-option" :class="{ disabled: exportEvents.length === 0 }">
+              <input v-model="exportScope" type="radio" value="event" :disabled="exportEvents.length === 0" />
+              <div>
+                <strong>指定赛事积分</strong>
+                <p>{{ exportEvents.length > 0 ? '按单场赛事重算积分排名后导出' : '当前暂无可导出的赛事明细' }}</p>
+              </div>
+            </label>
+          </div>
+
+          <div v-if="exportScope === 'event'" class="export-field">
+            <label for="export-event-select">赛事</label>
+            <select v-model="selectedExportEventId" id="export-event-select" class="export-select">
+              <option value="">请选择赛事</option>
+              <option v-for="eventOption in exportEvents" :key="eventOption.value" :value="eventOption.value">
+                {{ eventOption.label }}
+              </option>
+            </select>
+          </div>
+
+          <div class="export-preview">
+            <span class="preview-label">导出范围</span>
+            <span class="preview-value">{{ exportScopeLabel }}</span>
+          </div>
+
+          <div class="export-actions">
+            <button type="button" class="btn-export-cancel" @click="closeExportDialog">取消</button>
+            <button type="button" class="btn-export-confirm" @click="exportToExcel">确认导出</button>
+          </div>
+        </div>
       </div>
 
       <div v-if="showAuthDialog" class="auth-dialog-mask" @click.self="closeAuthDialog">
@@ -216,17 +261,26 @@ const selectedBowType = ref('')
 const availableYears = ref([])
 const { bowTypes, loadDictionaries: fetchDictionaries } = useDictionaries()
 const showAuthDialog = ref(false)
+const showExportDialog = ref(false)
 const adminPassword = ref('')
 const authLoading = ref(false)
 const authError = ref('')
 const pendingManageRoute = ref('/score-import')
 const nameKeyword = ref('')
 const selectedClub = ref('')
+const exportScope = ref('year')
+const selectedExportEventId = ref('')
 const pageMsg = useMessage(5000)
 const yearLoadFailed = ref(false)
 const dictionaryLoadFailed = ref(false)
 const rankingLoadFailed = ref(false)
 const NO_CLUB_FILTER = '__NO_CLUB__'
+const SEASON_ORDER = {
+  '春季赛': 1,
+  '夏季赛': 2,
+  '秋季赛': 3,
+  '冬季赛': 4,
+}
 const rankingBowTypes = computed(() => bowTypes.value.filter(item => item.code !== 'sightless'))
 
 // 从排名数据中提取可用的俱乐部列表
@@ -250,15 +304,66 @@ const hasActiveFilter = computed(() => {
   return (nameKeyword.value || '').trim() !== '' || selectedClub.value !== ''
 })
 
-const filteredRanking = computed(() => {
+const matchesCurrentFilters = athlete => {
   const keyword = (nameKeyword.value || '').trim().toLowerCase()
   const club = selectedClub.value
-  return ranking.value.filter(athlete => {
-    if (keyword && !(athlete.name || '').toLowerCase().includes(keyword)) return false
-    if (club === NO_CLUB_FILTER && (athlete.club || '') !== '') return false
-    if (club !== '' && club !== NO_CLUB_FILTER && (athlete.club || '') !== club) return false
-    return true
+  if (keyword && !(athlete.name || '').toLowerCase().includes(keyword)) return false
+  if (club === NO_CLUB_FILTER && (athlete.club || '') !== '') return false
+  if (club !== '' && club !== NO_CLUB_FILTER && (athlete.club || '') !== club) return false
+  return true
+}
+
+const filteredRanking = computed(() => {
+  return ranking.value.filter(matchesCurrentFilters)
+})
+
+const getEventSortMeta = (eventSeason) => {
+  const [yearText, ...seasonParts] = String(eventSeason || '').split(' ')
+  const seasonLabel = seasonParts.join(' ').trim()
+  return {
+    year: Number(yearText) || Number(selectedYear.value) || 0,
+    seasonOrder: SEASON_ORDER[seasonLabel] || 99,
+    seasonLabel: seasonLabel || String(eventSeason || ''),
+  }
+}
+
+const exportEvents = computed(() => {
+  const eventMap = new Map()
+
+  ranking.value.forEach(athlete => {
+    athlete.scores.forEach(score => {
+      if (!score?.event_id) return
+
+      const value = String(score.event_id)
+      if (!eventMap.has(value)) {
+        const sortMeta = getEventSortMeta(score.event_season)
+        eventMap.set(value, {
+          value,
+          label: score.event_season || `赛事 ${score.event_id}`,
+          shortLabel: sortMeta.seasonLabel || score.event_season || `赛事 ${score.event_id}`,
+          sortYear: sortMeta.year,
+          sortSeason: sortMeta.seasonOrder,
+        })
+      }
+    })
   })
+
+  return Array.from(eventMap.values()).sort((left, right) => {
+    if (left.sortYear !== right.sortYear) return left.sortYear - right.sortYear
+    if (left.sortSeason !== right.sortSeason) return left.sortSeason - right.sortSeason
+    return left.label.localeCompare(right.label, 'zh-CN')
+  })
+})
+
+const selectedExportEvent = computed(() => {
+  return exportEvents.value.find(item => item.value === selectedExportEventId.value) || null
+})
+
+const exportScopeLabel = computed(() => {
+  if (exportScope.value === 'event') {
+    return selectedExportEvent.value?.label || '请选择赛事'
+  }
+  return `${selectedYear.value} 年年度总积分`
 })
 
 const getTopRankClass = (rank) => {
@@ -281,6 +386,104 @@ const getFormatLabel = (format) => {
 
 const getBowTypeLabel = (bowType) => {
   return bowTypes.value.find(item => item.code === bowType)?.name || bowType || '-'
+}
+
+const buildEventScopedRanking = (eventId) => {
+  const eventRanking = ranking.value.map(athlete => {
+    const scopedScores = athlete.scores.filter(score => String(score.event_id) === String(eventId))
+    if (scopedScores.length === 0) return null
+
+    const totalPoints = scopedScores.reduce((sum, score) => sum + Number(score.points || 0), 0)
+    return {
+      ...athlete,
+      total_points: totalPoints,
+      scores: scopedScores,
+    }
+  }).filter(Boolean)
+
+  eventRanking.sort((left, right) => {
+    if (right.total_points !== left.total_points) return right.total_points - left.total_points
+    return (left.name || '').localeCompare(right.name || '', 'zh-CN')
+  })
+
+  return eventRanking.map((athlete, index) => ({
+    ...athlete,
+    ranking: index + 1,
+    highlight: index < 8,
+  }))
+}
+
+const getExportRanking = () => {
+  const scopedRanking = exportScope.value === 'event'
+    ? buildEventScopedRanking(selectedExportEventId.value)
+    : ranking.value
+
+  return scopedRanking.filter(matchesCurrentFilters)
+}
+
+const addMergeRange = (merges, startRow, endRow, columnIndex) => {
+  if (endRow <= startRow) return
+
+  merges.push({
+    s: { r: startRow, c: columnIndex },
+    e: { r: endRow, c: columnIndex },
+  })
+}
+
+const buildDetailSheetData = (exportRanking) => {
+  const rows = []
+  const merges = []
+  let currentRow = 1
+
+  exportRanking.forEach(athlete => {
+    const athleteStartRow = currentRow
+    let eventStartRow = currentRow
+    let currentEventSeason = athlete.scores[0]?.event_season || ''
+
+    athlete.scores.forEach((score, index) => {
+      rows.push([
+        athlete.ranking,
+        athlete.name,
+        athlete.club || '',
+        athlete.total_points.toFixed(1),
+        score.event_season,
+        getBowTypeLabel(score.bow_type),
+        score.distance,
+        getFormatLabel(score.format),
+        score.rank,
+        score.points.toFixed(1)
+      ])
+
+      currentRow += 1
+
+      const nextScore = athlete.scores[index + 1]
+      const nextEventSeason = nextScore?.event_season || null
+      if (nextEventSeason !== currentEventSeason) {
+        addMergeRange(merges, eventStartRow, currentRow - 1, 4)
+        eventStartRow = currentRow
+        currentEventSeason = nextEventSeason
+      }
+    })
+
+    const athleteEndRow = currentRow - 1
+    ;[0, 1, 2, 3].forEach(columnIndex => {
+      addMergeRange(merges, athleteStartRow, athleteEndRow, columnIndex)
+    })
+  })
+
+  return { rows, merges }
+}
+
+const openExportDialog = () => {
+  if (filteredRanking.value.length === 0) return
+
+  exportScope.value = 'year'
+  selectedExportEventId.value = exportEvents.value[0]?.value || ''
+  showExportDialog.value = true
+}
+
+const closeExportDialog = () => {
+  showExportDialog.value = false
 }
 
 // 初始化可选的年度 - 从数据库获取实际的事件年份
@@ -346,12 +549,21 @@ const loadRanking = async () => {
 
 // 导出 Excel
 const exportToExcel = async () => {
-  if (filteredRanking.value.length === 0) return
+  if (exportScope.value === 'event' && !selectedExportEventId.value) {
+    pageMsg.show('error', '请选择要导出的赛事')
+    return
+  }
+
+  const exportRanking = getExportRanking()
+  if (exportRanking.length === 0) {
+    pageMsg.show('error', '当前导出范围内没有可导出的积分数据')
+    return
+  }
 
   const XLSX = await import('xlsx')
 
-  const headers = ['排名', '姓名', '俱乐部', '积分', '参赛次数']
-  const rows = filteredRanking.value.map(athlete => [
+  const summaryHeaders = ['排名', '姓名', '俱乐部', '积分', '参赛次数']
+  const summaryRows = exportRanking.map(athlete => [
     athlete.ranking,
     athlete.name,
     athlete.club || '',
@@ -359,12 +571,14 @@ const exportToExcel = async () => {
     athlete.scores.length
   ])
 
-  // 创建工作表
-  const worksheetData = [headers, ...rows]
-  const worksheet = XLSX.utils.aoa_to_sheet(worksheetData)
+  const detailHeaders = ['排名', '姓名', '俱乐部', '总积分', '赛事', '弓种', '距离', '赛制', '名次', '积分']
+  const detailSheetData = buildDetailSheetData(exportRanking)
+  const detailRows = detailSheetData.rows
 
-  // 设置列宽
-  worksheet['!cols'] = [
+  const summaryWorksheet = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows])
+  const detailWorksheet = XLSX.utils.aoa_to_sheet([detailHeaders, ...detailRows])
+
+  summaryWorksheet['!cols'] = [
     { wch: 8 },  // 排名
     { wch: 15 }, // 姓名
     { wch: 20 }, // 俱乐部
@@ -372,19 +586,36 @@ const exportToExcel = async () => {
     { wch: 12 }  // 参赛次数
   ]
 
-  // 创建工作簿
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, '排名列表')
+  detailWorksheet['!cols'] = [
+    { wch: 8 },
+    { wch: 15 },
+    { wch: 20 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 12 },
+    { wch: 8 },
+    { wch: 10 },
+  ]
 
-  // 生成文件名
+  detailWorksheet['!merges'] = detailSheetData.merges
+
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, summaryWorksheet, '排名列表')
+  XLSX.utils.book_append_sheet(workbook, detailWorksheet, '积分明细')
+
   const bowTypeLabel = bowTypes.value.find(b => b.code === selectedBowType.value)?.name || selectedBowType.value
   const clubSuffix = selectedClub.value === NO_CLUB_FILTER
     ? '_无俱乐部'
     : (selectedClub.value ? `_${selectedClub.value}` : '')
-  const filename = `${selectedYear.value}年${bowTypeLabel}积分排名${clubSuffix}.xlsx`
+  const scopeSuffix = exportScope.value === 'event'
+    ? `_${selectedExportEvent.value?.shortLabel || '指定赛事'}`
+    : '_年度总积分'
+  const filename = `${selectedYear.value}年${bowTypeLabel}积分排名${scopeSuffix}${clubSuffix}.xlsx`
 
-  // 导出文件
   XLSX.writeFile(workbook, filename)
+  closeExportDialog()
 }
 
 // 导航到管理页面（成绩导入）
