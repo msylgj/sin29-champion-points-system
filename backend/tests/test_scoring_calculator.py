@@ -172,12 +172,75 @@ class TestScoringCalculator:
         )
         # 基础5分 × 系数1.0 = 5分
         assert points == 5.0
+
+    def test_ranking_points_four_to_seven_people_group(self):
+        """测试单项4-7人分组系数与名次限制"""
+        points = ScoringCalculator.calculate_points(
+            rank=1,
+            competition_format="ranking",
+            competition_groups=TEST_COMPETITION_GROUPS,
+            bow_type="recurve",
+            distance="30m",
+            participant_count=4
+        )
+        # 基础25分 × 系数0.4 = 10分
+        assert points == 10.0
+
+    def test_ranking_points_five_to_eight_people_cutoff(self):
+        """测试单项8人按8-15人分组保留前4名基础积分"""
+        points = ScoringCalculator.calculate_points(
+            rank=3,
+            competition_format="ranking",
+            competition_groups=TEST_COMPETITION_GROUPS,
+            bow_type="recurve",
+            distance="30m",
+            participant_count=8
+        )
+        # 基础19分 × 系数0.6 = 11.4分
+        assert points == 11.4
+
+    def test_team_points_two_to_four_teams_group(self):
+        """测试团体赛2-4队走0.6系数"""
+        points = ScoringCalculator.calculate_points(
+            rank=1,
+            competition_format="team",
+            competition_groups=TEST_COMPETITION_GROUPS,
+            bow_type="recurve",
+            distance="30m",
+            participant_count=2
+        )
+        # 基础20分 × 系数0.6 = 12分
+        assert points == 12.0
     
+    def test_coefficient_two_to_three_people_group(self):
+        """测试单项2-3人分组系数"""
+        coeff, cutoff = ScoringCalculator.get_coefficient_and_cutoff(3, "ranking")
+        assert coeff == 0.2
+        assert cutoff == 1
+
+    def test_coefficient_four_to_seven_people_group(self):
+        """测试单项4-7人分组系数"""
+        coeff, cutoff = ScoringCalculator.get_coefficient_and_cutoff(4, "ranking")
+        assert coeff == 0.4
+        assert cutoff == 2
+
+    def test_coefficient_five_to_eight_people_group(self):
+        """测试单项8人落在8-15人分组系数"""
+        coeff, cutoff = ScoringCalculator.get_coefficient_and_cutoff(8, "ranking")
+        assert coeff == 0.6
+        assert cutoff == 4
+
     def test_coefficient_small_group(self):
         """测试小分组系数（8-15人）"""
         coeff, cutoff = ScoringCalculator.get_coefficient_and_cutoff(10, "ranking")
         assert coeff == 0.6
         assert cutoff == 4
+
+    def test_team_coefficient_two_to_four_teams_group(self):
+        """测试团体赛2-4队系数"""
+        coeff, cutoff = ScoringCalculator.get_coefficient_and_cutoff(2, "team")
+        assert coeff == 0.6
+        assert cutoff == 2
     
     def test_coefficient_medium_group(self):
         """测试中等分组系数（16-31人）"""

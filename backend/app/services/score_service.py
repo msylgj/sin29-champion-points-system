@@ -370,23 +370,23 @@ class ScoreService:
                     event_config_map,
                 )
                 if not participant_count:
-                    participant_count = 8
+                    participant_count = 2
             elif score.format == 'team':
                 participant_count = ScoreService._get_team_participant_count(
                     score,
                     event_config_map,
                 )
                 if not participant_count:
-                    participant_count = 3
+                    participant_count = 2
             elif score.format == 'mixed_doubles':
                 participant_count = ScoreService._get_mixed_doubles_participant_count(
                     score,
                     event_config_map,
                 )
                 if not participant_count:
-                    participant_count = 3
+                    participant_count = 2
             else:
-                participant_count = 8
+                participant_count = 2
             
             # 计算积分
             points = ScoringCalculator.calculate_points(

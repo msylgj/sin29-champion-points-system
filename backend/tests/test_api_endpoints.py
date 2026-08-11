@@ -223,7 +223,7 @@ def test_annual_ranking_uses_registration_points_bow_type_and_sightless_scores()
     assert payload['total'] == 1
     assert payload['athletes'][0]['name'] == '王五'
     assert payload['athletes'][0]['club'] == 'C俱乐部'
-    assert payload['athletes'][0]['total_points'] == 7.5
+    assert payload['athletes'][0]['total_points'] == 2.5
 
 
 def test_annual_ranking_uses_bow_type_for_default_registration_context():

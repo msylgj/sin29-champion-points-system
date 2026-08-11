@@ -90,6 +90,10 @@ CREATE TABLE IF NOT EXISTS competition_groups (
 
 INSERT INTO competition_groups (group_code, bow_type, distance) VALUES
     ('S', 'barebow', '50m'),
+    ('S', 'longbow', '50m'),
+    ('S', 'sightless', '50m'),
+    ('S', 'traditional', '50m'),
+    ('S', 'recurve', '50m'),
     ('A', 'compound', '50m'),
     ('A', 'barebow', '30m'),
     ('A', 'longbow', '30m'),

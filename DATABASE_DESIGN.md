@@ -151,7 +151,7 @@
 
 默认映射包括：
 
-- `S组 barebow 50m`
+- `S组 barebow/longbow/sightless/traditional/recurve 50m`
 - `A组 compound 50m`
 - `A组 barebow/longbow/traditional/recurve 30m`
 - `B组 compound 30m`
