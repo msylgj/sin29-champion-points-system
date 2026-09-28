@@ -1,0 +1,7 @@
+{
+  "sprint": 1,
+  "qa_started_sha": "98e9760a469912dd0c4606b059cfd387793ba7b4",
+  "l2_gate_manifest_sha256": "40b7ef8a2d9aaf0c5566f756f91c4d0e672a8f4151df8d070832bdcab5a247f9",
+  "l2_input_digest": "5aa2d682310262633c58df7bc78fe4c69097f2339c59139100e420dc44e7c007",
+  "l2_stash_refs": []
+}
