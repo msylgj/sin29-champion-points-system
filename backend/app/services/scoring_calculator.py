@@ -35,6 +35,7 @@
      * 11-14队: 1.2, 1-8名获得基础积分
      * 14队以上: 1.4, 1-8名获得基础积分
 """
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, Optional, Tuple
 
 
@@ -185,6 +186,7 @@ class ScoringCalculator:
         3. 如果排名在限制内，使用步骤1的基础积分；否则替换为1分
         4. 计算：基础积分 × 系数
         5. 根据弓种+距离匹配组别系数（B组×0.5，C组×0.3）
+        6. 完整乘算后按分项四舍五入保留1位小数，供展示和汇总共用
         
         Args:
             rank: 排名（1开始）
@@ -210,12 +212,13 @@ class ScoringCalculator:
         if rank > cutoff:
             base_points = 1.0
         
-        # 步骤4：计算最终积分：基础积分 × 系数
-        final_points = base_points * coefficient
-        
-        # 步骤5：组别系数调整
+        # 完整分项应用所有系数后再舍入；不在中间乘算阶段损失精度。
+        # 从十进制字符串构造，避免二进制浮点误差和 round 的银行家舍入。
         group_multiplier = ScoringCalculator.get_group_multiplier(bow_type, distance, competition_groups)
-        final_points *= group_multiplier
-        
-        return round(final_points, 2)
+        final_points = (
+            Decimal(str(base_points))
+            * Decimal(str(coefficient))
+            * Decimal(str(group_multiplier))
+        )
+        return float(final_points.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
     

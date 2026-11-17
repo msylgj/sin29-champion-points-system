@@ -10,6 +10,12 @@ const xlsxBookAppendSheet = vi.fn((workbook, worksheet, name) => {
   workbook.sheets.push({ name, worksheet })
 })
 const xlsxWriteFile = vi.fn()
+const seasonExport = vi.fn(async () => {})
+
+vi.mock('@/utils/seasonPointsExport', async importOriginal => ({
+  ...await importOriginal(),
+  exportSeasonPoints: seasonExport,
+}))
 
 vi.mock('xlsx', () => ({
   utils: {
@@ -120,7 +126,7 @@ describe('PointsDisplay page', () => {
     view.unmount()
   })
 
-  it('exports selected event ranking with detail sheet', async () => {
+  it('exports only the selected season through the styled template', async () => {
     annualRankingGet.mockResolvedValue({
       athletes: [
         {
@@ -164,35 +170,103 @@ describe('PointsDisplay page', () => {
     view.container.querySelector('.btn-export-confirm').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flushPromises(5)
 
-    expect(xlsxWriteFile).toHaveBeenCalledTimes(1)
+    expect(xlsxWriteFile).not.toHaveBeenCalled()
+    expect(seasonExport).toHaveBeenCalledTimes(1)
+    const options = seasonExport.mock.calls[0][1]
+    expect(options.filename).toContain('春季赛')
+    expect(options.eventLabel).toBe('春季赛')
+    expect(options.eventId).toBe('1')
+    expect(options.year).toBe(2026)
+    expect(options.bowTypeLabel).toBe('光弓')
+    expect(options.ranking.map(({ ranking, name, total_points, scores }) => [ranking, name, total_points, scores.length])).toEqual([
+      [1, '张三', 17, 2],
+      [2, '李四', 14, 2],
+    ])
+    expect(options.ranking.every(athlete => athlete.scores.every(score => score.event_id === 1))).toBe(true)
+    expect(view.container.querySelector('.export-dialog')).toBeNull()
+
+    view.unmount()
+  })
+
+  it('keeps the annual ranking and detail worksheets unchanged', async () => {
+    const { default: PointsDisplay } = await import('./PointsDisplay.vue')
+    const view = await mountComponent(PointsDisplay)
+    view.container.querySelector('.btn-export').click()
+    await flushPromises()
+    view.container.querySelector('.btn-export-confirm').click()
+    await flushPromises(5)
+
+    expect(seasonExport).not.toHaveBeenCalled()
     const [workbook, filename] = xlsxWriteFile.mock.calls[0]
-    expect(filename).toContain('春季赛')
+    expect(filename).toContain('_年度总积分.xlsx')
     expect(workbook.sheets.map(sheet => sheet.name)).toEqual(['排名列表', '积分明细'])
     expect(workbook.sheets[0].worksheet.data).toEqual([
       ['排名', '姓名', '俱乐部', '积分', '参赛次数'],
-      [1, '张三', '甲俱乐部', '17.0', 2],
-      [2, '李四', '乙俱乐部', '14.0', 2],
+      [1, '张三', '甲俱乐部', '20.0', 1],
     ])
     expect(workbook.sheets[1].worksheet.data).toEqual([
       ['排名', '姓名', '俱乐部', '总积分', '赛事', '弓种', '距离', '赛制', '名次', '积分'],
-      [1, '张三', '甲俱乐部', '17.0', '2026 春季赛', '光弓', '30m', '排位赛', 1, '12.0'],
-      [1, '张三', '甲俱乐部', '17.0', '2026 春季赛', '光弓', '18m', '淘汰赛', 3, '5.0'],
-      [2, '李四', '乙俱乐部', '14.0', '2026 春季赛', '光弓', '30m', '排位赛', 2, '10.0'],
-      [2, '李四', '乙俱乐部', '14.0', '2026 春季赛', '光弓', '18m', '淘汰赛', 4, '4.0'],
+      [1, '张三', '甲俱乐部', '20.0', '2026 夏季赛', '-', '30m', '排位赛', 1, '20.0'],
     ])
-    expect(workbook.sheets[1].worksheet['!merges']).toEqual([
-      { s: { r: 1, c: 4 }, e: { r: 2, c: 4 } },
-      { s: { r: 1, c: 0 }, e: { r: 2, c: 0 } },
-      { s: { r: 1, c: 1 }, e: { r: 2, c: 1 } },
-      { s: { r: 1, c: 2 }, e: { r: 2, c: 2 } },
-      { s: { r: 1, c: 3 }, e: { r: 2, c: 3 } },
-      { s: { r: 3, c: 4 }, e: { r: 4, c: 4 } },
-      { s: { r: 3, c: 0 }, e: { r: 4, c: 0 } },
-      { s: { r: 3, c: 1 }, e: { r: 4, c: 1 } },
-      { s: { r: 3, c: 2 }, e: { r: 4, c: 2 } },
-      { s: { r: 3, c: 3 }, e: { r: 4, c: 3 } },
-    ])
+    view.unmount()
+  })
 
+  it('uses decimal tenths for season sorting and honors club filters', async () => {
+    annualRankingGet.mockResolvedValue({ athletes: [
+      { ranking: 1, name: 'Z', club: '甲', total_points: 1.6, scores: [
+        { event_id: 1, event_season: '2026 春季赛', distance: '30m', format: 'ranking', points: 0.6 },
+        { event_id: 2, event_season: '2026 夏季赛', distance: '30m', format: 'ranking', points: 1 },
+      ] },
+      { ranking: 2, name: 'A', club: '乙', total_points: 0.6, scores: [
+        { event_id: 1, event_season: '2026 春季赛', distance: '30m', format: 'ranking', points: 0.24 },
+        { event_id: 1, event_season: '2026 春季赛', distance: '18m', format: 'team', points: 0.24 },
+        { event_id: 1, event_season: '2026 春季赛', distance: '10m', format: 'elimination', points: 0.24 },
+      ] },
+    ] })
+    const { default: PointsDisplay } = await import('./PointsDisplay.vue')
+    const view = await mountComponent(PointsDisplay)
+    view.container.querySelector('.btn-export').click()
+    await flushPromises()
+    const radio = view.container.querySelector('input[value="event"]')
+    radio.checked = true
+    radio.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
+    view.container.querySelector('.btn-export-confirm').click()
+    await flushPromises(5)
+    expect(seasonExport.mock.calls[0][1].ranking.map(item => [item.name, item.total_points, item.ranking])).toEqual([['A', 0.6, 1], ['Z', 0.6, 2]])
+
+    const club = view.container.querySelector('#club-filter')
+    club.value = '甲'
+    club.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
+    view.container.querySelector('.btn-export').click()
+    await flushPromises()
+    const filteredRadio = view.container.querySelector('input[value="event"]')
+    filteredRadio.checked = true
+    filteredRadio.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
+    view.container.querySelector('.btn-export-confirm').click()
+    await flushPromises(5)
+    expect(seasonExport.mock.calls[1][1].ranking.map(item => [item.name, item.ranking])).toEqual([['Z', 2]])
+    expect(seasonExport.mock.calls[1][1].filename).toContain('_甲.xlsx')
+    view.unmount()
+  })
+
+  it('reports template export failures without closing the dialog', async () => {
+    seasonExport.mockRejectedValueOnce(new Error('赛季导出模板加载失败，请重试'))
+    const { default: PointsDisplay } = await import('./PointsDisplay.vue')
+    const view = await mountComponent(PointsDisplay)
+    view.container.querySelector('.btn-export').click()
+    await flushPromises()
+    const radio = view.container.querySelector('input[value="event"]')
+    radio.checked = true
+    radio.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
+    view.container.querySelector('.btn-export-confirm').click()
+    await flushPromises(5)
+    expect(view.container.textContent).toContain('赛季导出模板加载失败，请重试')
+    expect(view.container.querySelector('.export-dialog')).not.toBeNull()
+    expect(xlsxWriteFile).not.toHaveBeenCalled()
     view.unmount()
   })
 })

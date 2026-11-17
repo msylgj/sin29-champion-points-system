@@ -251,6 +251,7 @@ import { scoreAPI, eventAPI, authAPI } from '@/api'
 import { useDictionaries } from '@/composables/useDictionaries'
 import { useMessage } from '@/composables/useMessage'
 import { useRouter, useRoute } from 'vue-router'
+import { exportSeasonPoints, sumPointTenths } from '@/utils/seasonPointsExport'
 
 const router = useRouter()
 const route = useRoute()
@@ -393,7 +394,7 @@ const buildEventScopedRanking = (eventId) => {
     const scopedScores = athlete.scores.filter(score => String(score.event_id) === String(eventId))
     if (scopedScores.length === 0) return null
 
-    const totalPoints = scopedScores.reduce((sum, score) => sum + Number(score.points || 0), 0)
+    const totalPoints = sumPointTenths(scopedScores) / 10
     return {
       ...athlete,
       total_points: totalPoints,
@@ -562,6 +563,32 @@ const exportToExcel = async () => {
 
   const XLSX = await import('xlsx')
 
+  const bowTypeLabel = bowTypes.value.find(b => b.code === selectedBowType.value)?.name || selectedBowType.value
+  const clubSuffix = selectedClub.value === NO_CLUB_FILTER
+    ? '_无俱乐部'
+    : (selectedClub.value ? `_${selectedClub.value}` : '')
+  const scopeSuffix = exportScope.value === 'event'
+    ? `_${selectedExportEvent.value?.shortLabel || '指定赛事'}`
+    : '_年度总积分'
+  const filename = `${selectedYear.value}年${bowTypeLabel}积分排名${scopeSuffix}${clubSuffix}.xlsx`
+
+  if (exportScope.value === 'event') {
+    try {
+      await exportSeasonPoints(XLSX, {
+        ranking: exportRanking,
+        eventId: selectedExportEventId.value,
+        eventLabel: selectedExportEvent.value?.shortLabel || '赛季',
+        year: selectedYear.value,
+        bowTypeLabel,
+        filename,
+      })
+      closeExportDialog()
+    } catch (error) {
+      pageMsg.show('error', error.message || '赛季积分导出失败，请重试')
+    }
+    return
+  }
+
   const summaryHeaders = ['排名', '姓名', '俱乐部', '积分', '参赛次数']
   const summaryRows = exportRanking.map(athlete => [
     athlete.ranking,
@@ -604,15 +631,6 @@ const exportToExcel = async () => {
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, summaryWorksheet, '排名列表')
   XLSX.utils.book_append_sheet(workbook, detailWorksheet, '积分明细')
-
-  const bowTypeLabel = bowTypes.value.find(b => b.code === selectedBowType.value)?.name || selectedBowType.value
-  const clubSuffix = selectedClub.value === NO_CLUB_FILTER
-    ? '_无俱乐部'
-    : (selectedClub.value ? `_${selectedClub.value}` : '')
-  const scopeSuffix = exportScope.value === 'event'
-    ? `_${selectedExportEvent.value?.shortLabel || '指定赛事'}`
-    : '_年度总积分'
-  const filename = `${selectedYear.value}年${bowTypeLabel}积分排名${scopeSuffix}${clubSuffix}.xlsx`
 
   XLSX.writeFile(workbook, filename)
   closeExportDialog()

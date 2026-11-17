@@ -2,6 +2,7 @@
 成绩服务 - 简化版本
 """
 from collections import defaultdict
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, or_
@@ -406,7 +407,6 @@ class ScoreService:
                     'scores': []
                 }
 
-            athlete_points[score.name]['total_points'] += points
             athlete_points[score.name]['scores'].append({
                 'event_id': score.event_id,
                 'event_season': f"{event.year} {event.season}",
@@ -419,6 +419,11 @@ class ScoreService:
             })
         
         for item in athlete_points.values():
+            # 汇总展示使用的已舍入分项，不再对未舍入积分求和；十进制求和避免浮点尾差。
+            item['total_points'] = float(sum(
+                (Decimal(str(detail['points'])) for detail in item['scores']),
+                Decimal('0.0'),
+            ))
             item['scores'].sort(key=ScoreService._score_detail_sort_key)
             for score_detail in item['scores']:
                 score_detail.pop('_season_order', None)
