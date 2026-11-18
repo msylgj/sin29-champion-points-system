@@ -1,6 +1,19 @@
 import axios from 'axios'
 
-const ADMIN_TOKEN_KEY = 'admin_auth_token'
+import { getAdminAuthRedirect, getAdminSessionSnapshot, recoverAdminUnauthorized } from '@/utils/adminAuth'
+
+function isProtectedAdminRequest(config) {
+  if (config.skipAdminAuthRecovery) return false
+  try {
+    const url = new URL(config.url || '', window.location.origin)
+    if (url.origin !== window.location.origin) return false
+    const path = url.pathname.replace(/^\/api(?=\/)/, '')
+    if (path === '/auth/login' || path === '/events/years' || path.startsWith('/scores/annual-ranking/')) return false
+    return /^\/(scores|events|event-configurations|event-registrations|scoring-rules)(\/|$)/.test(path)
+  } catch {
+    return false
+  }
+}
 
 const api = axios.create({
   baseURL: '/api',
@@ -12,10 +25,16 @@ const api = axios.create({
 
 api.interceptors.request.use(
   config => {
-    const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY)
-    if (adminToken) {
-      config.headers.Authorization = `Bearer ${adminToken}`
+    const snapshot = getAdminSessionSnapshot()
+    config.headers ||= {}
+    // Reused configs/default headers must not keep an expired Authorization value.
+    for (const key of Object.keys(config.headers)) {
+      if (key.toLowerCase() === 'authorization') delete config.headers[key]
     }
+    if (snapshot.token) config.headers.Authorization = `Bearer ${snapshot.token}`
+    config.adminSessionSnapshot = snapshot
+    config.adminAuthProtected = isProtectedAdminRequest(config)
+    config.adminAuthRedirect = getAdminAuthRedirect()
     return config
   },
   error => {
@@ -31,7 +50,9 @@ api.interceptors.response.use(
     if (error.response) {
       switch (error.response.status) {
         case 401:
-          localStorage.removeItem(ADMIN_TOKEN_KEY)
+          if (error.config?.adminAuthProtected && isProtectedAdminRequest(error.config)) {
+            recoverAdminUnauthorized(error.config.adminSessionSnapshot, error.config.adminAuthRedirect)
+          }
           break
         case 403:
           console.error('无权限访问')
@@ -44,6 +65,9 @@ api.interceptors.response.use(
           console.error('服务器错误')
           break
       }
+    }
+    if (error.config?.preserveStatus && error.response) {
+      return Promise.reject({ ...error.response.data, status: error.response.status })
     }
     return Promise.reject(error.response?.data || error)
   }
@@ -80,8 +104,15 @@ export const eventRegistrationAPI = {
   delete: (id) => api.delete(`/event-registrations/${id}`),
 }
 
+// Preserve status only for version publishing, so stale drafts can handle 409.
+export const scoringRuleAPI = {
+  getList: () => api.get('/scoring-rules', { preserveStatus: true }),
+  create: data => api.post('/scoring-rules', data, { preserveStatus: true }),
+  delete: id => api.delete(`/scoring-rules/${id}`, { preserveStatus: true }),
+}
+
 export const authAPI = {
-  login: (password) => api.post('/auth/login', { password })
+  login: (password) => api.post('/auth/login', { password }, { skipAdminAuthRecovery: true })
 }
 
 // ==================== 字典 API ====================

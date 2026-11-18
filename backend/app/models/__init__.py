@@ -12,6 +12,7 @@ from app.models.dictionary import (
 from app.models.event import Event
 from app.models.event_configuration import EventConfiguration
 from app.models.event_registration import EventRegistration
+from app.models.scoring_rule import ScoringRule
 
 __all__ = [
     # Models
@@ -24,4 +25,5 @@ __all__ = [
     "Event",
     "EventConfiguration",
     "EventRegistration",
+    "ScoringRule",
 ]

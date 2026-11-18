@@ -53,6 +53,19 @@ describe('registration import parsing helpers', () => {
     })
   })
 
+  it('keeps whitespace/case aliases valid through the shared mapped-value helper', () => {
+    const result = parseRegistrationImportData({
+      jsonData: [
+        ['姓名', '俱乐部', '距离', '比赛弓种', '积分弓种', '分组'],
+        ['张三', '甲俱乐部', ' 1 8 M ', ' 无 瞄 ', ' 传 统 ', ' 混 合 '],
+      ],
+      bowTypes, distances, competitionGenderGroups, existingRegistrations: [],
+      selectedYear: 2024, selectedSeason: '春季赛',
+    })
+    expect(result.errorMessage).toBeNull()
+    expect(result.registrations[0]).toMatchObject({ distance: '18m', competition_bow_type: 'sightless', points_bow_type: 'traditional', competition_gender_group: 'mixed', __valid: true })
+  })
+
   it('forces non-sightless points bow type to match competition bow type', () => {
     const result = parseRegistrationImportData({
       jsonData: [

@@ -1,5 +1,5 @@
 """
-成绩 API 路由 - 简化版本
+成绩管理与公开年度积分 API 路由
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session

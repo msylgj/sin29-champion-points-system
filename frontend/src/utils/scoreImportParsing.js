@@ -202,7 +202,7 @@ export const createValueToCodeMap = (dictArray, aliasConfig = null) => {
   }
 }
 
-const hasMappedValue = (value, valueMap) => {
+export const hasMappedValue = (value, valueMap) => {
   const trimmedValue = (value || '').toString().trim()
   if (!trimmedValue) return false
   const normalizedValue = normalizeLookupValue(trimmedValue)

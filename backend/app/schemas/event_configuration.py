@@ -1,9 +1,12 @@
 """
 赛事配置 Pydantic Schema
 """
-from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime
 from typing import Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.schemas._validation import validate_choice
 
 VALID_BOW_TYPES = ['recurve', 'compound', 'traditional', 'longbow', 'barebow', 'sightless']
 VALID_DISTANCES = ['10m', '18m', '30m', '50m', '70m']
@@ -11,21 +14,15 @@ VALID_GENDER_GROUPS = ['men', 'women', 'mixed']
 
 
 def _validate_bow_type(value: str) -> str:
-    if value not in VALID_BOW_TYPES:
-        raise ValueError(f'弓种必须是 {VALID_BOW_TYPES}')
-    return value
+    return validate_choice(value, VALID_BOW_TYPES, '弓种')
 
 
 def _validate_distance(value: str) -> str:
-    if value not in VALID_DISTANCES:
-        raise ValueError(f'距离必须是 {VALID_DISTANCES}')
-    return value
+    return validate_choice(value, VALID_DISTANCES, '距离')
 
 
 def _validate_gender_group(value: str) -> str:
-    if value not in VALID_GENDER_GROUPS:
-        raise ValueError(f'比赛性别分组必须是 {VALID_GENDER_GROUPS}')
-    return value
+    return validate_choice(value, VALID_GENDER_GROUPS, '比赛性别分组')
 
 
 class EventConfigurationBase(BaseModel):

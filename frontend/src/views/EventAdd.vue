@@ -14,6 +14,14 @@
     </div>
 
     <form @submit.prevent="submitForm" class="form-container">
+      <div class="section scoring-rules-entry">
+        <div>
+          <h2 class="section-title">积分规则管理</h2>
+          <p class="section-help">查看历史规则，继承最新版本创建后继规则并指定前版截止赛事。</p>
+        </div>
+        <button type="button" class="btn-scoring-rules" data-test="scoring-rules-link" @click="router.push('/scoring-rules')">⚙️ 管理积分规则</button>
+      </div>
+
       <div v-if="dictionaryLoadFailed || existingConfigLoadFailed || existingRegistrationLoadFailed" class="page-feedback-list">
         <div v-if="dictionaryLoadFailed" class="failure-notice">
           <div>

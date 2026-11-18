@@ -1,7 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getValidAdminToken, markAdminAuthenticationRequired, registerAdminAuthRouter } from '@/utils/adminAuth'
 
 const EventAdd = () => import('@/views/EventAdd.vue')
 const ScoreImport = () => import('@/views/ScoreImport.vue')
+const ScoringRules = () => import('@/views/ScoringRules.vue')
 const PointsDisplay = () => import('@/views/PointsDisplay.vue')
 
 const routes = [
@@ -22,6 +24,12 @@ const routes = [
     meta: { title: '赛事配置', requiresAdminAuth: true }
   },
   {
+    path: '/scoring-rules',
+    name: 'ScoringRules',
+    component: ScoringRules,
+    meta: { title: '积分规则管理', requiresAdminAuth: true }
+  },
+  {
     path: '/score-import',
     name: 'ScoreImport',
     component: ScoreImport,
@@ -37,20 +45,15 @@ const router = createRouter({
   }
 })
 
-router.beforeEach((to, from, next) => {
+registerAdminAuthRouter(router)
+
+router.beforeEach(to => {
   document.title = to.meta.title || '射箭积分系统'
 
-  const adminToken = localStorage.getItem('admin_auth_token')
-  if (to.meta.requiresAdminAuth && !adminToken) {
-    sessionStorage.setItem('admin_auth_required', '1')
-    sessionStorage.setItem('admin_auth_redirect', to.fullPath)
-    next({
-      path: '/points-display'
-    })
-    return
+  if (to.meta.requiresAdminAuth && !getValidAdminToken()) {
+    markAdminAuthenticationRequired(to.fullPath)
+    return { path: '/points-display', replace: true }
   }
-
-  next()
 })
 
 export default router

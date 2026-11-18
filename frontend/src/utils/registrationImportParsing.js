@@ -2,12 +2,11 @@ import {
   SCORE_IMPORT_ALIASES,
   convertToCode,
   createValueToCodeMap,
+  hasMappedValue,
   mapColumns,
   markInFileDuplicates,
   normalizeKeyPart,
 } from './scoreImportParsing'
-
-const normalizeLookupValue = (value) => (value || '').toString().trim().toLowerCase().replace(/\s+/g, '')
 
 export const REGISTRATION_FIELD_MAPPINGS = {
   name: ['姓名', 'name', '名字', '选手', '参赛者'],
@@ -55,16 +54,6 @@ const REGISTRATION_IMPORT_ALIASES = {
 const buildMissingFieldsMessage = (missingFields) => {
   const missingLabels = missingFields.map(field => REGISTRATION_FIELD_LABELS[field]).join('、')
   return `Excel 文件缺少必需字段：${missingLabels}。列标题应包括：姓名、俱乐部、距离、比赛弓种、积分弓种、分组`
-}
-
-const hasMappedValue = (value, valueMap) => {
-  const trimmedValue = (value || '').toString().trim()
-  if (!trimmedValue) return false
-  const normalizedValue = normalizeLookupValue(trimmedValue)
-  if (Object.prototype.hasOwnProperty.call(valueMap.exactMap, normalizedValue)) {
-    return true
-  }
-  return valueMap.likeEntries.some(entry => entry.alias === normalizedValue)
 }
 
 export const buildRegistrationUniqueKey = (item) => [

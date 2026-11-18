@@ -1,10 +1,10 @@
-# DATABASE DESIGN
+# 数据库设计
 
-本文档描述当前项目数据库的实际结构与业务含义。当前初始化脚本以 `database/init.sql` 为准
+本文描述 PostgreSQL 的表结构、关系和初始化职责。业务流程见[项目概览](README.md)，计分口径见[积分与规则](docs/SCORING.md)。
 
 ## 1. 数据库定位
 
-当前数据库承担 4 类职责：
+数据库承担 4 类职责：
 
 - 字典定义
   - 弓种
@@ -22,11 +22,12 @@
 
 - 成绩与积分
   - 成绩事实表
-  - 年度积分按查询动态计算，不在库内落积分字段
+  - 积分规则按版本保存为配置快照
+  - 年度积分按赛事适用版本动态计算，不在成绩表内落积分字段
 
 ## 2. 表清单
 
-当前共 9 张表：
+共 10 张表：
 
 ### 字典表
 
@@ -42,6 +43,7 @@
 - `event_registrations`
 - `event_configurations`
 - `scores`
+- `scoring_rules`（规则配置快照与适用时间轴）
 
 ## 3. 字典表
 
@@ -139,7 +141,7 @@
 
 ### 3.5 competition_groups
 
-用途：定义“弓种 + 距离”对应的比赛组别，用于积分计算中的组别系数。
+用途：定义“弓种 + 距离”对应的比赛组别。初始规则创建时会快照该映射；历史积分计算使用对应规则版本中的映射，而非每次读取当前字典。
 
 字段：
 
@@ -286,7 +288,7 @@ CHECK 约束：
 说明：
 
 - `individual_participant_count`
-  - 当前由报名数据自动同步
+  - 由报名数据自动同步
   - 前端页面只读显示
 - `team_count`
   - 支持 `男子组 / 女子组 / 混合组`
@@ -314,7 +316,7 @@ CHECK 约束：
 
 注意：
 
-- `scores` 表当前不包含 `club`
+- `scores` 不保存 `club`；俱乐部来自报名记录。
 
 唯一性规则：
 
@@ -336,14 +338,27 @@ CHECK 约束：
 - 查询索引 `idx_scores_event_created_id(event_id, created_at desc, id desc)`
 - 唯一约束 `uq_score_event_name_distance_bow_format`
 
-说明：
+`gender_group` 保存成绩对应的分组，与赛事、弓种和距离一起用于匹配计分所需的赛事配置。网页导入混双成绩时使用 `mixed`。
 
-- `gender_group` 用于保存成绩记录对应的分组，供团体赛、混双赛取人数配置时使用
-- 成绩导入页前端会先做报名匹配预校验
-- 匹配规则：
-  - 排位赛、淘汰赛按 `姓名 + 距离 + 弓种` 匹配报名记录
-- 未找到对应报名记录时，该条个人赛成绩会在导入页中被标记为异常数据
-- 混双赛成绩在前端提交前会将 `gender_group` 强制归一为 `mixed`
+### 4.5 scoring_rules
+
+用途：保存不可变的计分配置快照及按年度、赛季排列的适用区间。成绩仍存排名事实，积分查询时计算，不把新规则覆盖到整年度。
+
+字段：
+
+- id：规则版本主键。
+- name：管理员指定的规则名称。
+- source_rule_id：所继承的前一版本外键；初始版本为空。唯一约束保证一个版本只能有一个后继，避免分支。
+- start_key：适用起始季，唯一且非空；0 表示初始版本覆盖无限过去。其余值为 年度×4＋赛季序号（春1、夏2、秋3、冬4）。
+- end_key：适用截止季，包含该季；NULL 表示当前最新版本延续到未来。
+- config：JSON 完整快照，保存排名基础分列表、个人人数和队伍数连续系数段、排名上限、S/A/B/C 组别系数、弓种距离组别映射、兜底分及缺失人数默认值，固定分项精度1位与四舍五入方式。团体、混双共用团体基础分和队伍系数表。
+- created_at：创建时间。
+
+时间轴约束：
+
+- 只允许在最新版本后发布，前版截止键和后继起始键相邻。结束前版和创建后继在同一事务完成。
+- 只允许删除无后继的非初始最新版本，删除及将前版的 `end_key` 恢复为 `NULL` 在同一事务完成。发布和删除按一致顺序锁记录并检查版本。
+- 规则选择依据赛事年度和赛季；积分明细返回 `scoring_rule_id` 和 `scoring_rule_name`。组别映射随快照保存，不受字典后续修改影响。
 
 ## 5. 表关系
 
@@ -369,73 +384,14 @@ CHECK 约束：
   - `year + season -> event`
   - `competition_gender_group + competition_bow_type + distance -> event_configuration`
 
-## 6. 当前前后端对数据库的使用方式
+### 5.5 scoring_rules 自引用
 
-### 6.1 赛事配置页
+- `scoring_rules.id -> scoring_rules.source_rule_id`
+- `source_rule_id` 唯一：每个规则最多有一个后继；初始规则没有前版。
+- `start_key` 唯一：同一赛季不能开始两个规则版本。
 
-页面：`frontend/src/views/EventAdd.vue`
+## 6. 初始化
 
-行为：
-
-- 先选择 `year + season`
-- 若已有赛事，读取 `events` 与 `event_configurations`
-- 若先导入报名，后端会自动创建赛事和对应个人人数配置
-- 若先手工保存配置，也会自动创建赛事
-
-### 6.2 报名导入页块
-
-页面：`frontend/src/views/EventAdd.vue`
-
-行为：
-
-- 导入 Excel 报名
-- 写入 `event_registrations`
-- 自动同步 `event_configurations.individual_participant_count`
-- 已导入报名支持查看、编辑、删除
-
-### 6.3 成绩导入页
-
-页面：`frontend/src/views/ScoreImport.vue`
-
-行为：
-
-- 先选择赛事
-- 再读取该赛事所属赛年赛季的报名表
-- 导入页前端会将未匹配报名记录的个人赛成绩标记为异常
-- 团体赛、混双赛不做报名匹配预校验
-- 成绩写入 `scores`
-
-### 6.4 年度积分页
-
-页面：`frontend/src/views/PointsDisplay.vue`
-
-行为：
-
-- 先从报名表中找到当年 `points_bow_type = 所选弓种` 的人
-- 默认按 `年度 + 赛季 + 姓名 + 距离 + 比赛弓种` 匹配并聚合这些人的成绩积分
-- 当报名的比赛弓种为 `barebow / longbow / traditional` 时，还会额外匹配同 `年度 + 赛季 + 姓名 + 距离` 下成绩弓种为 `sightless` 的成绩
-- 每名选手的成绩明细按 `春季赛 -> 夏季赛 -> 秋季赛 -> 冬季赛` 排列，同赛季内再按 `距离 -> 弓种 -> 赛制` 排列
-- 积分计算所需人数来自：
-  - 排位赛 / 淘汰赛：报名记录对应性别分组下的赛事配置
-  - 团体赛：按成绩记录上的 `gender_group` 取对应配置的 `team_count`
-  - 混双赛：先将 `gender_group` 归一为 `mixed`，再取 `mixed_doubles_team_count`
-
-## 7. 当前索引状态
-
-按项目当前实现，高频业务表使用以下业务索引或唯一约束：
-
-- `events`
-  - `idx_event_year_season(year, season)`
-
-- `event_registrations`
-  - `idx_event_registrations_year_points_lookup(year, points_bow_type, season, name, distance, competition_bow_type)`
-  - `ux_event_registration_key(year, season, name, distance, competition_bow_type)`
-
-- `event_configurations`
-  - `(event_id, gender_group, bow_type, distance)` 唯一约束
-
-- `scores`
-  - `idx_scores_event_created_id(event_id, created_at desc, id desc)`
-  - `uq_score_event_name_distance_bow_format(event_id, name, distance, bow_type, format)`
-
-以及各表主键索引 `..._pkey`
+- [PostgreSQL 初始化脚本](database/init.sql)创建表、约束、索引并填充字典。Compose 仅在 PostgreSQL 数据目录首次初始化时自动执行脚本。
+- [后端启动引导](backend/app/bootstrap.py)增建缺失表，在没有 `start_key = 0` 的初始版本时创建初始快照，不负责更新已有表结构或填充字典。PostgreSQL 的建表检查及首版快照使用同一事务级锁。
+- 初始映射存在不同组别的重复项时，引导失败并终止启动；空映射会告警，未匹配项目的组别系数为 0。旧部署的升级步骤单独记录在[变更记录](CHANGELOG.md)。

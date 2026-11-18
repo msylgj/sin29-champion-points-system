@@ -1,0 +1,154 @@
+@use './managementControls' as controls;
+@use './feedback' as feedback;
+
+.scoring-rules-page {
+  min-height: 100vh;
+  padding-bottom: 100px;
+  background-color: #f5f5f5;
+  color: #333;
+
+  .page-header {
+    padding: 30px 20px 20px;
+    margin-bottom: 20px;
+    color: white;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .header-title-wrap { flex: 1; text-align: center; }
+    .header-spacer { width: 70px; height: 1px; flex-shrink: 0; }
+    h1 { margin: 0 0 5px; font-size: 28px; font-weight: 600; }
+    .subtitle { margin: 0; opacity: .9; font-size: 14px; }
+
+    .btn-back {
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, .2);
+      border: 1px solid rgba(255, 255, 255, .3);
+      color: white;
+      border-radius: 6px;
+      font-size: 13px;
+      white-space: nowrap;
+
+      &:hover { background: rgba(255, 255, 255, .3); }
+      &:active { transform: scale(.95); }
+    }
+  }
+
+  .rules-container { padding: 0 15px; }
+
+  .rules-panel {
+    padding: 20px;
+    margin-bottom: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .05);
+  }
+
+  h2 { margin: 0 0 15px; font-size: 16px; font-weight: 600; }
+  p, :deep(p) { font-size: 13px; line-height: 1.5; }
+  .rules-panel > p, :deep(.rule-config > p), :deep(.config-section > p) { font-size: 12px; color: #888; margin-bottom: 12px; }
+  h3, :deep(h3) { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+
+  .section-heading, .section-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .section-heading { justify-content: space-between; margin-bottom: 15px; }
+  .section-heading h2 { margin: 0; }
+
+  button, :deep(button) {
+    @include controls.action-button(#eef1fb, #4c5684);
+
+    &:focus-visible { outline: 2px solid #667eea; outline-offset: 2px; }
+    &:disabled { @include controls.disabled-button; }
+  }
+
+  .btn-row-save, :deep(.btn-row-save) {
+    @include controls.action-button(#4d79ff, #fff);
+    margin-right: 6px;
+  }
+
+  .btn-row-delete, :deep(.btn-row-delete) {
+    @include controls.action-button(#d14343, #fff);
+  }
+
+  .btn-primary, :deep(.btn-add) { @include controls.primary-button; }
+  .section-actions button { padding: 7px 12px; border-radius: 6px; }
+
+  .manage-table-wrap, :deep(.manage-table-wrap) { @include controls.table-wrapper; margin: 12px 0; }
+  .manage-table { @include controls.table(680px); }
+  :deep(.manage-table) { @include controls.table(360px); }
+  :deep(.rule-coefficients-table) { min-width: 600px; }
+  :deep(.rule-groups-table) { min-width: 560px; }
+  .manage-table td, .manage-table th, :deep(.manage-table td), :deep(.manage-table th) { @include controls.table-cell; }
+  .manage-table thead th, :deep(.manage-table thead th) { @include controls.table-heading; }
+  .action-cell, :deep(.action-cell) { white-space: nowrap; }
+  :deep(.manage-table .cell-input) { @include controls.cell-input; min-width: 0; }
+  tr.selected td { background: #f0f2ff; }
+
+  .failure-notice { @include feedback.failure-notice; margin-bottom: 12px; }
+  .btn-retry-inline { @include feedback.retry-button; }
+  .empty-tip { @include feedback.empty-tip; margin: 12px 0; }
+  .start-preview { @include feedback.empty-tip; margin: 0; }
+
+  .draft-basics { display: grid; gap: 15px; padding: 15px; border: 1px solid #eee; border-radius: 6px; }
+  legend, :deep(legend) { padding: 0 6px; font-size: 14px; font-weight: 500; }
+  label, :deep(label) { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; }
+
+  .draft-basics input, .draft-basics select, :deep(.multiplier-grid input) {
+    @include controls.filter-select;
+    max-width: 100%;
+    box-sizing: border-box;
+
+    &:focus { outline: none; border-color: #667eea; }
+    &:disabled { background: #f5f5f5; color: #888; opacity: 1; }
+  }
+  input[type=number], :deep(input[type=number]) { width: 120px; }
+  :deep(.manage-table .cell-input) { width: 100%; }
+  :deep(.rule-config) { min-width: 0; padding: 15px; border: 1px solid #eee; border-radius: 6px; margin: 20px 0; }
+  :deep(.config-section) { border-top: 1px solid #eee; padding: 20px 0; }
+  :deep(.multiplier-grid) { display: flex; flex-wrap: wrap; gap: 20px; }
+
+  :deep(.rule-readonly) {
+    .readonly-note { margin: 0 0 8px; font-size: 12px; color: #666; }
+    .rule-readonly-tables { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; }
+    .readonly-table-block { flex: 1 1 120px; min-width: 0; }
+    .readonly-coefficients { flex-basis: 210px; }
+    .readonly-snapshot { flex-basis: 170px; }
+    .readonly-settings { flex-basis: 150px; }
+
+    table { @include controls.table; font-variant-numeric: tabular-nums; }
+    caption { padding: 0 0 4px; text-align: left; font-size: 13px; font-weight: 600; }
+    th, td {
+      @include controls.table-cell;
+      padding: 3px 6px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+    thead th { background: #f6f8fd; color: #3b4370; }
+    tbody th { font-weight: 400; }
+  }
+
+  .draft-actions { display: flex; gap: 12px; justify-content: flex-end; padding-top: 15px; border-top: 1px solid #eee; }
+  .draft-actions button { padding: 7px 12px; border-radius: 6px; }
+  .draft-actions .btn-primary { min-width: 140px; }
+
+  @media (max-width: 640px) {
+    .page-header { padding: 20px 15px; }
+    .page-header h1 { font-size: 24px; }
+    .page-header .subtitle { font-size: 12px; }
+    .rules-container { padding: 0 10px; }
+    .rules-panel { padding: 15px; }
+    .failure-notice { flex-direction: column; align-items: flex-start; }
+    .section-actions { width: 100%; }
+    .section-actions button { flex: 1; }
+    .draft-actions button { flex: 1; }
+  }
+}

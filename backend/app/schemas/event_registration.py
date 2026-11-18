@@ -6,6 +6,8 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas._validation import validate_choice
+
 
 VALID_SEASONS = ['春季赛', '夏季赛', '秋季赛', '冬季赛']
 VALID_DISTANCES = ['10m', '18m', '30m', '50m', '70m']
@@ -15,33 +17,23 @@ VALID_GENDER_GROUPS = ['men', 'women', 'mixed']
 
 
 def _validate_season(value: str) -> str:
-    if value not in VALID_SEASONS:
-        raise ValueError(f'赛季必须是 {VALID_SEASONS}')
-    return value
+    return validate_choice(value, VALID_SEASONS, '赛季')
 
 
 def _validate_distance(value: str) -> str:
-    if value not in VALID_DISTANCES:
-        raise ValueError(f'距离必须是 {VALID_DISTANCES}')
-    return value
+    return validate_choice(value, VALID_DISTANCES, '距离')
 
 
 def _validate_competition_bow_type(value: str) -> str:
-    if value not in VALID_COMPETITION_BOW_TYPES:
-        raise ValueError(f'比赛弓种必须是 {VALID_COMPETITION_BOW_TYPES}')
-    return value
+    return validate_choice(value, VALID_COMPETITION_BOW_TYPES, '比赛弓种')
 
 
 def _validate_points_bow_type(value: str) -> str:
-    if value not in VALID_POINTS_BOW_TYPES:
-        raise ValueError(f'积分弓种必须是 {VALID_POINTS_BOW_TYPES}')
-    return value
+    return validate_choice(value, VALID_POINTS_BOW_TYPES, '积分弓种')
 
 
 def _validate_gender_group(value: str) -> str:
-    if value not in VALID_GENDER_GROUPS:
-        raise ValueError(f'分组必须是 {VALID_GENDER_GROUPS}')
-    return value
+    return validate_choice(value, VALID_GENDER_GROUPS, '分组')
 
 
 class EventRegistrationBase(BaseModel):

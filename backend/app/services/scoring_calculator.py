@@ -1,42 +1,12 @@
+"""积分计算：生产查询使用赛事对应的规则版本配置。
+
+硬编码常量仅用于初始规则快照及无config的兼容调用，不代表所有赛事的现行规则。
+分项完整乘算后四舍五入保留1位小数；年度汇总使用这些已舍入分项。
 """
-积分计算服务 - 根据比赛规则和排名自动计算积分
-
-计分规则说明:
-1. 排位赛(单项):
-   - 排名1-8: 25, 22, 19, 15, 10, 8, 6, 4分
-   
-2. 淘汰赛:
-   - 排名1-8: 45, 40, 35, 30, 20, 20, 20, 20分
-   - 排名9-12: 15分
-   - 排名13-16: 10分
-
-3. 参赛人数与系数规则 (单项):
-   - 2-3人: 系数0.2, 第1名获得基础积分
-   - 4-7人: 系数0.4, 1-2名获得基础积分
-   - 8-15人: 系数0.6, 1-4名获得基础积分
-   - 16-31人: 系数0.8, 1-8名获得基础积分
-   - 32-63人: 系数1.0, 1-16名获得基础积分
-   - 64-127人: 系数1.2, 1-16名获得基础积分
-   - 128人以上: 系数1.4, 1-16名获得基础积分
-
-4. 组别积分系数规则:
-    - 根据弓种+距离匹配组别
-    - B组：积分×0.5
-    - C组：积分×0.3
-    - S/A组：积分不变
-    - 未匹配组别：积分×0
-
-5. 团体赛规则:
-   - 排名1-8: 20, 15, 10, 8, 5, 4, 3, 2分(每人)
-   - 单项队伍占数系数：
-     * 2-4队: 0.6, 1-2名获得基础积分
-     * 5-7队: 0.8, 1-4名获得基础积分
-     * 8-10队: 1.0, 1-8名获得基础积分
-     * 11-14队: 1.2, 1-8名获得基础积分
-     * 14队以上: 1.4, 1-8名获得基础积分
-"""
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, localcontext
 from typing import Dict, Optional, Tuple
+
+from app.schemas.scoring_rule import ScoringRuleConfig
 
 
 class ScoringCalculator:
@@ -60,24 +30,24 @@ class ScoringCalculator:
         1: 20, 2: 15, 3: 10, 4: 8, 5: 5, 6: 4, 7: 3, 8: 2
     }
     
-    # 参赛人数与系数映射 (单项赛)
+    # 人数区间 -> (系数, 保留基础积分的排名上限)，用于初始快照和兼容调用
     PARTICIPANT_COEFFICIENTS = {
-        (2, 3): (0.2, 1),       # 2-3人：系数0.2，第1名获得基础积分
-        (4, 7): (0.4, 2),       # 4-7人：系数0.4，1-2名获得基础积分
-        (8, 15): (0.6, 4),      # 8-15人：系数0.6，1-4名获得基础积分
-        (16, 31): (0.8, 8),     # 16-31人：系数0.8，1-8名获得基础积分
-        (32, 63): (1.0, 16),    # 32-63人：系数1.0，1-16名获得基础积分
-        (64, 127): (1.2, 16),   # 64-127人：系数1.2，1-16名获得基础积分
-        (128, float('inf')): (1.4, 16)  # 128人以上：系数1.4，1-16名获得基础积分
+        (2, 3): (0.2, 1),
+        (4, 7): (0.4, 2),
+        (8, 15): (0.6, 4),
+        (16, 31): (0.8, 8),
+        (32, 63): (1.0, 16),
+        (64, 127): (1.2, 16),
+        (128, float('inf')): (1.4, 16)
     }
     
-    # 队伍数与系数映射 (团体赛)
+    # 团体/混双队伍数区间使用相同结构
     TEAM_COEFFICIENTS = {
-        (2, 4): (0.6, 2),       # 2-4队：系数0.6，1-2名获得基础积分
-        (5, 7): (0.8, 4),       # 5-7队：系数0.8，1-4名获得基础积分
-        (8, 10): (1.0, 8),      # 8-10队：系数1.0，1-8名获得基础积分
-        (11, 14): (1.2, 8),     # 11-14队：系数1.2，1-8名获得基础积分
-        (15, float('inf')): (1.4, 8)  # 15队以上：系数1.4，1-8名获得基础积分
+        (2, 4): (0.6, 2),
+        (5, 7): (0.8, 4),
+        (8, 10): (1.0, 8),
+        (11, 14): (1.2, 8),
+        (15, float('inf')): (1.4, 8)
     }
 
     GROUP_MULTIPLIERS = {
@@ -172,10 +142,11 @@ class ScoringCalculator:
     def calculate_points(
         rank: int,
         competition_format: str,
-        competition_groups: Dict[tuple, str],
+        competition_groups: Optional[Dict[tuple, str]] = None,
         bow_type: Optional[str] = None,
         distance: str = "30m",
-        participant_count: Optional[int] = None
+        participant_count: Optional[int] = None,
+        config: Optional[ScoringRuleConfig] = None,
     ) -> float:
         """
         计算最终积分
@@ -199,6 +170,13 @@ class ScoringCalculator:
         Returns:
             最终积分
         """
+        if config is not None:
+            return ScoringCalculator._calculate_versioned_points(
+                rank, competition_format, bow_type, distance, participant_count, config,
+            )
+
+        # 无config的直接调用保留既有行为；生产统计始终传入赛事对应的版本快照。
+        competition_groups = competition_groups or {}
         # 步骤1：获取基础积分
         base_points = ScoringCalculator.calculate_base_points(rank, competition_format)
         
@@ -222,3 +200,35 @@ class ScoringCalculator:
         )
         return float(final_points.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
     
+    @staticmethod
+    def _calculate_versioned_points(rank, competition_format, bow_type, distance, participant_count, config):
+        if isinstance(config, dict):
+            config = ScoringRuleConfig.model_validate(config)
+        team_format = competition_format in ("team", "mixed_doubles")
+        points_table = (
+            config.team_points if team_format else
+            config.elimination_points if competition_format == "elimination" else
+            config.ranking_points if competition_format == "ranking" else []
+        )
+        base_points = points_table[rank - 1] if 1 <= rank <= len(points_table) else config.fallback_base_points
+        count = participant_count or config.default_participant_count
+        coefficient, cutoff = 1.0, float("inf")
+        # 历史特殊值1（及负数）保留原先不打折、不限制名次的行为；仅缺失/0使用默认人数。
+        if count >= 2:
+            ranges = config.team_coefficients if team_format else config.individual_coefficients
+            selected = next((row for row in ranges if row.min_count <= count and
+                             (row.max_count is None or count <= row.max_count)), None)
+            if selected is None:
+                selected = next(row for row in ranges if row.min_count <= config.default_participant_count and
+                                (row.max_count is None or config.default_participant_count <= row.max_count))
+            coefficient, cutoff = selected.coefficient, selected.cutoff
+        if rank > cutoff:
+            base_points = config.fallback_base_points
+        group_code = next((row.group_code for row in config.competition_groups
+                           if row.bow_type == bow_type and row.distance == distance), None)
+        group_multiplier = getattr(config.group_multipliers, group_code, 0.0) if group_code else 0.0
+        # 配置数值最多三个float的十进制有效位，64位上下文保留完整乘算精度。
+        with localcontext() as context:
+            context.prec = 64
+            final_points = Decimal(str(base_points)) * Decimal(str(coefficient)) * Decimal(str(group_multiplier))
+            return float(final_points.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))

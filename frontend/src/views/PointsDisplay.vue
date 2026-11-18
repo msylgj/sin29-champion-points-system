@@ -227,7 +227,7 @@
           />
           <div v-if="authError" class="auth-error">{{ authError }}</div>
           <div class="auth-actions">
-            <button type="button" class="btn-auth-cancel" @click="closeAuthDialog">取消</button>
+            <button type="button" class="btn-auth-cancel" :disabled="authLoading" @click="closeAuthDialog">取消</button>
             <button type="button" class="btn-auth-submit" :disabled="authLoading" @click="submitAdminAuth">
               {{ authLoading ? '验证中...' : '确认' }}
             </button>
@@ -246,12 +246,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { scoreAPI, eventAPI, authAPI } from '@/api'
 import { useDictionaries } from '@/composables/useDictionaries'
 import { useMessage } from '@/composables/useMessage'
 import { useRouter, useRoute } from 'vue-router'
 import { exportSeasonPoints, sumPointTenths } from '@/utils/seasonPointsExport'
+import { adminAuthRequest, clearAdminAuthRequest, getValidAdminToken, requestAdminAuthentication, sanitizeAdminRedirect, saveAdminToken } from '@/utils/adminAuth'
 
 const router = useRouter()
 const route = useRoute()
@@ -636,59 +637,66 @@ const exportToExcel = async () => {
   closeExportDialog()
 }
 
-// 导航到管理页面（成绩导入）
-const navigateToManage = () => {
-  const token = localStorage.getItem('admin_auth_token')
-  if (token) {
-    router.push('/score-import')
-    return
-  }
-  pendingManageRoute.value = '/score-import'
+// Authentication requests are reactive so a 401 also opens the dialog when this page is already mounted.
+let authAttempt = 0
+let disposed = false
+onUnmounted(() => { disposed = true; authAttempt += 1 })
+watch(adminAuthRequest, request => {
+  if (!request) return
+  pendingManageRoute.value = sanitizeAdminRedirect(request.redirect)
+  if (showAuthDialog.value) return
   showAuthDialog.value = true
   adminPassword.value = ''
   authError.value = ''
+}, { immediate: true })
+
+const navigateToManage = () => {
+  if (getValidAdminToken()) {
+    router.push('/score-import')
+    return
+  }
+  requestAdminAuthentication('/score-import')
 }
 
-const closeAuthDialog = () => {
+const resetAuthDialog = () => {
   showAuthDialog.value = false
   adminPassword.value = ''
   authError.value = ''
+  clearAdminAuthRequest()
+}
+const closeAuthDialog = () => {
+  if (authLoading.value) return
+  resetAuthDialog()
 }
 
 const submitAdminAuth = async () => {
+  if (authLoading.value || !showAuthDialog.value) return
   if (!adminPassword.value) {
     authError.value = '请输入管理密码'
     return
   }
-
+  const attempt = ++authAttempt
   authLoading.value = true
   authError.value = ''
   try {
     const response = await authAPI.login(adminPassword.value)
-    localStorage.setItem('admin_auth_token', response.access_token)
-    const targetPath = pendingManageRoute.value || '/score-import'
-    closeAuthDialog()
+    if (disposed || attempt !== authAttempt) return
+    const targetPath = sanitizeAdminRedirect(pendingManageRoute.value)
+    saveAdminToken(response.access_token)
+    resetAuthDialog()
     router.push(targetPath)
   } catch (error) {
-    authError.value = error.detail || '密码验证失败'
+    if (!disposed && attempt === authAttempt) authError.value = error.detail || error.message || '密码验证失败'
   } finally {
-    authLoading.value = false
+    if (!disposed && attempt === authAttempt) authLoading.value = false
   }
 }
 
 onMounted(async () => {
-  const adminToken = localStorage.getItem('admin_auth_token')
-
-  const storageAuthRequired = sessionStorage.getItem('admin_auth_required')
-  const storageRedirect = sessionStorage.getItem('admin_auth_redirect')
-
-  if (storageAuthRequired === '1') {
-    pendingManageRoute.value = storageRedirect || '/score-import'
-    if (!adminToken) {
-      showAuthDialog.value = true
-    }
-    sessionStorage.removeItem('admin_auth_required')
-    sessionStorage.removeItem('admin_auth_redirect')
+  // Legacy session markers may predate loading this module; restore them before any network awaits.
+  getValidAdminToken()
+  if (!adminAuthRequest.value && sessionStorage.getItem('admin_auth_required') === '1') {
+    requestAdminAuthentication(sessionStorage.getItem('admin_auth_redirect') || '/score-import')
   }
 
   // 首先加载年份和字典

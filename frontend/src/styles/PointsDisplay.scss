@@ -1,3 +1,5 @@
+@use './feedback';
+
 .points-display-page {
   padding-bottom: 100px;
   background-color: #f5f5f5;
@@ -73,28 +75,7 @@
 }
 
 .failure-notice {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 8px;
-  border: 1px solid #f3c2c7;
-  background: #fff4f5;
-
-  strong {
-    display: block;
-    color: #af2334;
-    font-size: 14px;
-    margin-bottom: 4px;
-  }
-
-  p {
-    margin: 0;
-    color: #7d3a42;
-    font-size: 12px;
-    line-height: 1.5;
-  }
+  @include feedback.failure-notice;
 }
 
 .btn-retry-inline,
@@ -501,34 +482,18 @@
 
 .export-dialog-mask,
 .auth-dialog-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.42);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  z-index: 999;
+  @include feedback.dialog-mask;
 }
 
 .export-dialog {
-  width: min(460px, 100%);
-  background: #fff;
-  border-radius: 10px;
-  padding: 18px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  @include feedback.dialog-panel(460px);
 
   h3 {
-    margin: 0 0 8px;
-    font-size: 18px;
-    color: #333;
+    @include feedback.dialog-title;
   }
 
   .export-tip {
-    margin: 0 0 14px;
-    font-size: 13px;
-    color: #666;
-    line-height: 1.5;
+    @include feedback.dialog-tip(14px, 1.5);
   }
 
   .export-scope-list {
@@ -615,48 +580,32 @@
   }
 
   .export-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+    @include feedback.dialog-actions(null);
   }
 
   .btn-export-cancel,
   .btn-export-confirm {
-    border: none;
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-size: 13px;
-    cursor: pointer;
+    @include feedback.dialog-button;
   }
 
   .btn-export-cancel {
-    background: #eff1f7;
-    color: #444;
+    @include feedback.dialog-cancel-button;
   }
 
   .btn-export-confirm {
-    background: #4d79ff;
-    color: #fff;
+    @include feedback.dialog-confirm-button;
   }
 }
 
 .auth-dialog {
-  width: min(420px, 100%);
-  background: #fff;
-  border-radius: 10px;
-  padding: 18px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  @include feedback.dialog-panel;
 
   h3 {
-    margin: 0 0 8px;
-    font-size: 18px;
-    color: #333;
+    @include feedback.dialog-title;
   }
 
   .auth-tip {
-    margin: 0 0 12px;
-    font-size: 13px;
-    color: #666;
+    @include feedback.dialog-tip;
   }
 
   .auth-input {
@@ -674,29 +623,20 @@
   }
 
   .auth-actions {
-    margin-top: 14px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+    @include feedback.dialog-actions;
   }
 
   .btn-auth-cancel,
   .btn-auth-submit {
-    border: none;
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-size: 13px;
-    cursor: pointer;
+    @include feedback.dialog-button;
   }
 
   .btn-auth-cancel {
-    background: #eff1f7;
-    color: #444;
+    @include feedback.dialog-cancel-button;
   }
 
   .btn-auth-submit {
-    background: #4d79ff;
-    color: #fff;
+    @include feedback.dialog-confirm-button;
   }
 
   .btn-auth-submit:disabled {
@@ -707,20 +647,7 @@
 
 .success-message,
 .error-message {
-  position: fixed;
-  bottom: 90px;
-  left: 15px;
-  right: 15px;
-  padding: 12px 15px;
-  color: white;
-  border-radius: 6px;
-  font-size: 14px;
-  animation: slideUp 0.3s ease;
-  max-height: 180px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.5;
+  @include feedback.floating-message(180px);
 }
 
 .success-message {
@@ -737,16 +664,7 @@
   }
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
+@include feedback.floating-animation;
 
 @media (max-width: 480px) {
   .filters-section {

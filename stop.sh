@@ -1,29 +1,14 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "=========================================="
-echo "射箭赛事积分统计系统 - 停止脚本"
-echo "=========================================="
-echo ""
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
+source scripts/compose-common.sh
 
-echo "请选择停止方式："
-echo "1) 停止服务 (保留数据)"
-echo "2) 停止服务并删除数据卷"
-read -p "请输入选项 (1 或 2) [默认: 1]: " option
-option=${option:-1}
-
-echo ""
-
-if [ "$option" = "2" ]; then
-    echo "🛑 停止服务并删除数据卷..."
-    docker compose down -v
-    echo "⚠️  警告: 所有数据已被删除"
-else
-    echo "🛑 停止服务..."
-    docker compose down
-    echo "✅ 数据已保留"
-fi
-
-echo ""
-echo "=========================================="
-echo "✅ 服务已停止"
-echo "=========================================="
+compose_for_mode "${1:-dev}"
+read -r -p '1) 移除容器 2) 同时移除 Compose 管理的卷 [默认: 1] ' option || option=1
+case "${option:-1}" in
+  1) "${compose[@]}" down ;;
+  2) "${compose[@]}" down -v ;;
+  *) printf '无效选项。\n' >&2; exit 2 ;;
+esac
+printf '操作完成。PostgreSQL 宿主机绑定目录不受此操作影响。\n'

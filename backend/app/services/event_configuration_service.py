@@ -7,6 +7,7 @@ from sqlalchemy import and_, text
 from app.models.event_configuration import EventConfiguration
 from app.models.event import Event
 from app.schemas.event_configuration import EventConfigurationBase, EventConfigurationUpdate
+from app.services._updates import apply_non_null_updates
 from typing import Optional
 
 
@@ -180,12 +181,10 @@ class EventConfigurationService:
         if not db_config:
             return None
         
-        if config_update.individual_participant_count is not None:
-            db_config.individual_participant_count = config_update.individual_participant_count
-        if config_update.mixed_doubles_team_count is not None:
-            db_config.mixed_doubles_team_count = config_update.mixed_doubles_team_count
-        if config_update.team_count is not None:
-            db_config.team_count = config_update.team_count
+        apply_non_null_updates(
+            db_config, config_update,
+            ("individual_participant_count", "mixed_doubles_team_count", "team_count"),
+        )
         
         db.commit()
         db.refresh(db_config)

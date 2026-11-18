@@ -130,7 +130,7 @@ def list_events(
 
     total = query.count()
     skip = (page - 1) * page_size
-    events = query.order_by(desc(Event.created_at)).offset(skip).limit(page_size).all()
+    events = query.order_by(desc(Event.created_at), desc(Event.id)).offset(skip).limit(page_size).all()
 
     event_ids = [item.id for item in events]
     config_map = {}

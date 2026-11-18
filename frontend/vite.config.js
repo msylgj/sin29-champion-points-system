@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
     port: 8080,
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        target: process.env.VITE_API_PROXY_TARGET || env.VITE_API_PROXY_TARGET || 'http://backend:8000',
         changeOrigin: true
       }
     },

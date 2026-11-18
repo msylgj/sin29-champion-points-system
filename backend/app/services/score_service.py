@@ -1,5 +1,5 @@
 """
-成绩服务 - 简化版本
+成绩维护与按赛事规则版本汇总积分
 """
 from collections import defaultdict
 from decimal import Decimal
@@ -9,10 +9,12 @@ from sqlalchemy import and_, desc, or_
 from app.models.score import Score
 from app.models.event import Event
 from app.models.event_configuration import EventConfiguration
-from app.models.dictionary import CompetitionGroupDict
 from app.models.event_registration import EventRegistration
 from app.schemas.score import ScoreCreate, ScoreUpdate
+from app.services._updates import apply_non_null_updates
 from app.services.scoring_calculator import ScoringCalculator
+from app.schemas.scoring_rule import ScoringRuleConfig
+from app.services.scoring_rule_service import ScoringRuleService
 from typing import Optional, List, Tuple, Dict
 
 
@@ -149,19 +151,10 @@ class ScoreService:
         if not db_score:
             return None
 
-        # 更新允许的字段
-        if score_update.name is not None:
-            db_score.name = score_update.name
-        if score_update.bow_type is not None:
-            db_score.bow_type = score_update.bow_type
-        if score_update.distance is not None:
-            db_score.distance = score_update.distance
-        if score_update.format is not None:
-            db_score.format = score_update.format
-        if score_update.gender_group is not None:
-            db_score.gender_group = score_update.gender_group
-        if score_update.rank is not None:
-            db_score.rank = score_update.rank
+        apply_non_null_updates(
+            db_score, score_update,
+            ("name", "bow_type", "distance", "format", "gender_group", "rank"),
+        )
 
         duplicate = db.query(Score).filter(
             and_(
@@ -338,12 +331,16 @@ class ScoreService:
             Event.year == year,
         ).distinct().all()
 
-        # 预加载组别配置
-        group_rows = db.query(CompetitionGroupDict).all()
-        competition_groups = {
-            (row.bow_type, row.distance): row.group_code
-            for row in group_rows
-        }
+        # 一次预加载全部版本，按赛事缓存选择结果及解析后的配置；历史计算不读现行字典。
+        rules = ScoringRuleService.list_rules(db)
+        event_rules = {}
+        rule_configs = {}
+        for _score, event in score_rows:
+            if event.id not in event_rules:
+                rule = ScoringRuleService.rule_for_event(rules, event)
+                event_rules[event.id] = rule
+                if rule.id not in rule_configs:
+                    rule_configs[rule.id] = ScoringRuleConfig.model_validate(rule.config)
 
         event_ids = {score.event_id for score, _event in score_rows}
         config_rows = db.query(EventConfiguration).filter(
@@ -363,6 +360,8 @@ class ScoreService:
             }
 
         for score, event in score_rows:
+            rule = event_rules[event.id]
+            rule_config = rule_configs[rule.id]
             participant_count = None
 
             if score.format in ('ranking', 'elimination'):
@@ -370,30 +369,22 @@ class ScoreService:
                     score,
                     event_config_map,
                 )
-                if not participant_count:
-                    participant_count = 2
             elif score.format == 'team':
                 participant_count = ScoreService._get_team_participant_count(
                     score,
                     event_config_map,
                 )
-                if not participant_count:
-                    participant_count = 2
             elif score.format == 'mixed_doubles':
                 participant_count = ScoreService._get_mixed_doubles_participant_count(
                     score,
                     event_config_map,
                 )
-                if not participant_count:
-                    participant_count = 2
-            else:
-                participant_count = 2
             
             # 计算积分
             points = ScoringCalculator.calculate_points(
                 rank=score.rank,
                 competition_format=score.format,
-                competition_groups=competition_groups,
+                config=rule_config,
                 bow_type=score.bow_type,
                 distance=score.distance,
                 participant_count=participant_count
@@ -415,7 +406,9 @@ class ScoreService:
                 'distance': score.distance,
                 'format': score.format,
                 'rank': score.rank,
-                'points': points
+                'points': points,
+                'scoring_rule_id': rule.id,
+                'scoring_rule_name': rule.name,
             })
         
         for item in athlete_points.values():

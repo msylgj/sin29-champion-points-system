@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.event_registration import EventRegistration
 from app.schemas.event_registration import EventRegistrationCreate, EventRegistrationUpdate
 from app.services.event_configuration_service import EventConfigurationService
+from app.services._updates import apply_non_null_updates
 
 
 class EventRegistrationService:
@@ -114,19 +115,10 @@ class EventRegistrationService:
         old_year = db_registration.year
         old_season = db_registration.season
 
-        if registration_update.name is not None:
-            db_registration.name = registration_update.name
-        if registration_update.club is not None:
-            db_registration.club = registration_update.club
-        if registration_update.distance is not None:
-            db_registration.distance = registration_update.distance
-        if registration_update.competition_bow_type is not None:
-            db_registration.competition_bow_type = registration_update.competition_bow_type
-        if registration_update.competition_gender_group is not None:
-            db_registration.competition_gender_group = registration_update.competition_gender_group
-
-        if registration_update.points_bow_type is not None:
-            db_registration.points_bow_type = registration_update.points_bow_type
+        apply_non_null_updates(
+            db_registration, registration_update,
+            ("name", "club", "distance", "competition_bow_type", "competition_gender_group", "points_bow_type"),
+        )
 
         db_registration.points_bow_type = EventRegistrationService._resolve_points_bow_type(
             db_registration.competition_bow_type,

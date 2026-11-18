@@ -1,3 +1,6 @@
+@use './managementControls' as controls;
+@use './feedback';
+
 .section {
   background: white;
   border-radius: 8px;
@@ -20,11 +23,7 @@
 }
 
 .empty-tip {
-  padding: 12px;
-  border-radius: 6px;
-  background: #f7f8fc;
-  color: #666;
-  font-size: 13px;
+  @include feedback.empty-tip;
 }
 
 .bow-tabs {
@@ -91,23 +90,11 @@
   }
 
   .manage-filter-select {
-    border: 1px solid #d7deef;
-    border-radius: 6px;
-    padding: 7px 10px;
-    min-width: 120px;
-    font-size: 12px;
-    color: #333;
-    background: #fff;
+    @include controls.filter-select;
   }
 
   .btn-batch-save {
-    border: none;
-    border-radius: 6px;
-    padding: 7px 12px;
-    font-size: 12px;
-    background: #4d79ff;
-    color: #fff;
-    cursor: pointer;
+    @include controls.primary-button;
   }
 
   .btn-batch-save:disabled {
@@ -122,43 +109,23 @@
 }
 
 .manage-table-wrap {
-  max-height: 420px;
-  border: 1px solid #eceff7;
-  border-radius: 8px;
+  @include controls.table-frame;
 }
 
 .manage-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 920px;
+  @include controls.table(920px);
 
   th,
   td {
-    border-bottom: 1px solid #f0f2f8;
-    padding: 8px;
-    text-align: left;
-    font-size: 12px;
-    vertical-align: middle;
-    background: #fff;
+    @include controls.table-cell;
   }
 
   thead th {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    background: #f6f8fd;
-    color: #3b4370;
-    font-weight: 600;
+    @include controls.table-heading;
   }
 
   .cell-input {
-    width: 100%;
-    border: 1px solid #d9deef;
-    border-radius: 4px;
-    padding: 6px 8px;
-    font-size: 12px;
-    color: #333;
-    background: #fff;
+    @include controls.cell-input;
   }
 
   .action-cell {
@@ -169,11 +136,7 @@
   .btn-row-reset,
   .btn-row-delete,
   .btn-row-delete-confirm {
-    border: none;
-    border-radius: 4px;
-    padding: 5px 8px;
-    font-size: 12px;
-    cursor: pointer;
+    @include controls.action-button;
   }
 
   .btn-row-save {
@@ -223,48 +186,11 @@
 }
 
 .success-message {
-  position: fixed;
-  bottom: 90px;
-  left: 15px;
-  right: 15px;
-  padding: 12px 15px;
-  background: #2ed573;
-  color: white;
-  border-radius: 6px;
-  font-size: 14px;
-  animation: slideUp 0.3s ease;
-  max-height: 150px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.5;
+  @include feedback.floating-message(150px, #2ed573);
 }
 
 .error-message {
-  position: fixed;
-  bottom: 90px;
-  left: 15px;
-  right: 15px;
-  padding: 12px 15px;
-  background: #ff4757;
-  color: white;
-  border-radius: 6px;
-  font-size: 14px;
-  animation: slideUp 0.3s ease;
-  max-height: 200px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  line-height: 1.5;
+  @include feedback.floating-message(200px, #ff4757);
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
+@include feedback.floating-animation;

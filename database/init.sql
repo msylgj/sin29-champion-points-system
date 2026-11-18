@@ -1,5 +1,4 @@
--- 创建数据库
--- 注意：此文件在 PostgreSQL Docker 容器启动时自动执行
+-- 初始化应用表、索引和字典。Compose 由 PostgreSQL 镜像在空数据目录首次初始化时执行。
 
 -- 创建扩展
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -184,3 +183,23 @@ CREATE TABLE IF NOT EXISTS scores (
 
 CREATE INDEX IF NOT EXISTS idx_scores_event_created_id
 ON scores(event_id, created_at DESC, id DESC);
+
+-- ============================================================================
+-- 积分规则版本：初始配置快照由后端启动引导写入；此脚本只定义表结构。
+-- start_key=0表示无限过去，其他值=year*4+赛季序号(春1/夏2/秋3/冬4)。
+-- end_key包含截止赛季；后继start_key=end_key+1；config发布后只读。
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS scoring_rules (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    source_rule_id INTEGER UNIQUE REFERENCES scoring_rules(id),
+    start_key INTEGER NOT NULL UNIQUE,
+    end_key INTEGER,
+    config JSON NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT ck_scoring_rule_start CHECK (start_key >= 0),
+    CONSTRAINT ck_scoring_rule_range CHECK (end_key IS NULL OR end_key >= start_key),
+    CONSTRAINT ck_scoring_rule_source CHECK (
+        (start_key = 0 AND source_rule_id IS NULL) OR (start_key > 0 AND source_rule_id IS NOT NULL)
+    )
+);

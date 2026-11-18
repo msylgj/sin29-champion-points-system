@@ -6,6 +6,7 @@ import {
   buildScoreUniqueKey,
   convertToCode,
   createValueToCodeMap,
+  hasMappedValue,
   mapColumns,
   markInFileDuplicates,
   normalizeKeyPart,
@@ -39,6 +40,16 @@ describe('score import parsing helpers', () => {
     { name: '女子组', code: 'women' },
     { name: '混合组', code: 'mixed' },
   ]
+
+  it('shares mapped-value validation without treating unknown fallback codes as valid', () => {
+    const valueMap = {
+      exactMap: { '18m': '18m', '光弓': 'barebow', 'zero': 0 },
+      likeEntries: [{ alias: '18米', code: '18m' }],
+    }
+    for (const value of ['18m', ' 1 8 M ', '光 弓', ' 18 米 ', 'zero']) expect(hasMappedValue(value, valueMap)).toBe(true)
+    for (const value of ['', '   ', null, undefined, 0, false, 'unknown']) expect(hasMappedValue(value, valueMap)).toBe(false)
+    expect(convertToCode('unknown', valueMap)).toBe('unknown')
+  })
 
   it('supports fuzzy aliases for bow type, distance, and format', () => {
     const bowTypeMap = createValueToCodeMap(bowTypes, SCORE_IMPORT_ALIASES.bow_type)

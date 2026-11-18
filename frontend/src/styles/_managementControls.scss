@@ -1,0 +1,81 @@
+// Shared visual contract for score-list and scoring-rule management controls.
+@mixin table-frame {
+  max-height: 420px;
+  border: 1px solid #eceff7;
+  border-radius: 8px;
+}
+
+@mixin table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  @include table-frame;
+}
+
+@mixin table($min-width: 0) {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: $min-width;
+}
+
+@mixin table-cell {
+  border-bottom: 1px solid #f0f2f8;
+  padding: 8px;
+  text-align: left;
+  font-size: 12px;
+  vertical-align: middle;
+  background: #fff;
+}
+
+@mixin table-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f6f8fd;
+  color: #3b4370;
+  font-weight: 600;
+}
+
+@mixin cell-input {
+  width: 100%;
+  border: 1px solid #d9deef;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #333;
+  background: #fff;
+}
+
+@mixin filter-select {
+  border: 1px solid #d7deef;
+  border-radius: 6px;
+  padding: 7px 10px;
+  min-width: 120px;
+  font-size: 12px;
+  color: #333;
+  background: #fff;
+}
+
+@mixin action-button($background: null, $color: null) {
+  border: none;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  @if $background { background: $background; }
+  @if $color { color: $color; }
+}
+
+@mixin primary-button {
+  border: none;
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 12px;
+  background: #4d79ff;
+  color: #fff;
+  cursor: pointer;
+}
+
+@mixin disabled-button {
+  opacity: .6;
+  cursor: not-allowed;
+}

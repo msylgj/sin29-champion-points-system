@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, nextTick } from 'vue'
+import { adminAuthRequest, clearAdminAuthRequest, requestAdminAuthentication, saveAdminToken } from '@/utils/adminAuth'
 
 const routerPush = vi.fn()
 const annualRankingGet = vi.fn()
 const eventYearsGet = vi.fn()
+const adminLogin = vi.fn()
+const encodeJwtPart = value => btoa(JSON.stringify(value)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+const jwt = (claims = {}) => [encodeJwtPart({ alg: 'HS256', typ: 'JWT' }), encodeJwtPart({ sub: 'admin', exp: Math.floor(Date.now() / 1000) + 3600, ...claims }), 'c2lnbmF0dXJl'].join('.')
 const xlsxAoaToSheet = vi.fn(data => ({ data }))
 const xlsxBookNew = vi.fn(() => ({ sheets: [] }))
 const xlsxBookAppendSheet = vi.fn((workbook, worksheet, name) => {
@@ -58,7 +62,7 @@ vi.mock('@/api', () => ({
     getYears: eventYearsGet,
   },
   authAPI: {
-    login: vi.fn(),
+    login: adminLogin,
   },
 }))
 
@@ -70,24 +74,164 @@ const flushPromises = async (times = 3) => {
   }
 }
 
+const activeViews = new Set()
 const mountComponent = async (component) => {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const app = createApp(component)
   app.mount(container)
   await flushPromises(5)
-  return {
+  const view = {
     container,
     unmount: () => {
+      if (!activeViews.delete(view)) return
       app.unmount()
       container.remove()
     },
   }
+  activeViews.add(view)
+  return view
 }
 
 describe('PointsDisplay page', () => {
+  it('shows the authentication dialog on the first expired-session mount before ranking requests finish', async () => {
+    localStorage.setItem('admin_auth_token', jwt({ exp: Math.floor(Date.now() / 1000) - 1 }))
+    sessionStorage.setItem('admin_auth_required', '1')
+    sessionStorage.setItem('admin_auth_redirect', '/scoring-rules?version=2#rules')
+    eventYearsGet.mockImplementationOnce(() => new Promise(() => {}))
+    const { default: PointsDisplay } = await import('./PointsDisplay.vue')
+    const view = await mountComponent(PointsDisplay)
+    expect(view.container.querySelector('.auth-dialog')).not.toBeNull()
+    expect(localStorage.getItem('admin_auth_token')).toBeNull()
+    expect(adminAuthRequest.value.redirect).toBe('/scoring-rules?version=2#rules')
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  it('opens immediately when the mounted public page receives an authentication request and keeps the first return target', async () => {
+    const { default: PointsDisplay } = await import('./PointsDisplay.vue')
+    const view = await mountComponent(PointsDisplay)
+    expect(view.container.querySelector('.auth-dialog')).toBeNull()
+    requestAdminAuthentication('/event-add?year=2026#config')
+    await flushPromises()
+    const password = view.container.querySelector('.auth-input')
+    password.value = '管理口令'
+    password.dispatchEvent(new Event('input', { bubbles: true }))
+    requestAdminAuthentication('/scoring-rules')
+    await flushPromises()
+    expect(view.container.querySelectorAll('.auth-dialog')).toHaveLength(1)
+    expect(view.container.querySelector('.auth-input').value).toBe('管理口令')
+    const fresh = jwt()
+    adminLogin.mockResolvedValueOnce({ access_token: fresh })
+    view.container.querySelector('.btn-auth-submit').click()
+    await flushPromises()
+    expect(localStorage.getItem('admin_auth_token')).toBe(fresh)
+    expect(routerPush).toHaveBeenCalledExactlyOnceWith('/event-add?year=2026#config')
+    expect(view.container.querySelector('.auth-dialog')).toBeNull()
+    expect(adminAuthRequest.value).toBeNull()
+  })
+
+  it('keeps a wrong-password error in the dialog and returns to the original page after retry', async () => {
+    requestAdminAuthentication('/scoring-rules?rule=3#config')
+    const { default: PointsDisplay } = await import('./PointsDisplay.vue')
+    const view = await mountComponent(PointsDisplay)
+    const password = view.container.querySelector('.auth-input')
+    password.value = '错误口令'
+    password.dispatchEvent(new Event('input', { bubbles: true }))
+    adminLogin.mockRejectedValueOnce({ detail: '管理密码错误', status: 401 })
+    view.container.querySelector('.btn-auth-submit').click()
+    await flushPromises()
+    expect(view.container.querySelector('.auth-error').textContent).toBe('管理密码错误')
+    expect(adminAuthRequest.value.redirect).toBe('/scoring-rules?rule=3#config')
+    expect(routerPush).not.toHaveBeenCalled()
+    adminLogin.mockResolvedValueOnce({ access_token: jwt() })
+    view.container.querySelector('.btn-auth-submit').click()
+    await flushPromises()
+    expect(routerPush).toHaveBeenCalledExactlyOnceWith('/scoring-rules?rule=3#config')
+  })
+
+  it('prevents duplicate login requests and dismissal while the password is being verified', async () => {
+    let finish
+    adminLogin.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    requestAdminAuthentication('/score-import?event=8')
+    const { default: PointsDisplay } = await import('./PointsDisplay.vue')
+    const view = await mountComponent(PointsDisplay)
+    const password = view.container.querySelector('.auth-input')
+    password.value = '口令'
+    password.dispatchEvent(new Event('input', { bubbles: true }))
+    view.container.querySelector('.btn-auth-submit').click()
+    view.container.querySelector('.btn-auth-submit').click()
+    password.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }))
+    await flushPromises()
+    expect(adminLogin).toHaveBeenCalledOnce()
+    expect(view.container.querySelector('.btn-auth-cancel').disabled).toBe(true)
+    view.container.querySelector('.auth-dialog-mask').click()
+    await flushPromises()
+    expect(view.container.querySelector('.auth-dialog')).not.toBeNull()
+    finish({ access_token: jwt() })
+    await flushPromises()
+    expect(routerPush).toHaveBeenCalledExactlyOnceWith('/score-import?event=8')
+  })
+
+  it('ignores a successful login response after this page has unmounted', async () => {
+    let finish
+    adminLogin.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    requestAdminAuthentication('/event-add')
+    const { default: PointsDisplay } = await import('./PointsDisplay.vue')
+    const view = await mountComponent(PointsDisplay)
+    const password = view.container.querySelector('.auth-input')
+    password.value = '口令'
+    password.dispatchEvent(new Event('input', { bubbles: true }))
+    view.container.querySelector('.btn-auth-submit').click()
+    await flushPromises()
+    view.unmount()
+    finish({ access_token: jwt() })
+    await flushPromises()
+    expect(localStorage.getItem('admin_auth_token')).toBeNull()
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  it('clears canceled reauthentication without reopening on the public page', async () => {
+    requestAdminAuthentication('/event-add')
+    const { default: PointsDisplay } = await import('./PointsDisplay.vue')
+    const view = await mountComponent(PointsDisplay)
+    view.container.querySelector('.btn-auth-cancel').click()
+    await flushPromises()
+    expect(view.container.querySelector('.auth-dialog')).toBeNull()
+    expect(adminAuthRequest.value).toBeNull()
+    expect(sessionStorage.getItem('admin_auth_required')).toBeNull()
+    expect(sessionStorage.getItem('admin_auth_redirect')).toBeNull()
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  it('does not require a password for public rankings when only a stored token has expired', async () => {
+    localStorage.setItem('admin_auth_token', jwt({ exp: 1 }))
+    const { default: PointsDisplay } = await import('./PointsDisplay.vue')
+    const view = await mountComponent(PointsDisplay)
+    expect(view.container.querySelector('.auth-dialog')).toBeNull()
+    expect(localStorage.getItem('admin_auth_token')).toBeNull()
+    expect(view.container.textContent).toContain('张三')
+    view.container.querySelector('.btn-manage').click()
+    await flushPromises()
+    expect(view.container.querySelector('.auth-dialog')).not.toBeNull()
+  })
+
+  it('uses valid stored administrator credentials to navigate without an unnecessary prompt', async () => {
+    saveAdminToken(jwt())
+    const { default: PointsDisplay } = await import('./PointsDisplay.vue')
+    const view = await mountComponent(PointsDisplay)
+    view.container.querySelector('.btn-manage').click()
+    await flushPromises()
+    expect(routerPush).toHaveBeenCalledExactlyOnceWith('/score-import')
+    expect(view.container.querySelector('.auth-dialog')).toBeNull()
+  })
+
+
   beforeEach(() => {
     vi.clearAllMocks()
+    adminLogin.mockReset()
+    localStorage.clear()
+    sessionStorage.clear()
+    clearAdminAuthRequest()
     document.body.innerHTML = ''
     eventYearsGet.mockResolvedValue({ items: [2026, 2025] })
     annualRankingGet.mockResolvedValue({
@@ -107,6 +251,10 @@ describe('PointsDisplay page', () => {
   })
 
   afterEach(() => {
+    for (const view of [...activeViews]) view.unmount()
+    clearAdminAuthRequest()
+    localStorage.clear()
+    sessionStorage.clear()
     document.body.innerHTML = ''
   })
 

@@ -1,243 +1,42 @@
 # 射箭赛事积分统计系统
 
-本项目是一个基于 `Vue 3 + FastAPI + PostgreSQL` 的射箭赛事积分系统，当前实现覆盖赛事配置、报名导入与管理、成绩导入与管理、年度积分排名查询。
+使用 Vue 3、FastAPI、SQLAlchemy 和 PostgreSQL 管理射箭赛事、报名及成绩，并根据赛事适用的规则计算年度及赛季积分。
 
-## 项目概览
+## 页面入口
 
-- 前端：Vue 3、Vite、Vue Router、Axios、XLSX
-- 后端：FastAPI、SQLAlchemy、PostgreSQL
-- 部署方式：Docker Compose
-- 数据初始化：`database/init.sql`
+| 页面 | 路径 | 功能 |
+| --- | --- | --- |
+| 积分排名 | `/points-display`（首页） | 查看年度弓种排名、筛选姓名或俱乐部、导出年度或指定赛季 Excel |
+| 赛事配置 | `/event-add` | 按年度和赛季维护赛事；导入、编辑或删除报名；配置团体和混双队伍数 |
+| 导入成绩 | `/score-import` | 按赛事导入 Excel、查看赛事配置、维护已有成绩 |
+| 积分规则管理 | `/scoring-rules` | 从赛事配置进入，查看、创建规则版本或删除最新非初始版 |
 
-## 前端页面
+除积分排名外均需管理员验证。首页的「管理」入口进入成绩导入页。口令验证签发管理员 JWT；管理凭证失效后返回积分首页重新验证，成功后回到原管理地址。认证与运行配置见[快速开始](QUICK_START.md)。
 
-当前前端只有 3 个主页面：
+## 业务约定
 
-- `积分排名`
-  - 路径：`/points-display`
-  - 文件：`frontend/src/views/PointsDisplay.vue`
-  - 功能：
-    - 选择年度与弓种查看年度积分排名
-    - 支持姓名、俱乐部筛选
-    - 支持导出 Excel
+- **赛事与报名**：赛事按年度和赛季唯一。赛事配置按性别分组、弓种及距离区分。报名仅支持 Excel，按年度、赛季、姓名、距离及比赛弓种唯一。报名导入、编辑或删除后自动同步个人人数；团体人数按男子、女子、混合组维护，混双仅使用混合组。无瞄弓报名的积分弓种可选光弓、美猎弓或传统弓；其他报名的积分弓种与比赛弓种一致。
+- **成绩**：导入仅支持 Excel，必填列为姓名、弓种、距离、赛制、排名，分组可选。个人赛在导入页按姓名、距离及弓种匹配该赛事报名，团体及混双不做此预校验。同赛事、姓名、距离、弓种及赛制的成绩重复导入时更新排名。
+- **积分**：成绩表保存排名而非积分。查询按每场赛事的年度和赛季选用规则快照，分项四舍五入保留一位小数后再汇总。算法、版本边界及导出口径见[积分与规则](docs/SCORING.md)。
 
-- `赛事配置`
-  - 路径：`/event-add`
-  - 文件：`frontend/src/views/EventAdd.vue`
-  - 功能：
-    - 选择赛年、赛季创建或更新赛事
-    - 导入报名表（仅支持 Excel）
-    - 查看与编辑已导入报名
-    - 根据报名数据同步赛事配置中的个人人数
-    - 配置团体和混双人数
+## API 入口
 
-- `导入成绩`
-  - 路径：`/score-import`
-  - 文件：`frontend/src/views/ScoreImport.vue`
-  - 功能：
-    - 选择赛事
-    - 导入成绩（仅支持 Excel）
-    - 导入时按报名表校验成绩是否合法
-    - 查看赛事配置预览
-    - 查看与编辑当前赛事已有成绩
+后端 `/docs` 提供 OpenAPI 文档。下表列出业务接口，均以 `/api` 开头。管理请求使用 `Authorization: Bearer <token>`。
 
-## 当前业务功能
+| 权限 | 接口 |
+| --- | --- |
+| 公开 | `POST /auth/login`、`GET /events/years`、`GET /dictionaries`、`GET /scores/annual-ranking/{year}/{bow_type}` |
+| 管理 | `GET /events`、`GET /events/{event_id}`、`POST /events/with-configs` |
+| 管理 | `POST /event-configurations`、`PUT /event-configurations/{config_id}`、`DELETE /event-configurations/{config_id}` |
+| 管理 | `GET /event-registrations`、`POST /event-registrations/batch/import`、`PUT /event-registrations/{registration_id}`、`DELETE /event-registrations/{registration_id}` |
+| 管理 | `GET /scores`、`POST /scores/batch/import`、`PUT /scores/{score_id}`、`DELETE /scores/{score_id}` |
+| 管理 | `GET /scoring-rules`、`POST /scoring-rules`、`DELETE /scoring-rules/{rule_id}` |
 
-### 1. 赛事配置
+## 项目结构与文档
 
-- 赛事按 `年度 + 赛季` 唯一
-- 赛事配置按 `性别分组 + 弓种 + 距离` 维护
-- 个人人数来自报名表统计，不支持手工修改
-- 团体人数支持 `男子组 / 女子组 / 混合组`
-- 混双人数仅支持 `混合组`
-
-### 2. 报名管理
-
-- 报名表存储在 `event_registrations`
-- 报名导入仅支持 Excel
-- 导入时支持：
-  - 距离模糊匹配
-  - 比赛弓种模糊匹配
-  - 分组按性别分组字典模糊匹配
-- 报名唯一性规则：
-  - `同年度 + 同赛季 + 同姓名 + 同距离 + 同比赛弓种`
-- 当比赛弓种为 `无瞄弓` 时：
-  - 积分弓种只允许 `光弓 / 美猎弓 / 传统弓`
-- 当比赛弓种不是 `无瞄弓` 时：
-  - 积分弓种固定等于比赛弓种
-- 报名导入、编辑、删除后会同步更新赛事配置中的个人人数
-
-### 3. 成绩管理
-
-- 成绩表存储在 `scores`
-- 成绩唯一性规则：
-  - `同赛事 + 同姓名 + 同距离 + 同弓种 + 同赛制`
-- 批量导入时，如果唯一键重复，则覆盖更新 `rank`
-- 成绩导入仅支持 Excel
-- 成绩导入要求列：
-  - `姓名 / 弓种 / 距离 / 赛制 / 排名`
-- 可选列：
-  - `分组`
-- 导入页提交前会按当前赛事对应赛季的报名表做预校验：
-  - 用 `姓名 + 距离 + 弓种` 匹配个人赛报名记录
-  - 排位赛、淘汰赛未匹配到报名记录时，该行成绩标记为异常
-  - 团体赛、混双赛不做这一步报名匹配
-
-### 4. 年度积分排名
-
-- 积分页调用 `GET /api/scores/annual-ranking/{year}/{bow_type}`
-- 查询人群来自报名表：
-  - 当年 `积分弓种 = 所选弓种` 的报名人员
-  - 默认根据所属 `年度 + 赛季 + 姓名 + 距离 + 比赛弓种` 匹配成绩
-  - 当报名的比赛弓种为 `光弓 / 美猎弓 / 传统弓` 时，还会额外匹配同 `年度 + 赛季 + 姓名 + 距离` 下成绩弓种为 `无瞄弓` 的成绩
-- 积分计算规则：
-  - 基础积分：
-    - 排位赛：
-      - 第 1-8 名分别为 `25 / 22 / 19 / 15 / 10 / 8 / 6 / 4`
-      - 超出前 8 名时基础积分按 `1` 计
-    - 淘汰赛：
-      - 第 1-4 名分别为 `45 / 40 / 35 / 30`
-      - 第 5-8 名统一为 `20`
-      - 第 9-12 名统一为 `15`
-      - 第 13-16 名统一为 `10`
-      - 超出前 16 名时基础积分按 `1` 计
-    - 团体赛、混双赛：
-      - 第 1-8 名分别为 `20 / 15 / 10 / 8 / 5 / 4 / 3 / 2`
-      - 超出前 8 名时基础积分按 `1` 计
-  - 人数/队伍数系数：
-    - 排位赛、淘汰赛使用“个人人数系数表”
-      - `2-3` 人：系数 `0.2`，仅第 `1` 名保留原额基础积分
-      - `4-7` 人：系数 `0.4`，仅前 `2` 名保留原额基础积分
-      - `8-15` 人：系数 `0.6`，仅前 `4` 名保留原额基础积分
-      - `16-31` 人：系数 `0.8`，仅前 `8` 名保留原额基础积分
-      - `32-63` 人：系数 `1.0`，仅前 `16` 名保留原额基础积分
-      - `64-127` 人：系数 `1.2`，仅前 `16` 名保留原额基础积分
-      - `128+` 人：系数 `1.4`，仅前 `16` 名保留原额基础积分
-    - 团体赛、混双赛使用“队伍数系数表”
-      - `2-4` 队：系数 `0.6`，仅前 `2` 名保留原额基础积分
-      - `5-7` 队：系数 `0.8`，仅前 `4` 名保留原额基础积分
-      - `8-10` 队：系数 `1.0`，仅前 `8` 名保留原额基础积分
-      - `11-14` 队：系数 `1.2`，仅前 `8` 名保留原额基础积分
-      - `15+` 队：系数 `1.4`，仅前 `8` 名保留原额基础积分
-  - 组别系数：
-    - 根据 `弓种 + 距离` 在 `competition_groups` 中匹配组别
-    - `S / A` 组：系数 `1.0`
-    - `B` 组：系数 `0.5`
-    - `C` 组：系数 `0.3`
-    - 未匹配组别时按 `0`
-  - 各赛制人数来源：
-    - 排位赛、淘汰赛：
-      - 根据报名记录的性别分组匹配赛事配置中的 `individual_participant_count`
-      - 若未匹配到有效人数或人数为 `0`，按 `2` 计
-    - 团体赛：
-      - 根据成绩记录上的 `event_id + gender_group + 弓种 + 距离` 在赛事配置中取 `team_count`
-      - 成绩导入时若未填写分组，团体赛默认使用 `mixed`
-      - 若未匹配到有效值或队伍数为 `0`，按 `2` 队计
-    - 混双赛：
-      - `gender_group` 强制归一为 `mixed`
-      - 根据成绩的 `event_id + mixed + 弓种 + 距离` 取 `mixed_doubles_team_count`
-      - 若未匹配到有效值或队伍数为 `0`，按 `2` 计
-  - 最终积分计算顺序：
-    - 先取基础积分
-    - 再按人数/队伍数确定系数和“可保留原额积分的排名上限”
-    - 若排名超出上限，则基础积分改为 `1`
-    - 最终积分 = `基础积分 × 系数 × 组别系数`
-  - 积分精度：完整乘算后按四舍五入保留小数点后 1 位（例如 0.25 → 0.3、0.24 → 0.2）。
-  - 年度与指定赛季总积分均累加已四舍五入的分项积分，确保明细与汇总一致（例如 0.2 + 0.2 + 0.2 = 0.6）。
-- 俱乐部展示取该年度该姓名最早一次报名记录中的俱乐部
-- 详细信息中的成绩按 `春季赛 -> 夏季赛 -> 秋季赛 -> 冬季赛` 排列，同赛季内再按 `距离 -> 弓种 -> 赛制` 排列
-
-### 5. 积分导出
-
-- 年度总积分导出保留原有汇总表和成绩明细表。
-- 指定赛季导出顶部为黄色底、居中、跨列合并的双行标题：杭州弓箭俱乐部冠军联赛 / 年度赛季站次弓种积分排名。春、夏、秋、冬季赛依次对应第一至第四站；年份及弓种跟随当前选择。
-- 标题下方使用两级表头：排名 / 姓名 / 俱乐部 / 50M / 30M / 18M / 10M / 站次积分。
-- 每个距离依次分为排位赛、淘汰赛、团体赛、混双赛四列；相同距离、赛制的积分合计填入对应列，无成绩留空。
-- 保留模板的合并表头、列宽、字体、边框与交替底色；积分为可计算的数值，显示一位小数。总积分列标题随所选赛季变化。
-- 赛季排名按该赛季积分重新排序，导出仍应用当前姓名及俱乐部筛选。
-
-## 认证方式
-
-管理功能使用管理员密码认证：
-
-- 登录接口：`POST /api/auth/login`
-- 请求体：`{"password": "明文密码"}`
-- 服务端校验逻辑：
-  - 对明文密码做 `SHA-256`
-  - 与 `.env` 中的 `SECRET_KEY` 进行比对
-- 登录成功后返回 JWT
-- 前端将 token 保存到 `localStorage.admin_auth_token`
-- 管理页面：
-  - `/event-add`
-  - `/score-import`
-  需要已登录管理员
-
-## API 概览
-
-### 公开接口
-
-- `GET /`
-- `POST /api/auth/login`
-- `GET /api/events/years`
-- `GET /api/dictionaries`
-- `GET /api/scores/annual-ranking/{year}/{bow_type}`
-
-### 需要认证的接口
-
-- 赛事
-  - `GET /api/events`
-  - `GET /api/events/{event_id}`
-  - `POST /api/events/with-configs`
-
-- 赛事配置
-  - `POST /api/event-configurations`
-  - `PUT /api/event-configurations/{config_id}`
-  - `DELETE /api/event-configurations/{config_id}`
-
-- 报名
-  - `GET /api/event-registrations`
-  - `POST /api/event-registrations/batch/import`
-  - `PUT /api/event-registrations/{registration_id}`
-  - `DELETE /api/event-registrations/{registration_id}`
-
-- 成绩
-  - `GET /api/scores`
-  - `POST /api/scores/batch/import`
-  - `PUT /api/scores/{score_id}`
-  - `DELETE /api/scores/{score_id}`
-
-## 项目结构
-
-```text
-sin29-champion-points-system
-├── backend/
-│   ├── app/
-│   │   ├── models/
-│   │   ├── routers/
-│   │   ├── schemas/
-│   │   └── services/
-│   ├── tests/
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── api/
-│   │   ├── composables/
-│   │   ├── router/
-│   │   ├── styles/
-│   │   ├── utils/
-│   │   └── views/
-│   └── package.json
-├── database/
-│   └── init.sql
-├── docker-compose.yml
-├── docker-compose.prod.yml
-├── full-integrity-test.sh
-├── README.md
-├── QUICK_START.md
-└── DATABASE_DESIGN.md
-```
-
-## 文档导航
-
-- 启动与验收：`QUICK_START.md`
-- 数据库结构：`DATABASE_DESIGN.md`
+- [前端](frontend)：页面、API 客户端、组件、组合式函数、共享样式及测试。
+- [后端](backend)：路由、模型、校验、业务服务及测试。
+- [数据库初始化](database/init.sql)：PostgreSQL 空数据目录首次启动所需的表、索引及字典。
+- [快速开始](QUICK_START.md)：配置、启动、验证与测试。
+- [数据库设计](DATABASE_DESIGN.md)：表结构、关系、索引和初始化职责。
+- [变更记录](CHANGELOG.md)：发布历史与升级注意事项。

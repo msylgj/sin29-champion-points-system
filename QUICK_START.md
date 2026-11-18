@@ -1,245 +1,85 @@
-# QUICK START
+# 快速开始
 
-本文档说明当前项目的启动方式、运行依赖、认证方式和基础验收路径。
+本文说明环境配置、启动和基础验收。业务功能见[项目概览](README.md)，既有安装的版本升级见[变更记录](CHANGELOG.md)。
 
-## 1. 运行依赖
+## 1. 环境配置
 
-### Docker 方式
+容器运行需要 Docker 和 Compose v2；本地开发需要 Python 3.11、Node.js 20.19+（20.x）或 22.12+、PostgreSQL 15。Compose 从项目根目录的环境读取以下配置，示例见 [.env.example](.env.example)：
 
-- Docker
-- Docker Compose
+| 变量 | 用途 |
+| --- | --- |
+| `DB_USER`、`DB_PASSWORD`、`DB_NAME` | PostgreSQL 账号、密码、库名 |
+| `POSTGRES_DATA_PATH` | PostgreSQL 的宿主机数据目录，默认 `./data/postgres` |
+| `DB_PORT`、`BACKEND_PORT`、`FRONTEND_PORT` | 宿主机端口，默认 5432、8000、8080 |
+| `SECRET_KEY` | 管理口令的 SHA-256 十六进制值，同时用于管理 JWT 签名及校验 |
+| `DEBUG`、`VITE_ALLOWED_HOSTS` | 开发模式后端调试选项及 Vite 主机白名单 |
+| `DOCKERHUB_NAMESPACE`、`IMAGE_TAG` | 生产镜像的命名空间和实际已发布标签；请显式设置两者 |
 
-### 本地开发方式
-
-- Python 3.11+
-- Node.js 20+
-- PostgreSQL 15
-
-## 2. 环境变量
-
-项目根目录需要 `.env` 文件，当前代码会读取以下变量：
-
-- `DB_USER`
-- `DB_PASSWORD`
-- `DB_NAME`
-- `DB_PORT`
-- `POSTGRES_DATA_PATH`
-- `BACKEND_PORT`
-- `FRONTEND_PORT`
-- `VITE_ALLOWED_HOSTS`
-- `SECRET_KEY`
-
-说明：
-
-- `SECRET_KEY` 不是随机字符串，而是“管理员明文密码的 SHA-256 十六进制字符串”
-- `backend/app/security.py` 会用用户输入的明文密码做 SHA-256 后与 `SECRET_KEY` 比对
-
-生成密码哈希示例：
+复制示例后填写实际值；为数据库和管理功能分别设置强口令，不使用示例值。以下方式可生成管理口令哈希，避免把明文写进命令历史：
 
 ```bash
-echo -n '你的管理密码' | sha256sum | awk '{print $1}'
+cp .env.example .env
+read -rsp '管理口令: ' admin_password; printf '\n'
+printf '%s' "$admin_password" | sha256sum | cut -d ' ' -f 1
+unset admin_password
 ```
 
-## 3. Docker 启动
+将输出的哈希填入 `SECRET_KEY` 并妥善保管。网页验证时输入原始管理口令，非哈希。后端验证成功签发默认有效期 30 分钟的 JWT。
 
-在项目根目录执行：
+## 2. 容器部署
+
+在项目根目录配置好环境后，二选一。生产模式只拉取镜像，不构建本地源码；请设置实际已发布的 `IMAGE_TAG`，虽然 Compose 在标签为空时回退到 `latest`，本项目的发布工作流不推送该标签。示例中的 `1.5` 是旧版标签，不包含本次未发布的规则管理功能；要验证本地代码，请使用开发模式。不要同时用同一个 PostgreSQL 数据目录运行两套环境。
 
 ```bash
-cd sin29-champion-points-system
-docker-compose up -d --build
+# 开发：本地构建，代码热重载
+docker compose up -d --build
+# 生产：预构建镜像，指定发布标签便于复现
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-启动后访问：
+默认前端入口为 `http://localhost:8080/points-display`，后端为 `http://localhost:8000`，OpenAPI 为 `http://localhost:8000/docs`。实际端口以环境配置为准。部署时在外部代理启用 HTTPS，并限制数据库和后端端口的访问范围。
 
-- 前端：`http://localhost:8080`
-- 后端：`http://localhost:8000`
-- OpenAPI：`http://localhost:8000/docs`
-
-停止服务：
+查看状态、日志、停止时使用同一个 Compose 文件：
 
 ```bash
-docker-compose down
+docker compose ps
+docker compose logs -f backend
+docker compose down
+# 生产模式在 compose 后添加 -f docker-compose.prod.yml
 ```
 
-删除容器和数据卷：
+也可用 [启动脚本](start.sh)和[停止脚本](stop.sh)，传入 `dev` 或 `prod` 选择相同部署模式。停止或移除容器不会清空宿主机数据目录。`down -v` 删除 Compose 管理的卷（开发模式包含前端匿名依赖卷），**不会**删除绑定的 PostgreSQL 数据目录。
 
-```bash
-docker-compose down -v
-```
+## 3. 本地开发
 
-查看服务状态：
+1. 在 PostgreSQL 中创建有数据库访问权限的应用角色和由其拥有的数据库。仅对**空数据库**，使用有权限的账号运行 [初始化脚本](database/init.sql)，确保字典已经填充后再启动后端。示例：
 
-```bash
-docker-compose ps
-```
+   ```bash
+   psql -h 127.0.0.1 -U archery_user -d archery_db -v ON_ERROR_STOP=1 -f database/init.sql
+   ```
 
-查看后端日志：
+2. 在一个终端中启动 FastAPI。后端直接从进程环境读取配置；请按实际账号、口令、地址和数据库设置连接串。
 
-```bash
-docker-compose logs -f backend
-```
+   ```bash
+   cd backend
+   python -m pip install -r requirements.txt
+   export DATABASE_URL='postgresql://archery_user:YOUR_DB_PASSWORD@127.0.0.1:5432/archery_db'
+   export SECRET_KEY='YOUR_ADMIN_PASSWORD_SHA256'
+   python -m uvicorn app.main:app --reload --port 8000
+   ```
 
-## 4. 本地开发启动
+3. 在另一个终端中启动前端，将同源 `/api` 请求代理到本地后端。Compose 开发模式仍使用容器内的 `http://backend:8000`。
 
-### 4.1 初始化数据库
+   ```bash
+   cd frontend
+   npm ci
+   VITE_API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
+   ```
 
-```bash
-cd sin29-champion-points-system
-createdb archery_db
-psql archery_db < database/init.sql
-```
+## 4. 验收与测试
 
-### 4.2 启动后端
+- 访问积分首页并选择年度、弓种；确认排名及年度/赛季导出可用。
+- 点击「管理」验证口令，检查成绩导入、赛事配置及积分规则页面。会话失效后重新验证，确认可回到原管理页。
+- 在测试环境准备报名和成绩 Excel，检查报名同步、个人赛报名预校验和积分明细。发布和删除规则可改变已有赛事的积分结果，应使用测试赛季验证。
 
-```bash
-cd backend
-pip install -r requirements.txt
-export DATABASE_URL='postgresql://archery_user:archery_pass@localhost:5432/archery_db'
-export SECRET_KEY='replace_with_sha256_hex'
-python -m uvicorn app.main:app --reload --port 8000
-```
-
-### 4.3 启动前端
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-## 5. 当前页面入口
-
-- `http://localhost:8080/points-display`
-  - 年度积分排名
-- `http://localhost:8080/event-add`
-  - 赛事配置、报名导入、报名管理
-  - 需要管理员认证
-- `http://localhost:8080/score-import`
-  - 成绩导入、成绩管理
-  - 需要管理员认证
-
-根路径 `/` 会自动跳转到 `/points-display`。
-
-## 6. 管理认证流程
-
-当前管理认证流程如下：
-
-1. 从积分页点击“管理”进入管理功能
-2. 若本地没有 `admin_auth_token`，会弹出密码输入框
-3. 前端调用：
-
-```text
-POST /api/auth/login
-```
-
-4. 登录成功后，token 保存到：
-
-```text
-localStorage.admin_auth_token
-```
-
-5. 后续所有管理接口自动带 `Authorization: Bearer <token>`
-
-## 7. 当前接口清单
-
-### 公开接口
-
-- `GET /`
-- `POST /api/auth/login`
-- `GET /api/events/years`
-- `GET /api/dictionaries`
-- `GET /api/scores/annual-ranking/{year}/{bow_type}`
-
-### 管理接口
-
-赛事：
-
-- `GET /api/events`
-- `GET /api/events/{event_id}`
-- `POST /api/events/with-configs`
-
-赛事配置：
-
-- `POST /api/event-configurations`
-- `PUT /api/event-configurations/{config_id}`
-- `DELETE /api/event-configurations/{config_id}`
-
-赛事报名：
-
-- `GET /api/event-registrations`
-- `POST /api/event-registrations/batch/import`
-- `PUT /api/event-registrations/{registration_id}`
-- `DELETE /api/event-registrations/{registration_id}`
-
-成绩：
-
-- `GET /api/scores`
-- `POST /api/scores/batch/import`
-- `PUT /api/scores/{score_id}`
-- `DELETE /api/scores/{score_id}`
-
-## 8. 当前导入能力
-
-### 报名导入
-
-- 页面：`/event-add`
-- 文件格式：仅支持 Excel（`.xlsx`、`.xls`）
-- 必需列：
-  - `姓名`
-  - `俱乐部`
-  - `距离`
-  - `比赛弓种`
-  - `积分弓种`
-  - `分组`
-
-### 成绩导入
-
-- 页面：`/score-import`
-- 文件格式：仅支持 Excel（`.xlsx`、`.xls`）
-- 必需列：
-  - `姓名`
-  - `弓种`
-  - `距离`
-  - `赛制`
-  - `排名`
-- 可选列：
-  - `分组`
-
-说明：
-
-- 导入页会按 `姓名 + 距离 + 弓种` 到当前赛事报名表中匹配个人赛记录
-- 排位赛、淘汰赛未找到报名记录的成绩会被标记为异常
-- 团体赛未填写分组时默认使用 `mixed`
-- 混双赛统一按 `mixed` 设置分组
-
-## 9. 当前最小验收路径
-
-### 9.1 基础访问
-
-1. 打开积分页
-2. 能看到年度、弓种、姓名、俱乐部筛选
-3. 能查看年度积分排名
-
-### 9.2 管理认证
-
-1. 点击“管理”
-2. 输入错误密码，提示认证失败
-3. 输入正确密码，能进入管理页面
-
-### 9.3 赛事配置与报名
-
-1. 进入 `/event-add`
-2. 选择赛年、赛季
-3. 导入报名 Excel
-4. 页面出现“已导入报名”列表
-5. 赛事配置中的个人人数会按报名自动统计
-6. 保存赛事配置后，赛事存在且配置持久化
-
-### 9.4 成绩导入与管理
-
-1. 进入 `/score-import`
-2. 选择赛事
-3. 导入成绩 Excel
-4. 若个人赛成绩没有对应报名记录，页面应提示异常
-5. 导入成功后，成绩管理区能看到当前赛事成绩
-6. 可编辑、保存、删除成绩
+本地安装后端依赖及 `pytest`、前端执行 `npm ci` 后，可运行 [完整性检查脚本](full-integrity-test.sh)。脚本只使用内存 SQLite 做后端测试，不读取部署数据库连接配置，并用 Compose 配置校验、前端 lint、测试和构建覆盖另外的入口；没有 Compose v2 时只跳过配置校验。真实 PostgreSQL 的部署验收应使用隔离的测试环境。

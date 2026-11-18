@@ -1,0 +1,51 @@
+# 变更记录
+
+## 未发布
+
+- 积分规则按赛事年度和赛季版本化；支持从最新快照继承创建和删除最新非初始版。只读配置采用紧凑文本表格，编辑时使用与成绩管理一致的控件及操作提示。
+- 管理凭证超时后，在加载管理页前或收到管理接口 401 时返回积分首页验证，验证成功后回到原地址。
+- 收敛前后端重复代码与样式；按业务、部署、数据库结构、发布历史拆分说明。
+
+### 从 1.5 或更早版本升级
+
+先备份数据库，再用以下只读查询检查用于生成初始规则的组别字典。第一条必须大于 0，后两条应无返回记录：
+
+```sql
+SELECT COUNT(*) AS mapping_count FROM competition_groups;
+
+SELECT bow_type, distance
+FROM competition_groups
+GROUP BY bow_type, distance
+HAVING COUNT(DISTINCT group_code) > 1;
+
+SELECT id, bow_type, distance, group_code
+FROM competition_groups
+WHERE bow_type NOT IN ('barebow', 'longbow', 'traditional', 'sightless', 'recurve', 'compound')
+   OR distance NOT IN ('10m', '18m', '30m', '50m', '70m')
+   OR group_code NOT IN ('S', 'A', 'B', 'C');
+```
+
+有异常时，先按赛事实际口径核对并补齐或修正字典；不要自动为冲突项目选组。空字典可能使初始规则把所有项目计为 0 分，冲突或不受支持的代码可能导致引导失败。确认字典及覆盖范围后再更新并重启后端。启动将增建缺失的规则表，在没有初始版本（`start_key = 0`）时写入初始快照；不会覆盖已有快照，也无需重新导入初始化 SQL 或清空数据库目录。
+
+## 1.5
+
+- 单项积分完整乘算后四舍五入到一位小数，再汇总分项。
+- 指定赛季 Excel 使用联赛模板和按年度、站次、弓种生成的标题。
+
+## 1.4
+
+- 更新默认计分配置。
+
+## 1.3
+
+- 改进积分导出工作簿。
+
+## 1.2
+
+- 收紧年度排名中无瞄弓成绩的匹配条件。
+
+## 1.1
+
+- 成绩导入保存分组，年度积分按成绩分组匹配赛事人数配置。
+
+更早版本与发布间的细节以 Git 标签和提交历史为准。

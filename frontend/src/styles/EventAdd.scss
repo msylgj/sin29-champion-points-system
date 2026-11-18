@@ -1,3 +1,5 @@
+@use './feedback';
+
 .event-add-page {
   padding-bottom: 100px;
   background-color: #f5f5f5;
@@ -86,6 +88,30 @@
   }
 }
 
+.scoring-rules-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+
+  .section-help { margin-bottom: 0; }
+
+  .btn-scoring-rules {
+    padding: 12px 18px;
+    border: 0;
+    border-radius: 6px;
+    background: #667eea;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+
+    &:hover { background: #5267d4; }
+    &:focus-visible { outline: 3px solid #b7c3ff; outline-offset: 3px; }
+  }
+}
+
 .page-feedback-list {
   display: flex;
   flex-direction: column;
@@ -94,39 +120,11 @@
 }
 
 .failure-notice {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 8px;
-  border: 1px solid #f3c2c7;
-  background: #fff4f5;
-
-  strong {
-    display: block;
-    color: #af2334;
-    font-size: 14px;
-    margin-bottom: 4px;
-  }
-
-  p {
-    margin: 0;
-    color: #7d3a42;
-    font-size: 12px;
-    line-height: 1.5;
-  }
+  @include feedback.failure-notice;
 }
 
 .btn-retry-inline {
-  border: none;
-  border-radius: 6px;
-  background: #d14343;
-  color: #fff;
-  cursor: pointer;
-  padding: 8px 12px;
-  font-size: 12px;
-  flex-shrink: 0;
+  @include feedback.retry-button;
 }
 
 .form-group {
@@ -644,16 +642,7 @@
   animation: slideUp 0.3s ease;
 }
 
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
+@include feedback.floating-animation;
 
 @keyframes slideDownFade {
   from {

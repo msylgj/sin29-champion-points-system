@@ -140,6 +140,15 @@ describe('ScoreImport page', () => {
     view.unmount()
   })
 
+  it('keeps event configuration as the route to rule management', async () => {
+    const { default: ScoreImport } = await import('./ScoreImport.vue')
+    const view = await mountComponent(ScoreImport)
+    expect(view.container.querySelector('[data-test=scoring-rules-link]')).toBeNull()
+    view.container.querySelector('.btn-add-event').click()
+    expect(routerPush).toHaveBeenCalledWith('/event-add')
+    view.unmount()
+  })
+
   it('passes gender_group from loaded scores into the manage panel', async () => {
     scoreListGet.mockResolvedValue({
       items: [

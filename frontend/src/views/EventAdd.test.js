@@ -112,6 +112,18 @@ describe('EventAdd page', () => {
     document.body.innerHTML = ''
   })
 
+  it('shows rule management above event fields even without existing events', async () => {
+    const { default: EventAdd } = await import('./EventAdd.vue')
+    const view = await mountComponent(EventAdd)
+    const entry = view.container.querySelector('.form-container > .section')
+    expect(entry.textContent).toContain('积分规则管理')
+    const link = entry.querySelector('[data-test=scoring-rules-link]')
+    expect(link.type).toBe('button')
+    link.click()
+    expect(routerPush).toHaveBeenCalledWith('/scoring-rules')
+    view.unmount()
+  })
+
   it('loads registrations and reflects individual counts in readonly cells after selecting season', async () => {
     const { default: EventAdd } = await import('./EventAdd.vue')
     const view = await mountComponent(EventAdd)

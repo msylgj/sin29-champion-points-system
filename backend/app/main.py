@@ -4,21 +4,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import app.models  # noqa: F401
 from app.config import get_settings
-from app.routers import scores, events, event_configuration, event_registration, dictionary, auth
-from app.database import Base, engine
+from app.routers import scores, events, event_configuration, event_registration, dictionary, auth, scoring_rules
+from app.database import engine
+from app.bootstrap import initialize_database
 
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """应用生命周期：启动时初始化数据库"""
-    try:
-        Base.metadata.create_all(engine)
-        print("✓ Database tables initialized successfully")
-    except Exception as e:
-        print(f"⚠ Error initializing database: {e}")
-
+    """启动时非破坏性引导；规则快照失败必须终止启动，不能静默使用错误规则。"""
+    initialize_database(engine)
     yield
 
 
@@ -45,6 +41,7 @@ app.include_router(events.router, tags=["赛事管理"])
 app.include_router(event_configuration.router, tags=["赛事配置管理"])
 app.include_router(event_registration.router, tags=["赛事报名管理"])
 app.include_router(dictionary.router, tags=["字典管理"])
+app.include_router(scoring_rules.router, tags=["积分规则"])
 
 
 @app.get("/")
