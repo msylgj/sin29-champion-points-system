@@ -251,6 +251,7 @@ import { scoreAPI, eventAPI, authAPI } from '@/api'
 import { useDictionaries } from '@/composables/useDictionaries'
 import { useMessage } from '@/composables/useMessage'
 import { useRouter, useRoute } from 'vue-router'
+import { exportAnnualPoints } from '@/utils/annualPointsExport'
 import { exportSeasonPoints, sumPointTenths } from '@/utils/seasonPointsExport'
 import { adminAuthRequest, clearAdminAuthRequest, getValidAdminToken, requestAdminAuthentication, sanitizeAdminRedirect, saveAdminToken } from '@/utils/adminAuth'
 
@@ -423,59 +424,6 @@ const getExportRanking = () => {
   return scopedRanking.filter(matchesCurrentFilters)
 }
 
-const addMergeRange = (merges, startRow, endRow, columnIndex) => {
-  if (endRow <= startRow) return
-
-  merges.push({
-    s: { r: startRow, c: columnIndex },
-    e: { r: endRow, c: columnIndex },
-  })
-}
-
-const buildDetailSheetData = (exportRanking) => {
-  const rows = []
-  const merges = []
-  let currentRow = 1
-
-  exportRanking.forEach(athlete => {
-    const athleteStartRow = currentRow
-    let eventStartRow = currentRow
-    let currentEventSeason = athlete.scores[0]?.event_season || ''
-
-    athlete.scores.forEach((score, index) => {
-      rows.push([
-        athlete.ranking,
-        athlete.name,
-        athlete.club || '',
-        athlete.total_points.toFixed(1),
-        score.event_season,
-        getBowTypeLabel(score.bow_type),
-        score.distance,
-        getFormatLabel(score.format),
-        score.rank,
-        score.points.toFixed(1)
-      ])
-
-      currentRow += 1
-
-      const nextScore = athlete.scores[index + 1]
-      const nextEventSeason = nextScore?.event_season || null
-      if (nextEventSeason !== currentEventSeason) {
-        addMergeRange(merges, eventStartRow, currentRow - 1, 4)
-        eventStartRow = currentRow
-        currentEventSeason = nextEventSeason
-      }
-    })
-
-    const athleteEndRow = currentRow - 1
-    ;[0, 1, 2, 3].forEach(columnIndex => {
-      addMergeRange(merges, athleteStartRow, athleteEndRow, columnIndex)
-    })
-  })
-
-  return { rows, merges }
-}
-
 const openExportDialog = () => {
   if (filteredRanking.value.length === 0) return
 
@@ -562,79 +510,31 @@ const exportToExcel = async () => {
     return
   }
 
-  const XLSX = await import('xlsx')
-
-  const bowTypeLabel = bowTypes.value.find(b => b.code === selectedBowType.value)?.name || selectedBowType.value
+  const isSeason = exportScope.value === 'event'
+  const year = selectedYear.value
+  const bowType = selectedBowType.value
+  const bowTypeLabel = bowTypes.value.find(bow => bow.code === bowType)?.name || bowType
   const clubSuffix = selectedClub.value === NO_CLUB_FILTER
     ? '_无俱乐部'
     : (selectedClub.value ? `_${selectedClub.value}` : '')
-  const scopeSuffix = exportScope.value === 'event'
-    ? `_${selectedExportEvent.value?.shortLabel || '指定赛事'}`
-    : '_年度总积分'
-  const filename = `${selectedYear.value}年${bowTypeLabel}积分排名${scopeSuffix}${clubSuffix}.xlsx`
+  const eventId = selectedExportEventId.value
+  const eventLabel = selectedExportEvent.value?.shortLabel || '赛季'
+  const events = exportEvents.value
+  const scopeSuffix = isSeason ? '_' + eventLabel : '_年度总积分'
+  const filename = `${year}年${bowTypeLabel}积分排名${scopeSuffix}${clubSuffix}.xlsx`
+  const options = { ranking: exportRanking, year, bowType, bowTypeLabel, filename }
 
-  if (exportScope.value === 'event') {
-    try {
-      await exportSeasonPoints(XLSX, {
-        ranking: exportRanking,
-        eventId: selectedExportEventId.value,
-        eventLabel: selectedExportEvent.value?.shortLabel || '赛季',
-        year: selectedYear.value,
-        bowTypeLabel,
-        filename,
-      })
-      closeExportDialog()
-    } catch (error) {
-      pageMsg.show('error', error.message || '赛季积分导出失败，请重试')
+  try {
+    const XLSX = await import('xlsx')
+    if (isSeason) {
+      await exportSeasonPoints(XLSX, { ...options, eventId, eventLabel })
+    } else {
+      exportAnnualPoints(XLSX, { ...options, events })
     }
-    return
+    closeExportDialog()
+  } catch (error) {
+    pageMsg.show('error', error.message || (isSeason ? '赛季积分导出失败，请重试' : '年度积分导出失败，请重试'))
   }
-
-  const summaryHeaders = ['排名', '姓名', '俱乐部', '积分', '参赛次数']
-  const summaryRows = exportRanking.map(athlete => [
-    athlete.ranking,
-    athlete.name,
-    athlete.club || '',
-    athlete.total_points.toFixed(1),
-    athlete.scores.length
-  ])
-
-  const detailHeaders = ['排名', '姓名', '俱乐部', '总积分', '赛事', '弓种', '距离', '赛制', '名次', '积分']
-  const detailSheetData = buildDetailSheetData(exportRanking)
-  const detailRows = detailSheetData.rows
-
-  const summaryWorksheet = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows])
-  const detailWorksheet = XLSX.utils.aoa_to_sheet([detailHeaders, ...detailRows])
-
-  summaryWorksheet['!cols'] = [
-    { wch: 8 },  // 排名
-    { wch: 15 }, // 姓名
-    { wch: 20 }, // 俱乐部
-    { wch: 12 }, // 积分
-    { wch: 12 }  // 参赛次数
-  ]
-
-  detailWorksheet['!cols'] = [
-    { wch: 8 },
-    { wch: 15 },
-    { wch: 20 },
-    { wch: 12 },
-    { wch: 14 },
-    { wch: 12 },
-    { wch: 10 },
-    { wch: 12 },
-    { wch: 8 },
-    { wch: 10 },
-  ]
-
-  detailWorksheet['!merges'] = detailSheetData.merges
-
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, summaryWorksheet, '排名列表')
-  XLSX.utils.book_append_sheet(workbook, detailWorksheet, '积分明细')
-
-  XLSX.writeFile(workbook, filename)
-  closeExportDialog()
 }
 
 // Authentication requests are reactive so a 401 also opens the dialog when this page is already mounted.

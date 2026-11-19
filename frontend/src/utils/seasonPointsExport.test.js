@@ -6,7 +6,7 @@ import { buildSeasonWorkbook, exportSeasonPoints, pointTenths, sumPointTenths } 
 const templatePath = '../assets/season-export-template.xlsx'
 const template = readFileSync(new URL(templatePath, import.meta.url))
 const score = (distance, format, points, event_id = 1) => ({ distance, format, points, event_id })
-const options = ranking => ({ ranking, eventId: '1', eventLabel: '春季赛', year: 2026, bowTypeLabel: '反曲弓' })
+const options = ranking => ({ ranking, eventId: '1', eventLabel: '春季赛', year: 2026, bowType: 'recurve', bowTypeLabel: '反曲弓' })
 const readExport = ranking => {
   const bytes = buildSeasonWorkbook(XLSX, template, options(ranking))
   const book = XLSX.read(bytes, { type: 'array', cellStyles: true, cellNF: true })
@@ -34,16 +34,27 @@ describe('season template workbook roundtrip', () => {
     expect(sheet['!ref']).toBe('A1:T4')
   })
 
-  it('retains template fonts, colors, borders, alignment, heights and alternating fills beyond eighteen athletes', () => {
+  it('retains template fonts, themed fills, borders, alignment, heights and stripes beyond eighteen athletes', () => {
     const { bytes, sheet } = readExport(Array.from({ length: 25 }, (_, i) => ({ ranking: i + 1, name: '选手' + i, scores: [score('30m', 'team', 2)] })))
     expect(sheet['!ref']).toBe('A1:T28')
     expect(sheet.A28.v).toBe(25)
     expect(sheet.T28).toMatchObject({ t: 'n', v: 2, w: '2.0' })
     const styles = new DOMParser().parseFromString(xml(bytes, 'xl/styles.xml'), 'application/xml')
     const originalStyles = new DOMParser().parseFromString(xml(template, 'xl/styles.xml'), 'application/xml')
-    for (const tag of ['fills', 'borders', 'cellStyleXfs']) {
+    for (const tag of ['borders', 'cellStyleXfs']) {
       expect(styles.getElementsByTagName(tag)[0].outerHTML).toBe(originalStyles.getElementsByTagName(tag)[0].outerHTML)
     }
+    const fills = styles.getElementsByTagName('fills')[0].children
+    const originalFills = originalStyles.getElementsByTagName('fills')[0].children
+    expect(fills.length).toBe(originalFills.length)
+    Array.from(fills).forEach((fill, index) => {
+      if (index === 2 || index === 3) {
+        const expected = index === 2 ? 'FFFFE175' : 'FFFFEFAE'
+        expect(fill.querySelector('fgColor').getAttribute('rgb')).toBe(expected)
+        expect(fill.querySelector('patternFill').getAttribute('patternType')).toBe('solid')
+        expect(fill.querySelector('bgColor').outerHTML).toBe(originalFills[index].querySelector('bgColor').outerHTML)
+      } else expect(fill.outerHTML).toBe(originalFills[index].outerHTML)
+    })
     const fonts = styles.getElementsByTagName('fonts')[0].children
     const originalFonts = originalStyles.getElementsByTagName('fonts')[0].children
     expect(fonts.length).toBe(originalFonts.length + 1)
@@ -105,6 +116,93 @@ describe('season template workbook roundtrip', () => {
   it('uses a dynamic event title', () => {
     const bytes = buildSeasonWorkbook(XLSX, template, { ...options([]), eventLabel: '冬季赛 & 决赛' })
     expect(XLSX.read(bytes, { type: 'array' }).Sheets.Sheet1.T2.v).toBe('冬季赛 & 决赛积分')
+  })
+})
+
+describe('season workbook bow themes persisted in OOXML', () => {
+  const themes = [
+    ['traditional', '传统弓', 'FF99D4B8', 'FFC2E7D6'],
+    ['barebow', '光弓', 'FFFF9D9A', 'FFFFCBC8'],
+    ['longbow', '美猎弓', 'FF9ABCF7', 'FFC8DAF8'],
+    ['compound', '复合弓', 'FFD690F6', 'FFF2C8F9'],
+    ['recurve', '反曲弓', 'FFFFE175', 'FFFFEFAE'],
+  ]
+  const athletes = [
+    { ranking: 1, name: '=1+1 & <甲>', club: '甲俱乐部', scores: [score('30m', 'ranking', 0.25)] },
+    { ranking: 2, name: '乙', club: '乙俱乐部', scores: [score('30m', 'ranking', 1.15)] },
+    { ranking: 3, name: '丙', scores: [] },
+  ]
+
+  it.each(themes)('writes %s header/stripe colors into the actual xlsx, retaining white rows and numeric precision', (bowType, bowTypeLabel, header, stripe) => {
+    const bytes = buildSeasonWorkbook(XLSX, template, { ...options(athletes), bowType, bowTypeLabel })
+    const book = XLSX.read(bytes, { type: 'array', cellStyles: true, cellNF: true })
+    const sheet = book.Sheets.Sheet1
+    for (const ref of ['A1', 'A2', 'D2', 'D3', 'T2']) {
+      expect(sheet[ref].s).toMatchObject({ patternType: 'solid', fgColor: { rgb: header.slice(2) } })
+    }
+    for (const ref of ['A5', 'D5', 'H5', 'T5']) {
+      expect(sheet[ref].s).toMatchObject({ patternType: 'solid', fgColor: { rgb: stripe.slice(2) } })
+    }
+    for (const ref of ['A4', 'H4', 'T4', 'A6', 'T6']) expect(sheet[ref].s.patternType).toBe('none')
+    expect(sheet.A1.v).toBe('杭州弓箭俱乐部冠军联赛\n2026赛季第一站' + bowTypeLabel + '积分排名')
+    expect(sheet.H4).toMatchObject({ t: 'n', v: 0.3, z: '0.0', w: '0.3' })
+    expect(sheet.H5).toMatchObject({ t: 'n', v: 1.2, z: '0.0', w: '1.2' })
+    expect(sheet.T5).toMatchObject({ t: 'n', v: 1.2, z: '0.0', w: '1.2' })
+    expect(sheet.B4).toMatchObject({ t: 's', v: '=1+1 & <甲>' })
+    expect(sheet.B4.f).toBeUndefined()
+    expect(sheet.D4.v).toBeUndefined()
+    expect(sheet['!merges']).toHaveLength(9)
+    const original = XLSX.read(template, { type: 'array', cellStyles: true }).Sheets.Sheet1
+    expect(sheet['!cols']).toEqual(original['!cols'])
+    const styles = new DOMParser().parseFromString(xml(bytes, 'xl/styles.xml'), 'application/xml')
+    const fills = styles.getElementsByTagName('fills')[0].children
+    expect(fills[2].querySelector('fgColor').getAttribute('rgb')).toBe(header)
+    expect(fills[3].querySelector('fgColor').getAttribute('rgb')).toBe(stripe)
+    expect(xml(bytes, 'xl/worksheets/sheet1.xml')).not.toContain('<f>')
+  })
+
+  it.each([
+    ['future-bow', '未来弓'],
+    ['sightless', '无瞄弓'],
+    [undefined, undefined],
+  ])('writes neutral fallback colors for unknown bow %s', (bowType, bowTypeLabel) => {
+    const bytes = buildSeasonWorkbook(XLSX, template, { ...options(athletes), bowType, bowTypeLabel })
+    const sheet = XLSX.read(bytes, { type: 'array', cellStyles: true }).Sheets.Sheet1
+    expect(sheet.A1.s.fgColor.rgb).toBe('D8DFE9')
+    expect(sheet.A2.s.fgColor.rgb).toBe('D8DFE9')
+    expect(sheet.A5.s.fgColor.rgb).toBe('EDF1F6')
+    expect(sheet.A4.s.patternType).toBe('none')
+  })
+
+  it.each([
+    [undefined, '光弓', 'FF9D9A', 'FFCBC8'],
+    ['future-bow', '传统弓', '99D4B8', 'C2E7D6'],
+    ['compound', '反曲弓', 'D690F6', 'F2C8F9'],
+  ])('prefers a stable code and supports legacy localized labels (%s / %s)', (bowType, bowTypeLabel, header, stripe) => {
+    const bytes = buildSeasonWorkbook(XLSX, template, { ...options(athletes), bowType, bowTypeLabel })
+    const sheet = XLSX.read(bytes, { type: 'array', cellStyles: true }).Sheets.Sheet1
+    expect(sheet.A1.s.fgColor.rgb).toBe(header)
+    expect(sheet.A5.s.fgColor.rgb).toBe(stripe)
+  })
+
+  it('does not mutate the binary template or carry one bow palette into the next export', () => {
+    const originalBytes = new Uint8Array(template)
+    const originalFills = new DOMParser().parseFromString(xml(template, 'xl/styles.xml'), 'application/xml').getElementsByTagName('fills')[0].outerHTML
+    for (const [bowType, bowTypeLabel, header] of themes) {
+      const bytes = buildSeasonWorkbook(XLSX, template, { ...options(athletes), bowType, bowTypeLabel })
+      expect(XLSX.read(bytes, { type: 'array', cellStyles: true }).Sheets.Sheet1.A1.s.fgColor.rgb).toBe(header.slice(2))
+    }
+    expect(new Uint8Array(template)).toEqual(originalBytes)
+    expect(new Uint8Array(readFileSync(new URL(templatePath, import.meta.url)))).toEqual(originalBytes)
+    const unchanged = new DOMParser().parseFromString(xml(template, 'xl/styles.xml'), 'application/xml').getElementsByTagName('fills')[0]
+    expect(unchanged.outerHTML).toBe(originalFills)
+    expect(unchanged.children[2].querySelector('fgColor').getAttribute('rgb')).toBe('FFFFE270')
+    expect(unchanged.children[3].querySelector('fgColor').getAttribute('rgb')).toBe('FFFFEEAD')
+  })
+
+  it.each([['秋季赛', '第三站'], ['冬季赛', '第四站'], [undefined, '赛季']])('uses the shared station label %s', (eventLabel, stationLabel) => {
+    const bytes = buildSeasonWorkbook(XLSX, template, { ...options([]), eventLabel })
+    expect(XLSX.read(bytes, { type: 'array' }).Sheets.Sheet1.T2.v).toBe(stationLabel + '积分')
   })
 })
 

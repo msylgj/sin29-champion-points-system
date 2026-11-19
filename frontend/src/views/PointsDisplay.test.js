@@ -8,27 +8,15 @@ const eventYearsGet = vi.fn()
 const adminLogin = vi.fn()
 const encodeJwtPart = value => btoa(JSON.stringify(value)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
 const jwt = (claims = {}) => [encodeJwtPart({ alg: 'HS256', typ: 'JWT' }), encodeJwtPart({ sub: 'admin', exp: Math.floor(Date.now() / 1000) + 3600, ...claims }), 'c2lnbmF0dXJl'].join('.')
-const xlsxAoaToSheet = vi.fn(data => ({ data }))
-const xlsxBookNew = vi.fn(() => ({ sheets: [] }))
-const xlsxBookAppendSheet = vi.fn((workbook, worksheet, name) => {
-  workbook.sheets.push({ name, worksheet })
-})
-const xlsxWriteFile = vi.fn()
+const annualExport = vi.fn()
 const seasonExport = vi.fn(async () => {})
 
+vi.mock('@/utils/annualPointsExport', () => ({ exportAnnualPoints: annualExport }))
 vi.mock('@/utils/seasonPointsExport', async importOriginal => ({
   ...await importOriginal(),
   exportSeasonPoints: seasonExport,
 }))
-
-vi.mock('xlsx', () => ({
-  utils: {
-    aoa_to_sheet: xlsxAoaToSheet,
-    book_new: xlsxBookNew,
-    book_append_sheet: xlsxBookAppendSheet,
-  },
-  writeFile: xlsxWriteFile,
-}))
+vi.mock('xlsx', () => ({}))
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({
@@ -318,7 +306,7 @@ describe('PointsDisplay page', () => {
     view.container.querySelector('.btn-export-confirm').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flushPromises(5)
 
-    expect(xlsxWriteFile).not.toHaveBeenCalled()
+    expect(annualExport).not.toHaveBeenCalled()
     expect(seasonExport).toHaveBeenCalledTimes(1)
     const options = seasonExport.mock.calls[0][1]
     expect(options.filename).toContain('春季赛')
@@ -326,6 +314,7 @@ describe('PointsDisplay page', () => {
     expect(options.eventId).toBe('1')
     expect(options.year).toBe(2026)
     expect(options.bowTypeLabel).toBe('光弓')
+    expect(options.bowType).toBe('barebow')
     expect(options.ranking.map(({ ranking, name, total_points, scores }) => [ranking, name, total_points, scores.length])).toEqual([
       [1, '张三', 17, 2],
       [2, '李四', 14, 2],
@@ -336,26 +325,35 @@ describe('PointsDisplay page', () => {
     view.unmount()
   })
 
-  it('keeps the annual ranking and detail worksheets unchanged', async () => {
+  it('passes the bow theme, all station columns and filtered athletes to the annual export', async () => {
+    annualRankingGet.mockResolvedValue({ athletes: [
+      { ranking: 1, name: '张三', club: '甲俱乐部', total_points: 20, scores: [
+        { event_id: 2, event_season: '2026 夏季赛', distance: '30m', format: 'ranking', rank: 1, points: 20 },
+      ] },
+      { ranking: 2, name: '李四', club: '乙俱乐部', total_points: 9, scores: [
+        { event_id: 1, event_season: '2026 春季赛', distance: '30m', format: 'ranking', rank: 2, points: 9 },
+      ] },
+    ] })
     const { default: PointsDisplay } = await import('./PointsDisplay.vue')
     const view = await mountComponent(PointsDisplay)
+    const club = view.container.querySelector('#club-filter')
+    club.value = '甲俱乐部'
+    club.dispatchEvent(new Event('change', { bubbles: true }))
+    await flushPromises()
     view.container.querySelector('.btn-export').click()
     await flushPromises()
     view.container.querySelector('.btn-export-confirm').click()
     await flushPromises(5)
 
     expect(seasonExport).not.toHaveBeenCalled()
-    const [workbook, filename] = xlsxWriteFile.mock.calls[0]
-    expect(filename).toContain('_年度总积分.xlsx')
-    expect(workbook.sheets.map(sheet => sheet.name)).toEqual(['排名列表', '积分明细'])
-    expect(workbook.sheets[0].worksheet.data).toEqual([
-      ['排名', '姓名', '俱乐部', '积分', '参赛次数'],
-      [1, '张三', '甲俱乐部', '20.0', 1],
-    ])
-    expect(workbook.sheets[1].worksheet.data).toEqual([
-      ['排名', '姓名', '俱乐部', '总积分', '赛事', '弓种', '距离', '赛制', '名次', '积分'],
-      [1, '张三', '甲俱乐部', '20.0', '2026 夏季赛', '-', '30m', '排位赛', 1, '20.0'],
-    ])
+    expect(annualExport).toHaveBeenCalledOnce()
+    const options = annualExport.mock.calls[0][1]
+    expect(options.filename).toContain('_年度总积分_甲俱乐部.xlsx')
+    expect(options).toMatchObject({ year: 2026, bowType: 'barebow', bowTypeLabel: '光弓' })
+    expect(options.events.map(event => [event.value, event.shortLabel])).toEqual([['1', '春季赛'], ['2', '夏季赛']])
+    expect(options.ranking.map(athlete => athlete.name)).toEqual(['张三'])
+
+    expect(view.container.querySelector('.export-dialog')).toBeNull()
     view.unmount()
   })
 
@@ -414,7 +412,7 @@ describe('PointsDisplay page', () => {
     await flushPromises(5)
     expect(view.container.textContent).toContain('赛季导出模板加载失败，请重试')
     expect(view.container.querySelector('.export-dialog')).not.toBeNull()
-    expect(xlsxWriteFile).not.toHaveBeenCalled()
+    expect(annualExport).not.toHaveBeenCalled()
     view.unmount()
   })
 })

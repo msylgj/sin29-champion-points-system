@@ -1,10 +1,10 @@
 import templateUrl from '../assets/season-export-template.xlsx?url'
+import { downloadWorkbook, getBowPalette, getStationLabel } from './pointsWorkbook'
 
 const DISTANCES = ['50M', '30M', '18M', '10M']
 const FORMATS = ['ranking', 'elimination', 'team', 'mixed_doubles']
 const FORMAT_LABELS = ['排位赛', '淘汰赛', '团体赛', '混双赛']
 const POINT_FORMAT_ID = 164
-const STATION_LABELS = { 春季赛: '第一站', 夏季赛: '第二站', 秋季赛: '第三站', 冬季赛: '第四站' }
 
 // Round each component half up before summing integer tenths. Parsing decimal
 // digits avoids binary floating-point errors at boundaries such as 1.15.
@@ -43,7 +43,7 @@ const cellXml = (column, row, value, style) => {
  * SheetJS CE's worksheet writer drops custom cell styles. Use its existing CFB
  * ZIP API to retain the template fonts, fills, borders, row layout and merges.
  */
-export function buildSeasonWorkbook(XLSX, template, { ranking, eventId, eventLabel, year, bowTypeLabel }) {
+export function buildSeasonWorkbook(XLSX, template, { ranking, eventId, eventLabel, year, bowType, bowTypeLabel }) {
   const zip = XLSX.CFB.read(new Uint8Array(template), { type: 'array' })
   const decoder = new TextDecoder()
   const getXml = path => {
@@ -53,7 +53,8 @@ export function buildSeasonWorkbook(XLSX, template, { ranking, eventId, eventLab
   }
   const putXml = (path, xml) => XLSX.CFB.utils.cfb_add(zip, '/' + path, new TextEncoder().encode(xml))
 
-  const stationLabel = STATION_LABELS[eventLabel] || eventLabel || '赛季'
+  const stationLabel = getStationLabel(eventLabel)
+  const palette = getBowPalette(bowType, bowTypeLabel)
   const title = '杭州弓箭俱乐部冠军联赛\n' + (year || '') + '赛季' + stationLabel + (bowTypeLabel || '') + '积分排名'
   const titleRow = [title, ...Array(19).fill('')]
   const header = ['排名', '姓名', '俱乐部', ...DISTANCES.flatMap(distance => [distance, '', '', '']), stationLabel + '积分']
@@ -95,6 +96,17 @@ export function buildSeasonWorkbook(XLSX, template, { ranking, eventId, eventLab
   putXml('xl/worksheets/sheet1.xml', sheet)
 
   let styles = getXml('xl/styles.xml')
+  // Only the two fills used by the template's header and striped rows change.
+  // Fill 0 (white/no fill), unused palette entries and every existing style ID remain intact.
+  styles = styles.replace(/(<fills\b[^>]*>)([\s\S]*?)(<\/fills>)/, (_, open, content, close) => {
+    let fillIndex = 0
+    const fills = content.replace(/<fill\b[^>]*>[\s\S]*?<\/fill>/g, fill => {
+      const color = fillIndex === 2 ? palette.header : fillIndex === 3 ? palette.stripe : null
+      fillIndex += 1
+      return color ? fill.replace(/<fgColor\b[^>]*\/>/, '<fgColor rgb="' + color + '"/>') : fill
+    })
+    return open + fills + close
+  })
   styles = styles.replace(/<numFmts count="(\d+)">/, (_, count) => '<numFmts count="' + (Number(count) + 1) + '">')
     .replace('</numFmts>', '<numFmt numFmtId="' + POINT_FORMAT_ID + '" formatCode="0.0"/></numFmts>')
   const originals = styles.match(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/)[1].match(/<xf\b[^>]*>[\s\S]*?<\/xf>/g)
@@ -117,17 +129,5 @@ export async function exportSeasonPoints(XLSX, options) {
   const response = await fetch(templateUrl)
   if (!response.ok) throw new Error('赛季导出模板加载失败，请重试')
   const bytes = buildSeasonWorkbook(XLSX, await response.arrayBuffer(), options)
-  const url = URL.createObjectURL(new Blob([bytes], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = options.filename
-  document.body.appendChild(link)
-  try {
-    link.click()
-  } finally {
-    link.remove()
-    URL.revokeObjectURL(url)
-  }
+  return downloadWorkbook(bytes, options.filename)
 }
