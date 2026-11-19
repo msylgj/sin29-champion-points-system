@@ -1,0 +1,40 @@
+@use './managementControls' as controls;
+@use './feedback';
+
+.event-list-page { min-height: 100vh; padding-bottom: 24px; background: #f5f5f5; color: #333; }
+.page-header { padding: 25px 20px 20px; margin-bottom: 18px; color: #fff; background: linear-gradient(135deg, #667eea, #764ba2); }
+.header-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.header-title-wrap { flex: 1; text-align: center; }
+.header-spacer { width: 70px; flex-shrink: 0; }
+h1 { margin: 0 0 5px; font-size: 26px; }
+.subtitle { margin: 0; font-size: 14px; }
+.btn-back { @include controls.action-button(rgba(255, 255, 255, .2), #fff); padding: 8px 12px; white-space: nowrap; }
+.event-list-panel { margin: 0 auto; width: min(calc(100% - 30px), 1200px); padding: 16px; border-radius: 8px; background: #fff; }
+.list-actions, .row-actions, .pagination { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.pagination { justify-content: center; margin-top: 12px; font-size: 13px; }
+.section-help { margin: 10px 0; font-size: 12px; color: #666; }
+.btn-primary { @include controls.primary-button; }
+.btn-secondary { @include controls.action-button(#eef1fb, #4c5684); padding: 7px 12px; border-radius: 6px; }
+.btn-delete { @include controls.action-button(#fff0ef, #af322c); padding: 7px 12px; border-radius: 6px; }
+.event-name { user-select: text; }
+.delete-confirmation { color: #333; font-size: 14px; }
+.delete-confirmation label { display: grid; gap: 5px; }
+.delete-confirmation input { @include controls.cell-input; box-sizing: border-box; font-size: 16px; }
+.delete-error { color: #af322c; }
+button:disabled { @include controls.disabled-button; }
+button:focus-visible { outline: 2px solid #667eea; outline-offset: 2px; }
+.table-wrapper { @include controls.table-wrapper; max-height: none; }
+.manage-table { @include controls.table; }
+.manage-table th, .manage-table td { @include controls.table-cell; }
+.manage-table thead th { @include controls.table-heading; }
+.manage-table th[scope='row'] { font-weight: 500; }
+.empty-tip { @include feedback.empty-tip; }
+.failure-notice { @include feedback.failure-notice; }
+.btn-retry-inline { @include feedback.retry-button; }
+@media (max-width: 550px) {
+  .page-header { padding: 17px 10px; }
+  .header-spacer { width: 50px; }
+  h1 { font-size: 22px; }
+  .event-list-panel { width: calc(100% - 16px); padding: 10px; }
+  .row-actions { align-items: flex-start; flex-direction: column; }
+}

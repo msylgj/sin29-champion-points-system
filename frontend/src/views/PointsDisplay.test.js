@@ -221,7 +221,7 @@ describe('PointsDisplay page', () => {
     const view = await mountComponent(PointsDisplay)
     view.container.querySelector('.btn-manage').click()
     await flushPromises()
-    expect(routerPush).toHaveBeenCalledExactlyOnceWith('/score-import')
+    expect(routerPush).toHaveBeenCalledExactlyOnceWith('/event-list')
     expect(view.container.querySelector('.auth-dialog')).toBeNull()
   })
 

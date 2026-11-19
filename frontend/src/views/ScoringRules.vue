@@ -2,7 +2,7 @@
   <main class="scoring-rules-page safe-area">
     <header class="page-header rules-header">
       <div class="header-top">
-        <button type="button" class="btn-back" title="返回赛事配置" :disabled="busy" @click="!busy && router.push('/event-add')">← 返回</button>
+        <button type="button" class="btn-back" title="返回赛事清单" :disabled="busy" @click="!busy && returnToList()">← 返回</button>
         <div class="header-title-wrap">
           <h1>积分规则管理</h1>
           <p class="subtitle">查看历史规则，创建并保存新的积分规则</p>
@@ -110,6 +110,14 @@ const eventsError = ref('')
 const dictionaryError = ref(false)
 const submitError = ref('')
 const pageMsg = useMessage(5000)
+async function returnToList() {
+  if (disposed) return
+  try {
+    if (await router.push('/event-list') && !disposed) pageMsg.show('error', '未能返回赛事清单，请重试。')
+  } catch {
+    if (!disposed) pageMsg.show('error', '未能返回赛事清单，请重试。')
+  }
+}
 const confirmation = ref(null)
 let confirmationResolver = null
 let disposed = false
@@ -156,6 +164,7 @@ const deleteLatestRule = async () => {
     conflict.value = false
     reloadedAfterConflict.value = false
     if (!disposed) pageMsg.show('success', '规则已删除；上一版“' + restored_rule.name + '”（#' + restored_rule.id + '）已恢复持续生效，原适用赛事及后续积分将按上一版规则重算。')
+    await returnToList()
   } catch (error) {
     deleteError.value = ruleErrorMessage(error)
     if (!disposed) pageMsg.show('error', deleteError.value)
@@ -223,6 +232,7 @@ const saveDraft = async () => {
     selectedRuleId.value = created.id
     draft.value = null
     if (!disposed) pageMsg.show('success', '新规则已保存；历史规则保持只读。')
+    await returnToList()
   } catch (error) {
     if ((error.status || error.response?.status) === 409) { conflict.value = true; reloadedAfterConflict.value = false }
     submitError.value = ruleErrorMessage(error)

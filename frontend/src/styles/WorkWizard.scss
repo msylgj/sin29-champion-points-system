@@ -1,0 +1,44 @@
+@use './managementControls' as controls;
+
+.wizard-page { min-height: 100vh; padding-bottom: 28px; background: #f5f5f5; color: #333; }
+.wizard-header {
+  padding: 26px 20px 22px;
+  margin-bottom: 16px;
+  text-align: center;
+  color: #fff;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+
+  h1 { margin: 0 0 5px; font-size: 26px; }
+  p { margin: 0; font-size: 14px; }
+}
+.wizard-container { width: min(100%, 1280px); margin: auto; padding: 0 15px; }
+.wizard-card, .wizard-work { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 14px; }
+.wizard-work { min-width: 0; }
+h2 { margin: 0 0 14px; font-size: 17px; }
+h2:focus { outline: none; }
+.wizard-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 6px;
+
+  li { display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 6px; background: #f6f8fd; color: #4c5684; font-size: 13px; }
+  span { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #e9edfc; flex-shrink: 0; }
+  li.current { background: #e9edfc; color: #30449a; font-weight: 600; }
+  li.current span { background: #4d67c5; color: #fff; }
+  li.done span { background: #dcefe4; color: #246646; }
+}
+.event-summary { margin: 10px 0 0; font-size: 14px; }
+.wizard-actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.btn-primary { @include controls.primary-button; }
+.btn-secondary { @include controls.action-button(#eef1fb, #4c5684); padding: 7px 12px; border-radius: 6px; }
+button:disabled { @include controls.disabled-button; }
+.wizard-error { width: 100%; margin: 0; color: #a52b3d; font-size: 13px; }
+
+@media (max-width: 640px) {
+  .wizard-container { padding: 0 10px; }
+  .wizard-card, .wizard-work { padding: 12px; }
+  .wizard-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

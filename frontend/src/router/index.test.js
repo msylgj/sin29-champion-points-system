@@ -30,7 +30,7 @@ afterEach(async () => {
 })
 
 describe('actual project router administrator guard', () => {
-  it.each(['/event-add', '/score-import', '/scoring-rules'])('blocks %s before lazy management component resolution when token expired', async path => {
+  it.each(['/event-add', '/score-import', '/scoring-rules', '/work-wizard', '/event-list'])('blocks %s before lazy management component resolution when token expired', async path => {
     localStorage.setItem('admin_auth_token', jwt({ exp: NOW - 1 }))
     const route = router.getRoutes().find(record => record.path === path)
     const lazy = vi.fn(route.components.default)
@@ -45,7 +45,7 @@ describe('actual project router administrator guard', () => {
     expect(lazy).not.toHaveBeenCalled()
   })
 
-  it.each(['/event-add', '/score-import', '/scoring-rules'])('blocks %s for a missing token', async path => {
+  it.each(['/event-add', '/score-import', '/scoring-rules', '/work-wizard', '/event-list'])('blocks %s for a missing token', async path => {
     await router.push(path)
     expect(router.currentRoute.value.path).toBe('/points-display')
     expect(auth.adminAuthRequest.value.redirect).toBe(path)
@@ -58,7 +58,7 @@ describe('actual project router administrator guard', () => {
     expect(auth.adminAuthRequest.value.redirect).toBe('/scoring-rules?version=2#config')
   })
 
-  it.each(['/event-add', '/score-import', '/scoring-rules'])('allows a future administrator JWT into %s', async path => {
+  it.each(['/event-add', '/score-import', '/scoring-rules', '/work-wizard', '/event-list'])('allows a future administrator JWT into %s', async path => {
     auth.saveAdminToken(jwt())
     await router.push(path + '?year=2026#config')
     expect(router.currentRoute.value.fullPath).toBe(path + '?year=2026#config')

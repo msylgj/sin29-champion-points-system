@@ -3,8 +3,9 @@ import { ref } from 'vue'
 const TOKEN_KEY = 'admin_auth_token'
 const REQUIRED_KEY = 'admin_auth_required'
 const REDIRECT_KEY = 'admin_auth_redirect'
-const DEFAULT_REDIRECT = '/score-import'
-const ADMIN_PATHS = new Set(['/event-add', '/score-import', '/scoring-rules'])
+export const EVENT_LIST_PATH = '/event-list'
+const DEFAULT_REDIRECT = EVENT_LIST_PATH
+const ADMIN_PATHS = new Set([EVENT_LIST_PATH, '/event-add', '/score-import', '/scoring-rules', '/work-wizard'])
 
 function readStorage(storage, key) {
   try {

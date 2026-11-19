@@ -267,7 +267,7 @@ const showExportDialog = ref(false)
 const adminPassword = ref('')
 const authLoading = ref(false)
 const authError = ref('')
-const pendingManageRoute = ref('/score-import')
+const pendingManageRoute = ref('/event-list')
 const nameKeyword = ref('')
 const selectedClub = ref('')
 const exportScope = ref('year')
@@ -652,10 +652,10 @@ watch(adminAuthRequest, request => {
 
 const navigateToManage = () => {
   if (getValidAdminToken()) {
-    router.push('/score-import')
+    router.push('/event-list')
     return
   }
-  requestAdminAuthentication('/score-import')
+  requestAdminAuthentication('/event-list')
 }
 
 const resetAuthDialog = () => {
@@ -696,7 +696,7 @@ onMounted(async () => {
   // Legacy session markers may predate loading this module; restore them before any network awaits.
   getValidAdminToken()
   if (!adminAuthRequest.value && sessionStorage.getItem('admin_auth_required') === '1') {
-    requestAdminAuthentication(sessionStorage.getItem('admin_auth_redirect') || '/score-import')
+    requestAdminAuthentication(sessionStorage.getItem('admin_auth_redirect') || '/event-list')
   }
 
   // 首先加载年份和字典

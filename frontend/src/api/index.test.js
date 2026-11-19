@@ -166,7 +166,7 @@ describe('actual axios request/response interceptor chain', () => {
     coordinator.currentRoute.value = { path: '/points-display', fullPath: '/points-display' }
     rejectWith(401)
     await api.scoringRuleAPI.getList().catch(() => {})
-    expect(auth.adminAuthRequest.value.redirect).toBe('/score-import')
+    expect(auth.adminAuthRequest.value.redirect).toBe('/event-list')
     expect(coordinator.replace).not.toHaveBeenCalled()
   })
 

@@ -1,17 +1,24 @@
 """
 赛事 API 路由 - 简化版本
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc
+from sqlalchemy import and_, case, desc, func, tuple_
 from app.database import get_db
 from app.schemas.event_configuration import CreateEventWithConfigs, EventConfigurationBase
 from app.models.event import Event
 from app.models.event_configuration import EventConfiguration
+from app.models.event_registration import EventRegistration
+from app.models.score import Score
 from app.services.event_configuration_service import EventConfigurationService
 from app.security import verify_admin_token
 
 router = APIRouter(prefix="/api/events", tags=["赛事管理"])
+
+
+class EventDeletionConfirmation(BaseModel):
+    confirmation_name: str = Field(..., strict=True)
 
 
 @router.get("/years", summary="获取可用赛事年度")
@@ -111,6 +118,42 @@ def get_event(event_id: int, db: Session = Depends(get_db), _auth: dict = Depend
     }
 
 
+@router.delete("/{event_id}", status_code=204, response_class=Response, summary="删除赛事及关联报名成绩配置")
+def delete_event(
+    event_id: int,
+    confirmation: EventDeletionConfirmation,
+    db: Session = Depends(get_db),
+    _auth: dict = Depends(verify_admin_token),
+):
+    """锁定目标后精确确认名称，显式删除关联记录，不依赖数据库的外键级联开关。"""
+    try:
+        event = db.query(Event).filter(Event.id == event_id).populate_existing().with_for_update().first()
+        if event is None:
+            raise HTTPException(status_code=404, detail="赛事不存在")
+        if confirmation.confirmation_name != f"{event.year}年{event.season}":
+            raise HTTPException(status_code=400, detail="确认赛事名称不匹配")
+
+        year, season = event.year, event.season
+        db.query(EventRegistration).filter(
+            EventRegistration.year == year, EventRegistration.season == season,
+        ).delete(synchronize_session="fetch")
+        db.query(Score).filter(Score.event_id == event_id).delete(synchronize_session="fetch")
+        db.query(EventConfiguration).filter(EventConfiguration.event_id == event_id).delete(synchronize_session="fetch")
+        deleted = db.query(Event).filter(
+            Event.id == event_id, Event.year == year, Event.season == season,
+        ).delete(synchronize_session="fetch")
+        if deleted != 1:
+            raise HTTPException(status_code=404, detail="赛事不存在")
+        db.commit()
+        return Response(status_code=204)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="删除赛事失败，请重试") from exc
+
+
 @router.get("", summary="获取赛事列表")
 def list_events(
     page: int = Query(1, ge=1),
@@ -118,7 +161,8 @@ def list_events(
     year: int = Query(None),
     season: str = Query(None),
     db: Session = Depends(get_db),
-    _auth: dict = Depends(verify_admin_token)
+    _auth: dict = Depends(verify_admin_token),
+    summary: bool = False,
 ):
     """获取赛事列表，支持按年度和季度筛选"""
     query = db.query(Event)
@@ -130,6 +174,42 @@ def list_events(
 
     total = query.count()
     skip = (page - 1) * page_size
+    if summary:
+        season_order = case(
+            (Event.season == "春季赛", 1), (Event.season == "夏季赛", 2),
+            (Event.season == "秋季赛", 3), (Event.season == "冬季赛", 4),
+            else_=0,
+        )
+        events = query.order_by(desc(Event.year), season_order.desc(), desc(Event.id)).offset(skip).limit(page_size).all()
+        registration_counts = {}
+        score_counts = {}
+        if events:
+            scopes = [(event.year, event.season) for event in events]
+            # 报名按项目记录计数，不按姓名去重；两个事实表独立聚合，避免JOIN乘积。
+            registration_counts = {
+                (year, season): count
+                for year, season, count in db.query(
+                    EventRegistration.year, EventRegistration.season, func.count(EventRegistration.id),
+                ).filter(
+                    tuple_(EventRegistration.year, EventRegistration.season).in_(scopes),
+                ).group_by(EventRegistration.year, EventRegistration.season).all()
+            }
+            score_counts = dict(db.query(Score.event_id, func.count(Score.id)).filter(
+                Score.event_id.in_([event.id for event in events]),
+            ).group_by(Score.event_id).all())
+        return {
+            "items": [
+                {
+                    "id": event.id, "year": event.year, "season": event.season,
+                    "created_at": event.created_at, "updated_at": event.updated_at,
+                    "registration_count": registration_counts.get((event.year, event.season), 0),
+                    "score_count": score_counts.get(event.id, 0),
+                }
+                for event in events
+            ],
+            "total": total, "page": page, "page_size": page_size,
+        }
+
     events = query.order_by(desc(Event.created_at), desc(Event.id)).offset(skip).limit(page_size).all()
 
     event_ids = [item.id for item in events]

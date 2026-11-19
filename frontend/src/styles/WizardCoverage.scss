@@ -1,0 +1,33 @@
+@use './managementControls' as controls;
+@use './feedback' as feedback;
+
+.wizard-coverage {
+  .coverage-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  h2 { font-size: 16px; font-weight: 600; color: #333; margin: 0; }
+  .coverage-help { font-size: 12px; color: #888; line-height: 1.5; margin: 0 0 12px; }
+  .empty-tip { @include feedback.empty-tip; margin: 12px 0; }
+  .failure-notice { @include feedback.failure-notice; margin: 12px 0; }
+  .btn-retry-inline { @include feedback.retry-button; }
+  .btn-refresh { @include controls.primary-button; }
+  button:disabled { @include controls.disabled-button; }
+  button:focus-visible { outline: 2px solid #667eea; outline-offset: 2px; }
+  .manage-table-wrap { @include controls.table-wrapper; margin-top: 12px; }
+  .manage-table { @include controls.table(650px); }
+  th, td { @include controls.table-cell; }
+  thead th { @include controls.table-heading; }
+  .coverage-filter { display: grid; gap: 4px; }
+  .coverage-filter select {
+    @include controls.cell-input;
+    min-width: 72px;
+    max-width: 160px;
+    box-sizing: border-box;
+  }
+  .coverage-filter select:focus-visible { outline: 2px solid #667eea; outline-offset: 1px; }
+  .filter-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .btn-clear-filters { @include controls.action-button(#eef1fb, #4c5684); }
+  .no-filter-matches { text-align: center; color: #666; }
+  .coverage-present { color: #26834a; font-weight: 600; }
+  @media (max-width: 640px) {
+    .failure-notice { flex-direction: column; align-items: flex-start; }
+  }
+}

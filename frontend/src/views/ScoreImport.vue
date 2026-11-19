@@ -1,38 +1,43 @@
 <template>
-  <div class="score-import-page safe-area">
-    <div class="page-header">
+  <div class="score-import-page safe-area" :class="{ 'wizard-mode': !!wizardEvent }">
+    <div v-if="!wizardEvent" class="page-header">
       <div class="header-top">
-        <button class="btn-back" @click="$router.push('/points-display')" title="返回积分排名">
+        <button type="button" class="btn-back" :disabled="operationBusy" @click="returnToEventList" title="返回赛事清单">
           ← 返回
         </button>
         <div>
           <h1>导入成绩</h1>
           <p class="subtitle">为赛事导入参赛者成绩</p>
         </div>
-        <button class="btn-add-event" @click="navigateToAddEvent" title="赛事配置">
-          ➕ 赛事配置
+        <button type="button" class="btn-add-event" data-test="score-complete" :disabled="operationBusy" @click="returnToEventList" title="完成并返回赛事清单">
+          完成
         </button>
       </div>
     </div>
 
     <div class="import-container">
-      <!-- 赛事选择 -->
-      <div class="section">
-        <h2 class="section-title">选择赛事</h2>
+      <!-- 清单入口和向导锁定赛事；未绑定的旧入口保留赛事选择。 -->
+      <div v-if="!wizardEvent" class="section">
+        <h2 class="section-title">{{ isManagedEvent ? '当前赛事' : '选择赛事' }}</h2>
         
-        <div v-if="events.length === 0" class="no-events-tip">
-          <p>📋 当前无赛事记录，请先添加赛事</p>
-          <button class="btn-add-event-inline" @click="navigateToAddEvent">
-            ➕ 赛事配置
-          </button>
+        <p v-if="isManagedEvent && managedEventLoading" role="status" data-test="managed-event-loading">正在读取指定赛事…</p>
+        <div v-else-if="isManagedEvent && managedEventError" class="import-feedback" role="alert" data-test="managed-event-error">
+          <p class="import-message import-message-error">{{ managedEventError }}</p>
+          <button type="button" class="btn-add-event-inline" data-test="managed-event-retry" :disabled="operationBusy || managedEventLoading" @click="loadManagedEvent">重试加载当前赛事</button>
+        </div>
+        <p v-else-if="isManagedEvent && selectedEvent" class="section-help" data-test="managed-locked-event">当前赛事：{{ selectedEvent.year }} {{ selectedEvent.season }}（已锁定）</p>
+        <div v-else-if="!isManagedEvent && events.length === 0" class="no-events-tip">
+          <p>📋 当前无赛事记录，请返回赛事清单创建或选择赛事</p>
+          <button type="button" class="btn-add-event-inline" @click="returnToEventList">返回赛事清单</button>
         </div>
 
-        <div v-else class="form-group">
+        <div v-else-if="!isManagedEvent" class="form-group">
           <label for="event-select">赛事 *</label>
           <select 
             id="event-select"
             v-model="selectedEventId" 
             class="form-input"
+            :disabled="operationBusy"
             @change="onEventSelected"
             required
           >
@@ -133,6 +138,14 @@
       <!-- 导入成绩 -->
       <div class="section" v-if="selectedEvent">
         <h2 class="section-title">导入成绩</h2>
+        <p v-if="wizardEvent" class="section-help" data-test="wizard-locked-event">当前赛事：{{ wizardEvent.year }} {{ wizardEvent.season }}（已锁定）</p>
+        <div v-if="lockedEventMode" class="import-feedback">
+          <p v-if="wizardLoading" role="status" class="import-message">正在完整加载报名、已有成绩和字典，请稍候…</p>
+          <div v-if="wizardDataError" class="import-message import-message-error" role="alert">
+            {{ wizardDataError }}
+            <button type="button" :disabled="wizardBusy" :data-test="wizardEvent ? 'wizard-retry-data' : 'managed-retry-data'" @click="reloadLockedData">重试加载导入校验数据</button>
+          </div>
+        </div>
 
         <div class="import-section">
           <div class="upload-area">
@@ -141,9 +154,10 @@
               ref="fileInput"
               @change="onFileSelected"
               accept=".xlsx,.xls"
+              :disabled="operationBusy || (lockedEventMode && !lockedDataReady)"
               hidden
             />
-            <button type="button" @click="$refs.fileInput.click()" class="btn-upload">
+            <button type="button" @click="$refs.fileInput.click()" class="btn-upload" :disabled="operationBusy || (lockedEventMode && !lockedDataReady)">
               选择 Excel 文件
             </button>
             <p class="upload-help">
@@ -210,7 +224,7 @@
                       <span v-else class="status-tag status-error" :title="score.__errors.join('；')">异常</span>
                     </td>
                     <td>
-                      <button @click="removeBatchScore(index)" class="btn-remove-small">
+                      <button @click="removeBatchScore(index)" class="btn-remove-small" :disabled="operationBusy">
                         删除
                       </button>
                     </td>
@@ -234,7 +248,9 @@
         <div class="import-actions">
           <button 
             type="button"
-            @click="$router.push('/points-display')"
+            v-if="!wizardEvent"
+            :disabled="operationBusy"
+            @click="returnToEventList"
             class="btn-cancel"
           >
             取消
@@ -244,16 +260,23 @@
             @click="submitImport"
             v-if="batchScores.length > 0"
             class="btn-submit"
-            :disabled="importLoading || invalidScoreCount > 0"
+            :disabled="operationBusy || invalidScoreCount > 0 || (lockedEventMode && !lockedDataReady)"
           >
             {{ importLoading ? '导入中...' : `确认导入 (${validScoreCount}条)` }}
           </button>
         </div>
       </div>
 
+      <div v-if="wizardEvent && selectedEvent" class="section">
+        <p class="section-help">也可明确使用本场已保存的成绩继续。已选择文件或仍有待导草稿时，请先完成导入或清除文件。</p>
+        <div class="import-actions">
+          <button type="button" class="btn-submit" data-test="wizard-use-existing" :disabled="!canUseExistingScores" @click="useExistingScores">使用已保存成绩继续（{{ managedScores.length }}条）</button>
+          <button v-if="uploadedFileName || batchScores.length" type="button" class="btn-cancel" data-test="wizard-clear-draft" :disabled="wizardBusy" @click="clearUpload">清除待导文件</button>
+        </div>
+      </div>
       <!-- 成绩管理 -->
       <ScoreManagePanel
-        v-if="selectedEvent"
+        v-if="selectedEvent && !wizardEvent && (!isManagedEvent || lockedDataReady)"
         :scores="managedScores"
         :loading="managedScoresLoading"
         :bow-types="bowTypes"
@@ -281,7 +304,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { eventAPI, eventRegistrationAPI, scoreAPI } from '@/api'
 import { useDictionaries } from '@/composables/useDictionaries'
@@ -293,11 +316,28 @@ import {
   recalculateDuplicateFlags
 } from '@/utils/scoreImportParsing'
 import ScoreManagePanel from './ScoreManagePanel.vue'
+import { getAllPages } from '@/utils/pagination'
 
+const props = defineProps({
+  wizardEvent: { type: Object, default: null },
+  managedEventId: { type: [String, Number, Array], default: undefined },
+})
+const emit = defineEmits(['complete', 'busy-change'])
 const router = useRouter()
 const events = ref([])
-const selectedEventId = ref('')
-const selectedEvent = ref(null)
+const isManagedEvent = computed(() => !props.wizardEvent && props.managedEventId !== undefined)
+const lockedEventMode = computed(() => !!props.wizardEvent || isManagedEvent.value)
+const managedEventId = computed(() => {
+  const value = props.managedEventId
+  if (typeof value === 'number') return Number.isSafeInteger(value) && value > 0 ? value : null
+  if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) return null
+  const id = Number(value)
+  return Number.isSafeInteger(id) ? id : null
+})
+const managedEventLoading = ref(false)
+const managedEventError = ref('')
+const selectedEventId = ref(props.wizardEvent?.id || '')
+const selectedEvent = ref(props.wizardEvent ? { ...props.wizardEvent } : null)
 const batchScores = ref([])
 const importLoading = ref(false)
 const pageMsg = useMessage()
@@ -310,6 +350,28 @@ const showEventConfig = ref(false)
 const managedScores = ref([])
 const managedScoresLoading = ref(false)
 const eventRegistrations = ref([])
+const wizardCompleted = ref(false)
+const parsingLoading = ref(false)
+const registrationsLoading = ref(false)
+const dictionariesLoading = ref(false)
+const registrationsReady = ref(false)
+const scoresReady = ref(false)
+const dictionariesReady = ref(false)
+const registrationsError = ref('')
+const scoresError = ref('')
+const dictionariesError = ref('')
+let activeReader = null
+let disposed = false
+const operationBusy = computed(() => parsingLoading.value || importLoading.value)
+const wizardLoading = computed(() => managedEventLoading.value || managedScoresLoading.value || registrationsLoading.value || dictionariesLoading.value)
+const wizardBusy = computed(() => operationBusy.value || wizardLoading.value)
+const wizardDataError = computed(() => [dictionariesError.value, registrationsError.value, scoresError.value].filter(Boolean).join('；'))
+const lockedDataReady = computed(() => lockedEventMode.value && !wizardCompleted.value && !!selectedEventId.value &&
+  (!isManagedEvent.value || (!managedEventError.value && selectedEvent.value?.id === managedEventId.value && selectedEventId.value === managedEventId.value)) &&
+  !wizardLoading.value && !wizardDataError.value && registrationsReady.value && scoresReady.value && dictionariesReady.value)
+const canUseExistingScores = computed(() => !!props.wizardEvent && lockedDataReady.value && !operationBusy.value && managedScores.value.length > 0 && !uploadedFileName.value && batchScores.value.length === 0)
+watch(wizardBusy, busy => { if (props.wizardEvent && !disposed) emit('busy-change', busy) }, { immediate: true, flush: 'sync' })
+onBeforeUnmount(() => { disposed = true; activeReader?.abort(); if (props.wizardEvent) emit('busy-change', false) })
 
 // 字典数据
 const {
@@ -440,11 +502,18 @@ const selectLatestEvent = async () => {
 
 // 加载字典数据
 const loadDictionaries = async () => {
+  dictionariesLoading.value = true
+  dictionariesReady.value = false
+  dictionariesError.value = ''
   try {
-    await fetchDictionaries()
+    const data = await fetchDictionaries()
+    if (disposed) return
+    if (isManagedEvent.value && ['bowTypes', 'distances', 'competitionFormats', 'competitionGenderGroups', 'competitionGroups'].some(key => !Array.isArray(data[key]))) throw new Error('字典数据不完整')
+    dictionariesReady.value = true
   } catch (error) {
+    dictionariesError.value = '加载字典数据失败，请重试'
     console.error('加载字典数据失败:', error)
-  }
+  } finally { dictionariesLoading.value = false }
 }
 
 // 加载赛事列表
@@ -480,13 +549,19 @@ const loadManagedScores = async () => {
   }
 
   managedScoresLoading.value = true
+  scoresReady.value = false
+  scoresError.value = ''
   try {
     const pageSize = 100
     let page = 1
     let total = 0
     const all = []
 
-    do {
+    if (lockedEventMode.value) {
+      all.push(...await getAllPages(scoreAPI.getList, { event_id: selectedEventId.value }))
+      if (disposed) return
+      if (isManagedEvent.value && all.some(item => item.event_id !== selectedEventId.value)) throw new Error('已有成绩不属于当前赛事')
+    } else do {
       const response = await scoreAPI.getList({
         page,
         page_size: pageSize,
@@ -514,7 +589,9 @@ const loadManagedScores = async () => {
       })
     })
     managedScores.value = Array.from(uniqById.values())
+    scoresReady.value = true
   } catch (error) {
+    scoresError.value = '加载已有成绩失败，请重试'
     console.error('加载成绩管理数据失败:', error)
     pageMsg.show('error', '加载成绩失败')
     managedScores.value = []
@@ -524,29 +601,88 @@ const loadManagedScores = async () => {
 }
 
 const loadEventRegistrations = async () => {
+  registrationsReady.value = false
+  registrationsError.value = ''
   if (!selectedEvent.value?.year || !selectedEvent.value?.season) {
     eventRegistrations.value = []
+    registrationsError.value = '缺少赛事年度或赛季，无法加载报名数据'
     return
   }
-
+  registrationsLoading.value = true
   try {
-    const response = await eventRegistrationAPI.getList({
-      page: 1,
-      page_size: 1000,
-      year: selectedEvent.value.year,
-      season: selectedEvent.value.season
-    })
-    eventRegistrations.value = response.items || []
+    const params = { year: selectedEvent.value.year, season: selectedEvent.value.season }
+    if (lockedEventMode.value) {
+      const records = await getAllPages(eventRegistrationAPI.getList, params)
+      if (disposed) return
+      if (isManagedEvent.value && records.some(item => item.year !== params.year || item.season !== params.season)) throw new Error('报名记录不属于当前赛事')
+      eventRegistrations.value = records
+    } else {
+      const response = await eventRegistrationAPI.getList({ page: 1, page_size: 1000, ...params })
+      eventRegistrations.value = response.items || []
+    }
+    registrationsReady.value = true
   } catch (error) {
+    registrationsError.value = '加载报名数据失败，请重试'
     console.error('加载报名数据失败:', error)
     pageMsg.show('error', '加载报名数据失败')
     eventRegistrations.value = []
-  }
+  } finally { registrationsLoading.value = false }
 }
 
+const loadWizardData = async () => {
+  if (!props.wizardEvent || wizardBusy.value || disposed) return
+  await Promise.all([loadDictionaries(), loadEventRegistrations(), loadManagedScores()])
+}
+// A managed URL never falls back to a list or a different event, even on 404.
+const loadManagedEvent = async () => {
+  if (!isManagedEvent.value || wizardBusy.value || disposed) return
+  managedEventLoading.value = true
+  managedEventError.value = ''
+  pageMsg.clear()
+  selectedEvent.value = null
+  selectedEventId.value = ''
+  managedScores.value = []
+  eventRegistrations.value = []
+  registrationsReady.value = false
+  scoresReady.value = false
+  dictionariesReady.value = false
+  const id = managedEventId.value
+  try {
+    if (id === null) throw new Error('赛事编号无效，请从赛事清单重新进入')
+    const detail = await eventAPI.getDetail(id)
+    if (disposed) return
+    if (detail?.id !== id || !Number.isSafeInteger(detail.year) || detail.year < 1 ||
+        !['春季赛', '夏季赛', '秋季赛', '冬季赛'].includes(detail.season) || !Array.isArray(detail.configurations)) {
+      throw new Error('返回赛事与指定赛事不一致或信息不完整，已禁止导入')
+    }
+    selectedEvent.value = detail
+    selectedEventId.value = id
+    showEventConfig.value = false
+    await Promise.all([loadDictionaries(), loadEventRegistrations(), loadManagedScores()])
+  } catch (error) {
+    if (!disposed) managedEventError.value = typeof error?.detail === 'string' ? error.detail : error?.message || '加载指定赛事失败，请重试'
+    selectedEvent.value = null
+    selectedEventId.value = ''
+  } finally { managedEventLoading.value = false }
+}
+const reloadLockedData = () => props.wizardEvent ? loadWizardData() : loadManagedEvent()
+
+const clearUpload = () => {
+  if (operationBusy.value) return
+  batchScores.value = []
+  uploadedFileName.value = ''
+  parseMsg.clear()
+  if (fileInput.value) fileInput.value.value = ''
+}
+const useExistingScores = () => {
+  if (!canUseExistingScores.value || disposed) return
+  wizardCompleted.value = true
+  emit('complete')
+}
 
 // 赛事选择
 const onEventSelected = async () => {
+  if (isManagedEvent.value || operationBusy.value) return
   if (!selectedEventId.value) {
     selectedEvent.value = null
     showEventConfig.value = false
@@ -568,40 +704,32 @@ const onEventSelected = async () => {
 
 // 文件选择
 const onFileSelected = async (event) => {
+  if (operationBusy.value || (lockedEventMode.value && !lockedDataReady.value) || disposed) return
   const file = event.target.files[0]
   if (!file) return
-
   uploadedFileName.value = file.name
+  batchScores.value = []
   parseMsg.clear()
-
-  const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls')
-  if (!isExcel) {
-    parseMsg.errorMsg.value = '请上传 .xlsx 或 .xls 格式的文件'
-    return
-  }
-
-  const reader = new FileReader()
-  reader.onerror = () => {
-    parseMsg.errorMsg.value = '文件读取失败，请重试'
-  }
-
-  if (isExcel) {
-    reader.onload = async (e) => {
-      try {
-        const XLSX = await import('xlsx')
-        const data = new Uint8Array(e.target.result)
-        const workbook = XLSX.read(data, { type: 'array' })
-        const sheetName = workbook.SheetNames[0]
-        const worksheet = workbook.Sheets[sheetName]
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
-        parseExcelData(jsonData)
-      } catch (error) {
-        parseMsg.errorMsg.value = 'Excel 文件解析失败：' + error.message
-      }
-    }
-    reader.readAsArrayBuffer(file)
-    return
-  }
+  const isExcel = /\.xlsx?$/i.test(file.name)
+  if (!isExcel) { parseMsg.errorMsg.value = '请上传 .xlsx 或 .xls 格式的文件'; return }
+  parsingLoading.value = true
+  try {
+    const buffer = await new Promise((resolve, reject) => {
+      activeReader = new FileReader()
+      activeReader.onload = e => resolve(e.target.result)
+      activeReader.onerror = () => reject(new Error('文件读取失败，请重试'))
+      activeReader.onabort = () => reject(new Error('文件读取已取消'))
+      activeReader.readAsArrayBuffer(file)
+    })
+    if (disposed) return
+    const XLSX = await import('xlsx')
+    if (disposed) return
+    const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' })
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+    parseExcelData(XLSX.utils.sheet_to_json(worksheet, { header: 1 }))
+  } catch (error) {
+    if (!disposed) parseMsg.errorMsg.value = 'Excel 文件解析失败：' + error.message
+  } finally { activeReader = null; parsingLoading.value = false }
 }
 
 // 解析 Excel 数据
@@ -629,6 +757,7 @@ const parseExcelData = (jsonData) => {
 }
 
 const removeBatchScore = (index) => {
+  if (operationBusy.value) return
   batchScores.value = recalculateDuplicateFlags(
     batchScores.value.filter((_, itemIndex) => itemIndex !== index),
     managedScores.value
@@ -637,6 +766,7 @@ const removeBatchScore = (index) => {
 
 // 提交导入
 const submitImport = async () => {
+  if (operationBusy.value || disposed || (lockedEventMode.value && !lockedDataReady.value)) return
   if (batchScores.value.length === 0) {
     parseMsg.errorMsg.value = '请先上传并解析成绩文件'
     return
@@ -647,6 +777,10 @@ const submitImport = async () => {
     return
   }
 
+  if (lockedEventMode.value && batchScores.value.some(item => item.event_id !== selectedEventId.value)) {
+    parseMsg.errorMsg.value = '待导成绩与当前赛事不一致，请重新选择文件'
+    return
+  }
   parseMsg.clear()
   importLoading.value = true
   submitMsg.clear()
@@ -672,6 +806,7 @@ const submitImport = async () => {
     submittedScores = Array.from(dedupedScoresMap.values())
 
     await scoreAPI.batchImport({ scores: submittedScores })
+    if (disposed) return
     const duplicateCount = duplicateScoreCount.value
     const inFileDuplicateCount = inFileDuplicateScoreCount.value
     const inFileDuplicateToRemove = inFileDuplicateToRemoveCount.value
@@ -688,9 +823,16 @@ const submitImport = async () => {
       fileInput.value.value = ''
     }
 
-    // 导入成功后保持在当前页，并刷新当前赛事成绩管理区
-    await loadManagedScores()
+    if (props.wizardEvent) {
+      if (!disposed) { wizardCompleted.value = true; emit('complete') }
+      return
+    }
+    if (!disposed) {
+      try { await router.push('/event-list') }
+      catch { submitMsg.show('error', '成绩已保存，但返回赛事清单失败，请点击完成重试') }
+    }
   } catch (error) {
+    if (disposed) return
     let errorMsg = '导入失败，请重试'
     
     console.error('Import error:', error)
@@ -764,19 +906,22 @@ const submitImport = async () => {
   }
 }
 
-// 导航到添加赛事页面
-const navigateToAddEvent = () => {
-  router.push('/event-add')
+const returnToEventList = () => {
+  if (!operationBusy.value) router.push('/event-list')
 }
 
 onMounted(() => {
   pageMsg.clear()
   parseMsg.clear()
   submitMsg.clear()
-  loadDictionaries()
-  loadEvents()
+  if (props.wizardEvent) loadWizardData()
+  else if (isManagedEvent.value) loadManagedEvent()
+  else { loadDictionaries(); loadEvents() }
 })
 </script>
 
 
 <style scoped lang="scss" src="@/styles/ScoreImport.scss" />
+<style scoped>
+.score-import-page.wizard-mode { padding-bottom: 0; background: transparent; }
+</style>

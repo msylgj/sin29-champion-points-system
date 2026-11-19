@@ -237,7 +237,7 @@ describe('rule management page', () => {
     await flush()
     expect(root.querySelector('[data-test=rule-history]').textContent).toContain('规则1')
     root.querySelector('.btn-back').click()
-    expect(routerPush).toHaveBeenCalledWith('/event-add')
+    expect(routerPush).toHaveBeenCalledWith('/event-list')
   })
 
   it('uses score-list table, select and action styles for all nested rule controls', async () => {
@@ -366,6 +366,7 @@ describe('rule management page', () => {
     await flush()
     expect(root.querySelector('[data-test=rule-draft]')).toBeNull()
     expect(root.textContent).toContain('新规则已保存')
+    expect(routerPush).toHaveBeenCalledExactlyOnceWith('/event-list')
     const saved = root.querySelector('[data-test=rule-history]')
     expect(saved.querySelector('input, select')).toBeNull()
     expect(tableRows(saved, '排位赛排名积分')[0]).toEqual(['1', '42'])
@@ -490,6 +491,7 @@ describe('rule management page', () => {
     expect(panel.querySelector('h2').textContent).toContain('服务端恢复版本')
     expect(tableRows(panel, '排位赛排名积分')).toEqual([['1', '77']])
     expect(root.querySelector('.success-message').textContent).toContain('已恢复持续生效')
+    expect(routerPush).toHaveBeenCalledExactlyOnceWith('/event-list')
     expect(root.querySelector('[data-test=delete-rule]').disabled).toBe(true)
   })
 

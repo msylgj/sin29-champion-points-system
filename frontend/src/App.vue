@@ -1,6 +1,8 @@
 <template>
   <div id="app" class="app-container">
-    <router-view v-if="!awaitingAdminAuth" />
+    <router-view v-if="!awaitingAdminAuth" v-slot="{ Component }">
+      <component :is="Component" :key="viewKey" />
+    </router-view>
     <section v-else class="auth-redirecting" role="status">
       <p>管理验证已失效，正在返回积分首页重新验证口令…</p>
       <div class="auth-redirect-actions">
@@ -19,6 +21,10 @@ import { adminAuthRequest, requestAdminAuthentication } from '@/utils/adminAuth'
 const route = useRoute()
 const router = useRouter()
 const awaitingAdminAuth = computed(() => !!adminAuthRequest.value && !!route.meta?.requiresAdminAuth)
+// A different event must get a fresh form, including its local upload draft.
+const viewKey = computed(() => route.meta?.keyedByEvent
+  ? JSON.stringify([route.path, Object.hasOwn(route.query, 'event_id'), route.query.event_id])
+  : route.path)
 const homeHref = computed(() => router.resolve('/points-display').href)
 </script>
 

@@ -58,7 +58,7 @@ describe('valid administrator JWT UX checks', () => {
 })
 
 describe('safe fullPath redirects', () => {
-  it.each(['/event-add', '/score-import?year=2026#scores', '/scoring-rules?version=2#config'])('preserves permitted path/query/hash %s', target => {
+  it.each(['/event-add', '/score-import?year=2026#scores', '/scoring-rules?version=2#config', '/work-wizard', '/event-list'])('preserves permitted path/query/hash %s', target => {
     expect(auth.sanitizeAdminRedirect(target)).toBe(target)
   })
 
@@ -68,7 +68,7 @@ describe('safe fullPath redirects', () => {
     '/%2f%2fevil.test', '/event-add/../scoring-rules', '/score-import%3fnext=1', '/score-import\\evil',
     '/\\evil.test', '/scoring-rules\n?x=1', ' /scoring-rules',
   ])('rejects external/unrecognized/encoded paths %s', target => {
-    expect(auth.sanitizeAdminRedirect(target)).toBe('/score-import')
+    expect(auth.sanitizeAdminRedirect(target)).toBe('/event-list')
   })
 })
 
@@ -86,7 +86,7 @@ describe('reactive and persisted authentication recovery', () => {
     sessionStorage.setItem('admin_auth_redirect', '//evil.test')
     vi.resetModules()
     const restored = await import('./adminAuth.js')
-    expect(restored.adminAuthRequest.value.redirect).toBe('/score-import')
+    expect(restored.adminAuthRequest.value.redirect).toBe('/event-list')
   })
 
   it('publishes without a registered router and clears both old marker keys on cancel', async () => {

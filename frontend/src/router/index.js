@@ -1,9 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getValidAdminToken, markAdminAuthenticationRequired, registerAdminAuthRouter } from '@/utils/adminAuth'
 
+const EventList = () => import('@/views/EventList.vue')
+const eventProps = route => ({ managedEventId: route.query.event_id })
 const EventAdd = () => import('@/views/EventAdd.vue')
 const ScoreImport = () => import('@/views/ScoreImport.vue')
 const ScoringRules = () => import('@/views/ScoringRules.vue')
+const WorkWizard = () => import('@/views/WorkWizard.vue')
 const PointsDisplay = () => import('@/views/PointsDisplay.vue')
 
 const routes = [
@@ -18,10 +21,17 @@ const routes = [
     meta: { title: '积分排名' }
   },
   {
+    path: '/event-list',
+    name: 'EventList',
+    component: EventList,
+    meta: { title: '赛事清单', requiresAdminAuth: true }
+  },
+  {
     path: '/event-add',
     name: 'EventAdd',
     component: EventAdd,
-    meta: { title: '赛事配置', requiresAdminAuth: true }
+    props: eventProps,
+    meta: { title: '赛事配置', requiresAdminAuth: true, keyedByEvent: true }
   },
   {
     path: '/scoring-rules',
@@ -30,10 +40,17 @@ const routes = [
     meta: { title: '积分规则管理', requiresAdminAuth: true }
   },
   {
+    path: '/work-wizard',
+    name: 'WorkWizard',
+    component: WorkWizard,
+    meta: { title: '成绩导入向导', requiresAdminAuth: true }
+  },
+  {
     path: '/score-import',
     name: 'ScoreImport',
     component: ScoreImport,
-    meta: { title: '导入成绩', requiresAdminAuth: true }
+    props: eventProps,
+    meta: { title: '导入成绩', requiresAdminAuth: true, keyedByEvent: true }
   }
 ]
 

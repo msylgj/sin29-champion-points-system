@@ -4,9 +4,10 @@
       <section ref="panel" class="app-confirm-dialog" role="dialog" aria-modal="true" :aria-labelledby="titleId" :aria-describedby="messageId" :aria-busy="busy" tabindex="-1">
         <h3 :id="titleId">{{ title }}</h3>
         <p :id="messageId" class="app-confirm-tip">{{ message }}</p>
+        <slot />
         <div class="app-confirm-actions">
           <button ref="cancelButton" type="button" class="app-confirm-cancel" data-test="cancel-action" :disabled="busy" @click="cancel">{{ cancelText }}</button>
-          <button type="button" class="app-confirm-submit" :class="{ danger }" data-test="confirm-action" :disabled="busy" @click="confirm">{{ confirmText }}</button>
+          <button type="button" class="app-confirm-submit" :class="{ danger }" data-test="confirm-action" :disabled="busy || confirmDisabled" @click="confirm">{{ confirmText }}</button>
         </div>
       </section>
     </div>
@@ -24,7 +25,9 @@ const props = defineProps({
   cancelText: { type: String, default: '取消' },
   danger: Boolean,
   busy: Boolean,
+  confirmDisabled: Boolean,
   returnFocus: { type: Object, default: null },
+  fallbackFocus: { type: Object, default: null },
 })
 const emit = defineEmits(['confirm', 'cancel'])
 const id = useId()
@@ -46,7 +49,7 @@ const canFocus = element => {
   return true
 }
 const restoreFocus = original => {
-  const target = canFocus(original) ? original : document.querySelector('[data-test="reload-rules"]')
+  const target = canFocus(original) ? original : props.fallbackFocus || document.querySelector('[data-test="reload-rules"]')
   if (!canFocus(target)) return false
   target.focus()
   return document.activeElement === target
@@ -56,7 +59,7 @@ const focusDefault = () => {
   if (props.busy) panel.value?.focus()
   else cancelButton.value?.focus()
 }
-const confirm = () => { if (props.open && !props.busy) emit('confirm') }
+const confirm = () => { if (props.open && !props.busy && !props.confirmDisabled) emit('confirm') }
 const cancel = () => { if (props.open && !props.busy) emit('cancel') }
 const handleKeydown = event => {
   if (!props.open) return
@@ -66,13 +69,14 @@ const handleKeydown = event => {
     cancel()
   } else if (event.key === 'Tab') {
     event.preventDefault()
-    const buttons = [...(panel.value?.querySelectorAll('button:not(:disabled)') || [])]
-    if (!buttons.length) { panel.value?.focus(); return }
-    const current = buttons.indexOf(document.activeElement)
+    const controls = props.busy ? [] : [...(panel.value?.querySelectorAll('button, input, select, textarea, a[href], [tabindex]') || [])]
+      .filter(control => control.tabIndex >= 0 && canFocus(control))
+    if (!controls.length) { panel.value?.focus(); return }
+    const current = controls.indexOf(document.activeElement)
     const next = event.shiftKey
-      ? (current <= 0 ? buttons.length - 1 : current - 1)
-      : (current + 1) % buttons.length
-    buttons[next].focus()
+      ? (current <= 0 ? controls.length - 1 : current - 1)
+      : (current + 1) % controls.length
+    controls[next].focus()
   }
 }
 const containFocus = event => {
