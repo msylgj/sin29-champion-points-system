@@ -38,6 +38,7 @@
                   <div class="row-actions">
                     <button type="button" class="btn-secondary" @click="openEvent('/event-add', event.id)">修改赛事配置</button>
                     <button type="button" class="btn-primary" @click="openEvent('/score-import', event.id)">导入成绩</button>
+                    <button type="button" class="btn-secondary" :aria-label="'生成' + eventName(event) + '记分纸'" @click="openScorecard(event, $event.currentTarget)">生成记分纸</button>
                     <button type="button" class="btn-delete" :aria-label="'删除' + eventName(event)" @click="askDelete(event, $event.currentTarget)">删除</button>
                   </div>
                 </td>
@@ -52,6 +53,8 @@
         </nav>
       </template>
     </section>
+    <ScorecardDialog v-if="scorecard" :event="scorecard.event"
+      :state="getScorecardState(scorecard.event.id)" :opener="scorecard.opener" @close="scorecard = null" />
     <AppConfirmDialog :open="!!deleteTarget" title="删除赛事"
       :message="deleteTarget ? '删除赛事将同步清理对应的报名信息、成绩和赛事配置，且无法撤销。是否确定要删除「' + deleteTarget.name + '」？' : ''"
       confirm-text="确定" danger :busy="deleting" :confirm-disabled="!canDelete"
@@ -70,10 +73,13 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { eventAPI } from '@/api'
 import AppConfirmDialog from '@/components/AppConfirmDialog.vue'
+import ScorecardDialog from '@/components/ScorecardDialog.vue'
+import { releasePdfUrl } from '@/utils/scorecardDownload'
+import { deleteScorecardDraft } from '@/utils/scorecardDraftStorage'
 
 const router = useRouter()
 const pageSize = 20
@@ -84,6 +90,8 @@ const events = ref([])
 const loading = ref(false)
 const error = ref('')
 const createButton = ref(null)
+const scorecard = ref(null)
+const scorecardStates = new Map()
 const deleteTarget = ref(null)
 const typedName = ref('')
 const deleting = ref(false)
@@ -93,8 +101,32 @@ const canDelete = computed(() => !!deleteTarget.value && typedName.value === del
 let disposed = false
 
 const eventName = event => event.year + '年' + event.season
+function openScorecard(event, opener) {
+  if (deleteTarget.value || scorecard.value || loading.value) return
+  scorecard.value = { event, opener }
+}
+
+function getScorecardState(eventId) {
+  if (!scorecardStates.has(eventId)) {
+    scorecardStates.set(eventId, reactive({
+      file: null, pages: [], sourceGroups: [], groups: [], planned: false, planError: '', rankingUrl: '', zipUrl: '',
+      draftLoaded: false, workbookSaved: false, pendingSaves: 0, storageError: '', saveRevision: 0,
+    }))
+  }
+  return scorecardStates.get(eventId)
+}
+
+function discardScorecardState(eventId) {
+  const state = scorecardStates.get(eventId)
+  if (!state) return
+  for (const url of [state.rankingUrl, state.zipUrl, ...state.groups.map(group => group.url)]) {
+    if (url) releasePdfUrl(url)
+  }
+  scorecardStates.delete(eventId)
+}
+
 function askDelete(event, opener) {
-  if (deleteTarget.value || deleting.value || loading.value) return
+  if (deleteTarget.value || scorecard.value || deleting.value || loading.value) return
   typedName.value = ''
   deleteError.value = ''
   deletedName.value = ''
@@ -118,7 +150,10 @@ async function confirmDelete() {
   } finally {
     deleting.value = false
   }
+  // The server deletion succeeded; only then remove the matching browser draft.
+  void deleteScorecardDraft(id).catch(() => {})
   if (disposed) return
+  discardScorecardState(id)
   events.value = events.value.filter(event => event.id !== id)
   deleteTarget.value = null
   deletedName.value = name
@@ -149,7 +184,10 @@ async function loadEvents(targetPage) {
 
 const openEvent = (path, id) => router.push({ path, query: { event_id: String(id) } })
 onMounted(() => loadEvents(1))
-onBeforeUnmount(() => { disposed = true })
+onBeforeUnmount(() => {
+  disposed = true
+  for (const eventId of scorecardStates.keys()) discardScorecardState(eventId)
+})
 </script>
 
 <style scoped lang="scss" src="@/styles/EventList.scss" />

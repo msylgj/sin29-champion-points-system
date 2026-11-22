@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import app.models  # noqa: F401
 from app.config import get_settings
-from app.routers import scores, events, event_configuration, event_registration, dictionary, auth, scoring_rules
+from app.routers import scores, events, event_configuration, event_registration, dictionary, auth, scoring_rules, ranking_scorecards, elimination_scorecards
 from app.database import engine
 from app.bootstrap import initialize_database
 
@@ -42,6 +42,8 @@ app.include_router(event_configuration.router, tags=["赛事配置管理"])
 app.include_router(event_registration.router, tags=["赛事报名管理"])
 app.include_router(dictionary.router, tags=["字典管理"])
 app.include_router(scoring_rules.router, tags=["积分规则"])
+app.include_router(ranking_scorecards.router, tags=["记分纸"])
+app.include_router(elimination_scorecards.router, tags=["记分纸"])
 
 
 @app.get("/")

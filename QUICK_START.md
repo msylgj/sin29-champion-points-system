@@ -58,7 +58,7 @@ docker compose down
    psql -h 127.0.0.1 -U archery_user -d archery_db -v ON_ERROR_STOP=1 -f database/init.sql
    ```
 
-2. 在一个终端中启动 FastAPI。后端直接从进程环境读取配置；请按实际账号、口令、地址和数据库设置连接串。
+2. 在一个终端中启动 FastAPI。后端直接从进程环境读取配置；请按实际账号、口令、地址和数据库设置连接串。排位记分纸生成需要中文 TrueType 字体；Debian/Ubuntu 可安装 `fonts-droid-fallback`（容器镜像已安装）。
 
    ```bash
    cd backend

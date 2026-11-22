@@ -15,6 +15,14 @@
 
 除积分排名外均需管理员验证。首页的「管理」入口进入赛事清单。清单的报名人数按报名记录计，同一选手参加不同项目分别计入；成绩条数为已保存的成绩记录数。删除赛事须输入或粘贴完整赛事名称；确认后同步清理该赛事的报名、成绩和配置，无法撤销。赛事配置保存、成绩导入和积分规则变更成功后回到赛事清单；向导完成后仍返回积分排名。口令验证签发管理员 JWT；管理凭证失效后返回积分首页重新验证，成功后回到原管理地址。认证与运行配置见[快速开始](QUICK_START.md)。
 
+### 生成记分纸
+
+在赛事清单点击对应赛事的「生成记分纸」，导入比赛站位表（.xlsx）。支持多日工作表，每个分组以组名和 A/B/C/D 的「靶位号／俱乐部／姓名」列组织。无明确轮次时按两轮生成排位记分纸，每靶每轮一页 A4 横向 PDF，一批最多 300 页。排位和淘汰赛 PDF 的赛事抬头以所选系统赛事为准，页脚年月取实际生成时的北京时间；站位表中的赛事标题和比赛日期不覆盖这些信息。
+
+系统按弓种、距离和组别统计淘汰赛人数，空站位不计。各组需逐轮填写 1–99 的起止靶号（含两端），可先生成本组 PDF；全部可比赛的分组填好后，点击「生成淘汰赛手卡」下载包含各组 PDF 的 ZIP。系统按签表安排轮空；共靶标记左、右。1/64、1/32 轮另页排版；某选手在该页涉及的早轮均轮空时，不生成这张早轮手卡。混合组手卡标题只显示距离和弓种，复合弓手卡显示「累计」。
+
+站位表原文件、解析结果和靶位配置按赛事保存在当前浏览器。刷新页面并重新打开同一赛事的弹窗即可恢复；不跨浏览器同步，生成的 PDF 和 ZIP 下载链接不随草稿保存。重传时保留未变化分组的靶号，名单或人数变化的分组需重新填写，移除的分组不再显示。站位表在浏览器解析，保存草稿和生成文件不修改赛事数据。
+
 ## 业务约定
 
 - **赛事与报名**：赛事按年度和赛季唯一。赛事配置按性别分组、弓种及距离区分。报名仅支持 Excel，按年度、赛季、姓名、距离及比赛弓种唯一。报名导入、编辑或删除后自动同步个人人数；团体人数按男子、女子、混合组维护，混双仅使用混合组。无瞄弓报名的积分弓种可选光弓、美猎弓或传统弓；其他报名的积分弓种与比赛弓种一致。
@@ -32,6 +40,7 @@
 | 公开 | `POST /auth/login`、`GET /events/years`、`GET /dictionaries`、`GET /scores/annual-ranking/{year}/{bow_type}` |
 | 管理 | `GET /events`（`summary=true` 返回分页摘要及统计）、`GET /events/{event_id}`、`POST /events/with-configs`、`DELETE /events/{event_id}` |
 | 管理 | `POST /event-configurations`、`PUT /event-configurations/{config_id}`、`DELETE /event-configurations/{config_id}` |
+| 管理 | `POST /events/{event_id}/ranking-scorecards`、`GET /events/{event_id}/elimination-rounds`、`POST /events/{event_id}/elimination-scorecards` |
 | 管理 | `GET /event-registrations`、`POST /event-registrations/batch/import`、`PUT /event-registrations/{registration_id}`、`DELETE /event-registrations/{registration_id}` |
 | 管理 | `GET /scores`、`POST /scores/batch/import`、`PUT /scores/{score_id}`、`DELETE /scores/{score_id}` |
 | 管理 | `GET /scoring-rules`、`POST /scoring-rules`、`DELETE /scoring-rules/{rule_id}` |

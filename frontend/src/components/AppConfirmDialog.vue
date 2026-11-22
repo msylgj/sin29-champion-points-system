@@ -1,12 +1,13 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="app-confirm-mask" data-test="confirm-mask" @click.self="cancel">
-      <section ref="panel" class="app-confirm-dialog" role="dialog" aria-modal="true" :aria-labelledby="titleId" :aria-describedby="messageId" :aria-busy="busy" tabindex="-1">
+      <section ref="panel" class="app-confirm-dialog" :class="{ 'app-confirm-dialog-wide': wide }" role="dialog" aria-modal="true" :aria-labelledby="titleId" :aria-describedby="messageId" :aria-busy="busy" tabindex="-1">
         <h3 :id="titleId">{{ title }}</h3>
         <p :id="messageId" class="app-confirm-tip">{{ message }}</p>
         <slot />
         <div class="app-confirm-actions">
           <button ref="cancelButton" type="button" class="app-confirm-cancel" data-test="cancel-action" :disabled="busy" @click="cancel">{{ cancelText }}</button>
+          <slot name="extra-actions" />
           <button type="button" class="app-confirm-submit" :class="{ danger }" data-test="confirm-action" :disabled="busy || confirmDisabled" @click="confirm">{{ confirmText }}</button>
         </div>
       </section>
@@ -24,6 +25,7 @@ const props = defineProps({
   confirmText: { type: String, default: '确认' },
   cancelText: { type: String, default: '取消' },
   danger: Boolean,
+  wide: Boolean,
   busy: Boolean,
   confirmDisabled: Boolean,
   returnFocus: { type: Object, default: null },
@@ -118,6 +120,21 @@ onBeforeUnmount(() => { disposed = true; release() })
 
 .app-confirm-mask { @include feedback.dialog-mask; }
 .app-confirm-dialog { @include feedback.dialog-panel; }
+.app-confirm-dialog-wide {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 70vw;
+  height: 70vh;
+  height: 70dvh;
+  max-width: 100%;
+  > .app-confirm-actions { flex-shrink: 0; flex-wrap: wrap; }
+  @media (max-width: 640px) {
+    width: 100%;
+    height: 88vh;
+    height: 88dvh;
+  }
+}
 .app-confirm-dialog h3 { @include feedback.dialog-title; }
 .app-confirm-tip {
   @include feedback.dialog-tip;
@@ -125,9 +142,12 @@ onBeforeUnmount(() => { disposed = true; release() })
   word-break: break-word;
 }
 .app-confirm-actions { @include feedback.dialog-actions; }
-.app-confirm-actions button { @include feedback.dialog-button; }
+.app-confirm-actions button,
+.app-confirm-actions :slotted(button) { @include feedback.dialog-button; }
 .app-confirm-cancel { @include feedback.dialog-cancel-button; }
-.app-confirm-submit { @include feedback.dialog-confirm-button; }
+.app-confirm-submit,
+.app-confirm-actions :slotted(.app-confirm-submit) { @include feedback.dialog-confirm-button; }
 .app-confirm-submit.danger { @include feedback.dialog-confirm-button($danger: true); }
-.app-confirm-actions button:disabled { opacity: 0.6; cursor: not-allowed; }
+.app-confirm-actions button:disabled,
+.app-confirm-actions :slotted(button:disabled) { opacity: 0.6; cursor: not-allowed; }
 </style>
