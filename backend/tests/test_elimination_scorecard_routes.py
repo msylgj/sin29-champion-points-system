@@ -148,3 +148,27 @@ def test_pdf_group_label_omits_only_mixed_without_a_separator(client, admin, pay
     assert routes.GROUP_LABELS["mixed"] == "混合组"  # UI选项/分组契约不改，仅打印时省略。
     assert payload["gender_group"] == gender_group
     assert all(statement.lstrip().startswith("SELECT") for statement in client.app.state.statements)
+
+@pytest.mark.parametrize("format_name, bow_type", [("team", "recurve"), ("mixed_team", "compound")])
+def test_team_final_requires_distinct_targets_and_renders_one_pdf_page(client, admin, format_name, bow_type):
+    url = "/api/events/42"
+    plan = client.get(url + "/elimination-rounds", headers=admin, params={"participant_count": 2, "competition_format": format_name})
+    assert plan.json() == {"participant_count": 2, "rounds": [{"key": "gold", "label": "金牌赛", "target_counts": [2]}]}
+    data = {"bow_type": bow_type, "distance": "10m", "gender_group": "mixed", "participant_count": 2,
+            "competition_format": format_name, "ranges": {"gold": [39, 39]}}
+    assert client.post(url + "/elimination-scorecards", headers=admin, json=data).status_code == 422
+    data["ranges"]["gold"] = [39, 40]
+    response = client.post(url + "/elimination-scorecards", headers=admin, json=data)
+    assert response.status_code == 200, response.text[:180]
+    assert response.headers["content-type"] == "application/pdf"
+    assert len(re.findall(rb"/Type\s*/Page\b", response.content)) == 1
+    assert all(statement.lstrip().startswith("SELECT") for statement in client.app.state.statements)
+
+
+def test_team_plan_excludes_byes_and_never_offers_a_shared_target(client, admin):
+    response = client.get("/api/events/42/elimination-rounds", headers=admin,
+                          params={"participant_count": 17, "competition_format": "team"})
+    assert response.status_code == 200
+    assert [(item["key"], item["target_counts"]) for item in response.json()["rounds"]] == [
+        ("1/16", [2]), ("1/8", [16]), ("1/4", [8]), ("1/2", [4]), ("bronze", [2]), ("gold", [2]),
+    ]

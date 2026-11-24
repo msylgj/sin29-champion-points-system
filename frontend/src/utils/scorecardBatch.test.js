@@ -108,6 +108,19 @@ describe('reconcileScorecardGroups', () => {
     expect(previous.rounds[0].target_counts).toEqual([2, 4])
   })
 
+  it('keeps two team formats separate from personal drafts for the same bow, distance and gender', () => {
+    const rounds = [{ key: 'gold', label: '金牌赛', target_counts: [2] }]
+    const team = group({ format: 'team', rounds, participantCount: 2 })
+    const mixed = { ...team, format: 'mixed_team' }
+    const initial = reconcileScorecardGroups([], [group(), team, mixed])
+    expect(new Set(initial.map(g => g.key)).size).toBe(3)
+    initial[1].ranges.gold = [8, 9]
+    initial[2].ranges.gold = [11, 12]
+    const next = reconcileScorecardGroups(initial, [mixed, { ...team, fingerprint: 'new' }, group()])
+    expect(next.map(g => g.ranges.gold)).toEqual([[11, 12], ['', ''], ['', '']])
+    expect(() => reconcileScorecardGroups([], [{ ...team, rounds: group().rounds }])).toThrow('轮次')
+  })
+
   it('matches by identity rather than ordering and omits removed groups', () => {
     const men = filledGroup()
     const women = filledGroup({ genderGroup: 'women', fingerprint: 'members-women' })

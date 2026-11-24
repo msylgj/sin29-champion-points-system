@@ -1,4 +1,4 @@
-"""管理员个人淘汰赛手卡：只读字典与赛事，现算靶位并下载 PDF。"""
+"""管理员淘汰赛手卡：只读字典与赛事，现算靶位并下载 PDF。"""
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -12,11 +12,14 @@ from app.security import verify_admin_token
 from app.services.elimination_bracket import assign_elimination_targets, elimination_rounds
 from app.services.elimination_scorecard_pdf import build_elimination_scorecards
 from app.services.ranking_scorecard_pdf import ScorecardFontUnavailable
+from app.services.team_elimination_bracket import assign_team_elimination_targets, team_elimination_rounds
+from app.services.team_elimination_scorecard_pdf import build_team_elimination_scorecards
 
 
 router = APIRouter(prefix="/api/events", tags=["记分纸"])
 Round = Literal["1/64", "1/32", "1/16", "1/8", "1/4", "1/2", "bronze", "gold"]
 Target = Annotated[int, Field(strict=True, ge=1, le=99)]
+CompetitionFormat = Literal["individual", "team", "mixed_team"]
 GROUP_LABELS = {"men": "男子组", "women": "女子组", "mixed": "混合组"}
 MEDAL_LABELS = {"bronze": "铜牌赛", "gold": "金牌赛"}
 
@@ -26,6 +29,7 @@ class EliminationScorecardRequest(BaseModel):
     bow_type: str = Field(strict=True, min_length=1, max_length=50)
     distance: str = Field(strict=True, min_length=1, max_length=10)
     gender_group: Literal["men", "women", "mixed"]
+    competition_format: CompetitionFormat = "individual"
     participant_count: int = Field(strict=True, ge=2, le=128)
     ranges: dict[Round, tuple[Target, Target]] = Field(min_length=1, max_length=8)
 
@@ -43,11 +47,16 @@ def get_elimination_rounds(
     participant_count: Annotated[int, Query(ge=2, le=128)],
     db: Session = Depends(get_db),
     _auth: dict = Depends(verify_admin_token),
+    competition_format: CompetitionFormat = "individual",
 ):
     _event(db, event_id)
+    try:
+        rounds = (elimination_rounds if competition_format == "individual" else team_elimination_rounds)(participant_count)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"participant_count": participant_count, "rounds": [
         {"key": key, "label": MEDAL_LABELS.get(key, key), "target_counts": counts}
-        for key, counts in elimination_rounds(participant_count).items()
+        for key, counts in rounds.items()
     ]}
 
 
@@ -67,8 +76,15 @@ def elimination_scorecards(
     if request.gender_group != "mixed":
         group += f" {GROUP_LABELS[request.gender_group]}"
     try:
-        cards = assign_elimination_targets(request.participant_count, request.ranges)
-        content = build_elimination_scorecards(event.year, event.season, group, cards, bow_type=bow.code)
+        if request.competition_format == "individual":
+            cards = assign_elimination_targets(request.participant_count, request.ranges)
+            content = build_elimination_scorecards(event.year, event.season, group, cards, bow_type=bow.code)
+        else:
+            cards = assign_team_elimination_targets(request.participant_count, request.ranges)
+            content = build_team_elimination_scorecards(
+                event.year, event.season, group, cards, bow_type=bow.code,
+                competition_format=request.competition_format,
+            )
     except ScorecardFontUnavailable as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:

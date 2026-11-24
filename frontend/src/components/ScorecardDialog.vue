@@ -5,13 +5,24 @@
     :busy="!!operation" :confirm-disabled="!canBatch" :return-focus="opener" @confirm="generateBatch" @cancel="close">
     <div class="scorecard-content">
       <section class="scorecard-section">
-        <label class="workbook">比赛站位表（.xlsx）
-          <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" :disabled="!!operation" @change="chooseWorkbook">
-        </label>
-        <p v-if="state.file">已导入：{{ state.file.name }} · 排位记分纸 {{ state.pages.length }} 页</p>
+        <p>上传站位表、团混队伍表，可分别导入。</p>
+        <div class="workbook-inputs">
+          <div class="workbook">
+            <label class="workbook">上传站位表（.xlsx）
+              <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" :disabled="!!operation" @change="chooseWorkbook($event, false)">
+            </label>
+            <p v-if="state.file">已导入：{{ state.file.name }} · 排位记分纸 {{ state.pages.length }} 页</p>
+          </div>
+          <div class="workbook">
+            <label class="workbook">上传团混队伍表（.xlsx）
+              <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" :disabled="!!operation" @change="chooseWorkbook($event, true)">
+            </label>
+            <p v-if="state.teamFile">已导入：{{ state.teamFile.name }} · {{ state.teamSourceGroups.length }} 组</p>
+          </div>
+        </div>
         <p v-if="state.pendingSaves" role="status">正在保存本地草稿…</p>
         <p v-else-if="state.storageError" class="error" role="alert">{{ state.storageError }}</p>
-        <p v-else-if="state.file" class="storage-note">草稿已保存到此浏览器，刷新后可继续填写。</p>
+        <p v-else-if="state.file || state.teamFile" class="storage-note">草稿已保存到此浏览器，刷新后可继续填写。</p>
         <a v-if="state.rankingUrl" :href="state.rankingUrl" :download="eventName + '_排位记分纸.pdf'">下载排位记分纸 PDF</a>
       </section>
       <p v-if="operation" role="status" class="progress">{{ operation }}</p>
@@ -20,11 +31,21 @@
       <section v-if="state.planned" class="scorecard-section" aria-label="淘汰赛配置">
         <h4>淘汰赛配置（{{ state.groups.length }} 组）</h4>
         <p v-if="!state.groups.length">站位表中没有可用的淘汰赛分组。</p>
-        <p v-else>已填好 {{ readyGroups }} / {{ playable.length }} 组。请逐轮填写 1–99 的起止靶位，全部完成后可打包下载 ZIP。</p>
-        <article v-for="group in state.groups" :key="group.key" class="group" data-test="scorecard-group">
-          <h5>{{ group.label }} · {{ group.participantCount }} 人</h5>
-          <p v-if="group.participantCount < 2">不足 2 人，无需生成淘汰赛手卡。</p>
-          <p v-else-if="group.participantCount > 128" class="error">超过 128 人，无法生成。本组需在站位表中修正后重新导入。</p>
+        <template v-else>
+          <p>已填好 {{ readyGroups }} / {{ playable.length }} 组。请逐轮填写 1–99 的起止靶位，全部完成后可打包下载 ZIP。</p>
+          <div class="group-search">
+            <label class="group-search-field">搜索淘汰赛分组
+              <input ref="searchInput" v-model="groupQuery" type="search" placeholder="例如：A组 30米 反曲弓 女子" :disabled="!!operation" @keydown.enter="locateGroup">
+            </label>
+            <button type="button" :disabled="!!operation || !groupQuery.trim()" @click="clearGroupSearch">清除搜索</button>
+            <button type="button" :disabled="!!operation || !groupQuery.trim() || !visibleGroups.length" @click="locateGroup">定位首个结果</button>
+            <p v-if="groupQuery.trim()" class="search-status" role="status">{{ visibleGroups.length ? '找到 ' + visibleGroups.length + ' 组' : '未找到匹配分组，请试试其他关键词。' }}</p>
+          </div>
+        </template>
+        <article v-for="group in visibleGroups" :key="group.key" :ref="element => setGroupCard(group.key, element)" tabindex="-1" class="group" data-test="scorecard-group">
+          <h5><span v-if="teamFormat(group)" class="format-label">{{ teamFormat(group) === 'team' ? '团体' : '混双' }}</span>{{ group.label }} · {{ group.participantCount }} {{ teamFormat(group) ? '队' : '人' }}</h5>
+          <p v-if="group.participantCount < 2">不足 2 {{ teamFormat(group) ? '队' : '人' }}，无需生成淘汰赛手卡。</p>
+          <p v-else-if="group.participantCount > 128" class="error">超过 128 {{ teamFormat(group) ? '队' : '人' }}，无法生成，请修正上传表格。</p>
           <template v-else>
             <div class="rounds">
               <fieldset v-for="round in group.rounds" :key="round.key" :class="{ 'main-round-start': round.key === '1/16' }" :disabled="!!operation">
@@ -54,10 +75,11 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { eventAPI } from '@/api'
+import { dictionaryAPI, eventAPI } from '@/api'
 import AppConfirmDialog from './AppConfirmDialog.vue'
 import { createPdfUrl, pdfErrorMessage, releasePdfUrl, startPdfDownload } from '@/utils/scorecardDownload'
 import { loadScorecardDraft, saveScorecardWorkbook, saveScorecardConfiguration } from '@/utils/scorecardDraftStorage'
+import { filterScorecardGroups, indexScorecardDivisions, sortScorecardGroups } from '@/utils/scorecardGroupIndex'
 
 const props = defineProps({ event: { type: Object, required: true }, state: { type: Object, required: true }, opener: { type: Object, default: null } })
 const emit = defineEmits(['close'])
@@ -67,13 +89,19 @@ const zipFilename = computed(() => eventName.value + '_淘汰赛手卡.zip')
 const open = ref(true)
 const operation = ref('')
 const error = ref('')
+const groupQuery = ref('')
+const divisionDictionary = ref([])
+const searchInput = ref(null)
+const groupCards = new Map()
 let controller
 let disposed = false
 
 const GROUP_NAMES = { men: '男子组', women: '女子组', mixed: '混合组' }
 const ROUND_KEYS = new Set(['1/64', '1/32', '1/16', '1/8', '1/4', '1/2', 'bronze', 'gold'])
+const teamFormat = group => group.format === 'team' || group.format === 'mixed_team' ? group.format : undefined
+const planKey = group => (teamFormat(group) || 'individual') + ':' + group.participantCount
 const countHint = round => '需要 ' + round.target_counts.join(' 或 ') + ' 个靶位' +
-  (round.target_counts[1] > 99 ? '（后者超出 1–99，仅可共靶）' : '') + '。'
+  (round.target_counts[0] > 99 ? '（超出 1–99 的靶号范围）' : round.target_counts[1] > 99 ? '（后者超出 1–99，仅可共靶）' : '') + '。'
 const validTarget = value => Number.isInteger(value) && value >= 1 && value <= 99
 function rangeError(group, round) {
   const [start, end] = group.ranges[round.key]
@@ -85,12 +113,34 @@ function rangeError(group, round) {
 function validGroup(group) {
   return group.rounds.length > 0 && group.rounds.every(round => group.ranges[round.key].every(validTarget) && !rangeError(group, round))
 }
-const playable = computed(() => state.groups.filter(group => group.participantCount >= 2))
+const divisions = computed(() => indexScorecardDivisions(state.groups, divisionDictionary.value))
+const sortedGroups = computed(() => sortScorecardGroups(state.groups, divisions.value))
+const visibleGroups = computed(() => filterScorecardGroups(sortedGroups.value, groupQuery.value, divisions.value))
+// Searching changes what is shown, not which groups are validated or exported.
+const playable = computed(() => sortedGroups.value.filter(group => group.participantCount >= 2))
+function setGroupCard(key, element) {
+  if (element) groupCards.set(key, element)
+  else groupCards.delete(key)
+}
+async function locateGroup(event) {
+  if (event?.isComposing || event?.keyCode === 229) return
+  event?.preventDefault()
+  if (!groupQuery.value.trim() || operation.value) return
+  await nextTick()
+  const card = groupCards.get(visibleGroups.value[0]?.key)
+  card?.focus({ preventScroll: true })
+  card?.scrollIntoView?.({ block: 'nearest' })
+}
+function clearGroupSearch() {
+  groupQuery.value = ''
+  searchInput.value?.focus()
+}
 const readyGroups = computed(() => playable.value.filter(validGroup).length)
 const canBatch = computed(() => state.planned && playable.value.length > 0 && readyGroups.value === playable.value.length)
 function groupFilename(group) {
-  const suffix = GROUP_NAMES[group.genderGroup]
-  const name = group.label.includes(suffix) ? group.label : group.label + '_' + suffix
+  const suffix = teamFormat(group) || GROUP_NAMES[group.genderGroup]
+  const formatLabel = suffix === 'team' ? '团体' : suffix === 'mixed_team' ? '混双' : suffix
+  const name = group.label.includes(formatLabel) ? group.label : group.label + '_' + formatLabel
   return (eventName.value + '_' + name + '_淘汰赛手卡.pdf').replace(/[<>:"/\\|?*]/g, '_')
 }
 function clearUrl(owner, key) {
@@ -111,20 +161,20 @@ function setRange(group, key, position, input) {
 
 function snapshotConfiguration() {
   // Store the plain draft, not Vue proxies, transient errors, generated PDFs or their URLs.
-  const groups = state.groups.map(({ key, bowType, distance, genderGroup, label, participantCount, fingerprint, rounds, ranges }) => ({
-    key, bowType, distance, genderGroup, label, participantCount, fingerprint, rounds, ranges,
+  const groups = state.groups.map(({ key, format, bowType, distance, genderGroup, label, participantCount, fingerprint, rounds, ranges }) => ({
+    key, format, bowType, distance, genderGroup, label, participantCount, fingerprint, rounds, ranges,
   }))
   return JSON.parse(JSON.stringify({ groups, planned: state.planned }))
 }
 async function persistDraft(includeWorkbook = !state.workbookSaved) {
-  if (!state.file) return
+  if (!state.file && !state.teamFile) return
   const attempt = ++state.saveRevision
   state.pendingSaves++
   try {
     const configuration = snapshotConfiguration()
     if (includeWorkbook) {
-      const parsed = JSON.parse(JSON.stringify({ pages: state.pages, sourceGroups: state.sourceGroups }))
-      await saveScorecardWorkbook(props.event.id, { ...parsed, file: state.file }, configuration)
+      const parsed = JSON.parse(JSON.stringify({ pages: state.pages, sourceGroups: state.sourceGroups, teamSourceGroups: state.teamSourceGroups }))
+      await saveScorecardWorkbook(props.event.id, { ...parsed, file: state.file, teamFile: state.teamFile }, configuration)
       state.workbookSaved = true
     } else {
       await saveScorecardConfiguration(props.event.id, configuration)
@@ -143,9 +193,11 @@ async function restoreDraft() {
       if (disposed) return
       if (draft) {
         const { workbook, configuration } = draft
-        state.file = workbook.file
-        state.pages = workbook.pages
-        state.sourceGroups = workbook.sourceGroups
+        state.file = workbook.file ?? null
+        state.teamFile = workbook.teamFile ?? null
+        state.pages = workbook.pages ?? []
+        state.sourceGroups = workbook.sourceGroups ?? []
+        state.teamSourceGroups = workbook.teamSourceGroups ?? []
         state.groups = (configuration?.groups ?? []).map(group => ({ ...group, pdf: null, url: '', error: '' }))
         state.planned = configuration?.planned === true
         state.workbookSaved = true
@@ -183,27 +235,31 @@ async function run(label, work) {
     controller = undefined
   }
 }
-function checkedRounds(plan, count) {
+function checkedRounds(plan, count, format) {
   if (plan?.participant_count !== count || !Array.isArray(plan.rounds) || !plan.rounds.length ||
     new Set(plan.rounds.map(round => round?.key)).size !== plan.rounds.length || plan.rounds.some(round =>
       !ROUND_KEYS.has(round?.key) || typeof round.label !== 'string' || !Array.isArray(round.target_counts) ||
-      round.target_counts.length !== 2 || !round.target_counts.every(n => Number.isInteger(n) && n >= 1 && n <= 128))) {
+      round.target_counts.length !== (format ? 1 : 2) || !round.target_counts.every(n => Number.isInteger(n) && n >= 1 && n <= 128))) {
     throw new Error('轮次安排无效，请重试。')
   }
   return plan.rounds
 }
 async function planGroups(signal) {
   try {
-    const counts = [...new Set(state.sourceGroups.map(g => g.participantCount).filter(n => n >= 2 && n <= 128))]
+    const sourceGroups = [...state.sourceGroups, ...state.teamSourceGroups]
     const plans = new Map()
-    for (const count of counts) {
-      const plan = await eventAPI.eliminationRounds(props.event.id, count, signal)
+    for (const group of sourceGroups) {
+      const count = group.participantCount
+      const key = planKey(group)
+      if (count < 2 || count > 128 || plans.has(key)) continue
+      const format = teamFormat(group)
+      const plan = await eventAPI.eliminationRounds(props.event.id, count, signal, ...(format ? [format] : []))
       if (disposed) return
-      plans.set(count, checkedRounds(plan, count))
+      plans.set(key, checkedRounds(plan, count, format))
     }
     const { reconcileScorecardGroups } = await import('@/utils/scorecardBatch')
     if (disposed) return
-    const next = reconcileScorecardGroups(state.groups, state.sourceGroups.map(group => ({ ...group, rounds: plans.get(group.participantCount) ?? [] })))
+    const next = reconcileScorecardGroups(state.groups, sourceGroups.map(group => ({ ...group, rounds: plans.get(planKey(group)) ?? [] })))
     const kept = new Set(next.map(group => group.url).filter(Boolean))
     for (const group of state.groups) if (group.url && !kept.has(group.url)) releasePdfUrl(group.url)
     state.groups = next
@@ -217,22 +273,32 @@ async function planGroups(signal) {
 function retryPlan() {
   return run('正在重新计算轮次…', planGroups)
 }
-function chooseWorkbook(event) {
+function chooseWorkbook(event, isTeam) {
   const file = event.target.files?.[0]
   event.target.value = ''
   if (!file) return
-  return run('正在解析站位表、计算轮次…', async signal => {
-    if (!/\.xlsx$/i.test(file.name)) throw new Error('请选择 .xlsx 格式的站位表。')
-    if (file.size > 10 * 1024 * 1024) throw new Error('站位表文件不能超过 10 MB。')
-    const { parseStationScorecards } = await import('@/utils/stationScorecardInput')
+  const label = isTeam ? '团混队伍表' : '站位表'
+  return run('正在解析' + label + '、计算轮次…', async signal => {
+    if (!/\.xlsx$/i.test(file.name)) throw new Error('请选择 .xlsx 格式的' + label + '。')
+    if (file.size > 10 * 1024 * 1024) throw new Error(label + '文件不能超过 10 MB。')
     const bytes = await readWorkbook(file)
-    if (disposed) return
-    const parsed = parseStationScorecards(bytes)
-    clearUrl(state, 'rankingUrl')
+    if (isTeam) {
+      const { parseTeamScorecardGroups } = await import('@/utils/teamScorecardInput')
+      if (disposed) return
+      const groups = parseTeamScorecardGroups(bytes)
+      if (!groups.length) throw new Error('没有识别到团体或混双队伍，请检查工作簿。')
+      state.teamFile = file
+      state.teamSourceGroups = groups
+    } else {
+      const { parseStationScorecards } = await import('@/utils/stationScorecardInput')
+      if (disposed) return
+      const parsed = parseStationScorecards(bytes)
+      clearUrl(state, 'rankingUrl')
+      state.file = file
+      state.pages = parsed.pages
+      state.sourceGroups = parsed.groups
+    }
     clearUrl(state, 'zipUrl')
-    state.file = file
-    state.pages = parsed.pages
-    state.sourceGroups = parsed.groups
     state.planned = false
     state.planError = ''
     state.workbookSaved = false
@@ -261,6 +327,7 @@ async function getGroupPdf(group, signal) {
     const blob = await eventAPI.eliminationScorecards(props.event.id, {
       bow_type: group.bowType, distance: group.distance, gender_group: group.genderGroup,
       participant_count: group.participantCount,
+      ...(teamFormat(group) ? { competition_format: teamFormat(group) } : {}),
       ranges: Object.fromEntries(group.rounds.map(round => [round.key, [...group.ranges[round.key]]])),
     }, signal)
     if (disposed) return false
@@ -308,13 +375,19 @@ async function close() {
   await nextTick()
   if (!disposed) emit('close')
 }
-onMounted(() => {
-  if (!state.draftLoaded || (state.file && !state.planned)) {
-    void run('正在恢复本地草稿…', async signal => {
-      await restoreDraft()
-      if (!disposed && state.file && !state.planned) await planGroups(signal)
-    })
+async function loadDivisionDictionary(signal) {
+  try {
+    const response = await dictionaryAPI.getAll(signal)
+    if (!disposed && Array.isArray(response?.data?.competitionGroups)) divisionDictionary.value = response.data.competitionGroups
+  } catch {
+    // Explicit workbook groups still sort correctly if the dictionary is unavailable.
   }
+}
+onMounted(() => {
+  void run('正在加载组别及本地草稿…', async signal => {
+    await Promise.all([restoreDraft(), loadDivisionDictionary(signal)])
+    if (!disposed && (state.file || state.teamFile) && !state.planned) await planGroups(signal)
+  })
 })
 onBeforeUnmount(() => { disposed = true; controller?.abort() })
 </script>
@@ -323,9 +396,17 @@ onBeforeUnmount(() => { disposed = true; controller?.abort() })
 .scorecard-content { display: grid; align-content: start; flex: 1; min-height: 0; overflow-y: auto; gap: 12px; padding: 2px 6px; color: #333; font-size: 14px; }
 .scorecard-section, .group { display: grid; gap: 8px; }
 .scorecard-content p, .scorecard-content h4, .scorecard-content h5 { margin: 0; }
-.workbook { display: grid; gap: 6px; }
+.workbook-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 10px; align-items: start; }
+.workbook { display: grid; gap: 6px; min-width: 0; }
+.workbook input { max-width: 100%; }
+.format-label { display: inline-block; margin-right: 7px; padding: 1px 5px; border-radius: 4px; background: #eef2ff; color: #253c81; font-size: 12px; }
 .group { container: scorecard-group / inline-size; border: 1px solid #dce2f0; border-radius: 8px; padding: 10px; }
 .group h5 { font-size: 15px; }
+.group:focus { outline: 2px solid #335fcc; outline-offset: -2px; }
+.group-search { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; padding: 10px; border: 1px solid #dce2f0; border-radius: 8px; background: #f5f7fd; }
+.group-search-field { display: grid; flex: 1 1 210px; gap: 4px; min-width: 0; font-weight: 600; }
+.group-search-field input { box-sizing: border-box; min-width: 0; padding: 6px 8px; border: 1px solid #8292ae; border-radius: 5px; background: #fff; font-size: 16px; }
+.group-search .search-status { flex-basis: 100%; color: #4a5b77; font-size: 12px; }
 .rounds { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 .main-round-start { grid-column-start: 1; }
 .rounds fieldset { min-width: 0; margin: 0; padding: 6px 8px 8px; border: 1px solid #e4e7f1; border-radius: 6px; }

@@ -90,7 +90,7 @@ export const eventAPI = {
   getDetail: (id) => api.get(`/events/${id}`),
   delete: (id, confirmationName) => api.delete(`/events/${id}`, { data: { confirmation_name: confirmationName } }),
   rankingScorecards: (id, data, signal) => api.post(`/events/${id}/ranking-scorecards`, data, { responseType: 'blob', timeout: 60000, signal }),
-  eliminationRounds: (id, participantCount, signal) => api.get(`/events/${id}/elimination-rounds`, { params: { participant_count: participantCount }, signal }),
+  eliminationRounds: (id, participantCount, signal, format) => api.get(`/events/${id}/elimination-rounds`, { params: { participant_count: participantCount, ...(format ? { competition_format: format } : {}) }, signal }),
   eliminationScorecards: (id, data, signal) => api.post(`/events/${id}/elimination-scorecards`, data, { responseType: 'blob', timeout: 60000, signal }),
   createWithConfigs: (data) => api.post('/events/with-configs', data)
 }
@@ -121,5 +121,5 @@ export const authAPI = {
 
 // ==================== 字典 API ====================
 export const dictionaryAPI = {
-  getAll: () => api.get('/dictionaries')
+  getAll: signal => api.get('/dictionaries', { signal })
 }

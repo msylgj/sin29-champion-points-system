@@ -12,7 +12,13 @@ vi.mock('@/utils/scorecardDraftStorage', () => ({
   loadScorecardDraft: loadDraft, saveScorecardWorkbook: saveWorkbook, saveScorecardConfiguration: saveConfiguration, deleteScorecardDraft: deleteDraft,
 }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
-vi.mock('@/api', () => ({ eventAPI: { getList, delete: deleteEvent, rankingScorecards, eliminationRounds, eliminationScorecards } }))
+vi.mock('@/api', () => ({
+  eventAPI: { getList, delete: deleteEvent, rankingScorecards, eliminationRounds, eliminationScorecards },
+  dictionaryAPI: { getAll: async () => ({ data: { competitionGroups: [
+    { bow_type: 'recurve', distance: '10m', group_code: 'A' },
+    { bow_type: 'compound', distance: '18m', group_code: 'B' },
+  ] } }) },
+}))
 let app
 let root
 const button = title => [...root.querySelectorAll('button')].find(node => node.textContent.trim() === title)
@@ -196,13 +202,13 @@ async function openScorecards(season = '秋季赛') {
   expect(dialog().textContent).toContain('2026年' + season)
   await vi.waitFor(() => expect(dialog().querySelector('input[type=file]').disabled).toBe(false))
 }
-async function upload(file, expectedPlans) {
-  const input = dialog().querySelector('input[type=file]')
+async function upload(file, expectedPlans, isTeam = false, groupCount = 2) {
+  const input = dialog().querySelectorAll('input[type=file]')[isTeam ? 1 : 0]
   Object.defineProperty(input, 'files', { value: [file], configurable: true })
   input.dispatchEvent(new Event('change', { bubbles: true }))
   if (expectedPlans != null) await vi.waitFor(() => {
     expect(eliminationRounds).toHaveBeenCalledTimes(expectedPlans)
-    expect(groups()).toHaveLength(2)
+    expect(groups()).toHaveLength(groupCount)
     expect(input.disabled).toBe(false)
   })
 }
@@ -349,4 +355,91 @@ it('keeps the workbook usable and warns when browser storage is unavailable', as
   await upload(workbook(), 1)
   expect(dialog().textContent).toContain('刷新可能丢失当前修改')
   expect(action('生成排位记分纸').disabled).toBe(false)
+})
+
+function teamWorkbook(first = '团甲选手') {
+  const book = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['反曲弓10米男子团体', null, null, null, '反曲弓10米混双'],
+    ['序号', '团体参赛队', '参赛选手', null, '序号', '团体参赛队', '参赛选手'],
+    [1, '队甲', first, null, 1, '队丙', '混丙一'],
+    [null, null, '团甲二', null, null, null, '混丙二'],
+    [null, null, '团甲三', null, 2, '队丁', '混丁一'],
+    [2, '队乙', '团乙一', null, null, null, '混丁二'],
+    [null, null, '团乙二'], [null, null, '团乙三'],
+  ])
+  sheet['!merges'] = ['A1:C1','E1:G1','A3:A5','B3:B5','A6:A8','B6:B8','E3:E4','F3:F4','E5:E6','F5:F6'].map(XLSX.utils.decode_range)
+  XLSX.utils.book_append_sheet(book, sheet, '周六团混')
+  return new File([XLSX.write(book, { type: 'array', bookType: 'xlsx' })], '团混.xlsx')
+}
+
+it('combines personal, team and mixed-team plans without merging matching bows or losing drafts', async () => {
+  const { downloads } = setupScorecards()
+  eliminationRounds.mockImplementation(async (_id, n, _signal, format) => ({
+    participant_count: n, rounds: [format ? { ...gold, target_counts: [2] } : gold],
+  }))
+  eliminationScorecards.mockResolvedValue(pdf())
+  await openScorecards()
+  await upload(workbook(), 1)
+  fill(groups()[0], 7)
+  await upload(teamWorkbook(), 4, true, 4)
+  expect(eliminationRounds.mock.calls.slice(-2).map(call => call[3])).toEqual(['team', 'mixed_team'])
+  expect(groups().map(group => group.querySelector('h5').textContent)).toEqual([
+    '10米反曲弓男子组 · 2 人', '18米复合弓女子组 · 2 人',
+    expect.stringContaining('反曲弓10米男子团体 · 2 队'), expect.stringContaining('反曲弓10米混双 · 2 队'),
+  ])
+  const search = dialog().querySelector('input[type=search]')
+  async function searchGroups(query) {
+    search.value = query
+    search.dispatchEvent(new Event('input', { bubbles: true }))
+    await nextTick()
+  }
+  await searchGroups('没有这个分组')
+  expect(groups()).toHaveLength(0)
+  expect(dialog().textContent).toContain('未找到匹配分组')
+  expect(action('定位首个结果').disabled).toBe(true)
+  await searchGroups('A组 混双 １０米')
+  expect(groups()).toHaveLength(1)
+  expect(groups()[0].textContent).toContain('反曲弓10米混双')
+  search.focus()
+  search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }))
+  await nextTick()
+  expect(document.activeElement).toBe(search)
+  search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  await vi.waitFor(() => expect(document.activeElement).toBe(groups()[0]))
+  search.focus()
+  action('定位首个结果').click()
+  await vi.waitFor(() => expect(document.activeElement).toBe(groups()[0]))
+  action('清除搜索').click()
+  await nextTick()
+  expect(document.activeElement).toBe(search)
+  expect(groups()).toHaveLength(4)
+  expect(groups()[0].querySelector('input').value).toBe('7')
+  fill(groups()[2], 44)
+  await nextTick()
+  expect(action('生成本组 PDF', groups()[2]).disabled).toBe(true)
+  fill(groups()[2], 44, 45)
+  fill(groups()[3], 16, 17)
+  await searchGroups('混双')
+  expect(confirmButton().disabled).toBe(true) // The hidden women's group is not filled yet.
+  await searchGroups('女子')
+  fill(groups()[0], 8)
+  await nextTick()
+  expect(confirmButton().disabled).toBe(false)
+  confirmButton().click()
+  await vi.waitFor(() => expect(downloads.at(-1)).toMatch(/[.]zip$/))
+  expect(eliminationScorecards.mock.calls.map(call => call[1].competition_format)).toEqual([undefined, undefined, 'team', 'mixed_team'])
+  expect(eliminationScorecards.mock.calls.at(-1)[1]).toMatchObject({ participant_count: 2, ranges: {gold: [16, 17]}, gender_group: 'mixed' })
+  action('清除搜索').click()
+  await nextTick()
+  await upload(teamWorkbook('换入选手'), 7, true, 4)
+  expect(groups()[2].querySelector('input').value).toBe('')
+  expect(groups()[3].querySelector('input').value).toBe('16')
+  expect(groups()[0].querySelector('input').value).toBe('7')
+  app.unmount()
+  root.remove()
+  mount()
+  await openScorecards()
+  expect(dialog().textContent).toContain('已导入：团混.xlsx · 2 组')
+  expect(groups()[3].querySelector('input').value).toBe('16')
 })

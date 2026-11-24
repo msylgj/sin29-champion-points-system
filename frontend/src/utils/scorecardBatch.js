@@ -1,9 +1,12 @@
-const groupKey = group => JSON.stringify([group.bowType, group.distance, group.genderGroup])
+const groupKey = group => JSON.stringify([
+  ...(group.format && group.format !== 'individual' ? [group.format] : []), group.bowType, group.distance, group.genderGroup,
+])
+const requiredCounts = group => group.format && group.format !== 'individual' ? 1 : 2
 const hasIdentity = group => group && ['bowType', 'distance', 'genderGroup'].every(field => typeof group[field] === 'string' && group[field].length > 0)
 const sameRoundPlan = (previous, planned) => Array.isArray(previous) && previous.length === planned.length && planned.every((round, index) => {
   const old = previous[index]
   return old?.key === round.key && old.label === round.label && Array.isArray(old.target_counts) &&
-    old.target_counts.length === 2 && old.target_counts.every((value, position) => value === round.target_counts[position])
+    old.target_counts.length === round.target_counts.length && old.target_counts.every((value, position) => value === round.target_counts[position])
 })
 
 /** Reuse only artifacts for the exact same membership and round plan. URLs are owned by the caller. */
@@ -21,7 +24,7 @@ export function reconcileScorecardGroups(previous = [], planned = []) {
     const roundKeys = new Set()
     const rounds = suppliedRounds.map(round => {
       if (!round || typeof round.key !== 'string' || !round.key || roundKeys.has(round.key) || typeof round.label !== 'string' ||
-          !Array.isArray(round.target_counts) || round.target_counts.length !== 2 ||
+          !Array.isArray(round.target_counts) || round.target_counts.length !== requiredCounts(group) ||
           !round.target_counts.every(count => Number.isSafeInteger(count) && count > 0)) throw new Error('记分纸轮次数据无效。')
       roundKeys.add(round.key)
       return { ...round, target_counts: [...round.target_counts] }

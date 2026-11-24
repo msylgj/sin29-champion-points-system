@@ -109,7 +109,7 @@ function openScorecard(event, opener) {
 function getScorecardState(eventId) {
   if (!scorecardStates.has(eventId)) {
     scorecardStates.set(eventId, reactive({
-      file: null, pages: [], sourceGroups: [], groups: [], planned: false, planError: '', rankingUrl: '', zipUrl: '',
+      file: null, teamFile: null, pages: [], sourceGroups: [], teamSourceGroups: [], groups: [], planned: false, planError: '', rankingUrl: '', zipUrl: '',
       draftLoaded: false, workbookSaved: false, pendingSaves: 0, storageError: '', saveRevision: 0,
     }))
   }
